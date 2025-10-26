@@ -1,0 +1,26 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 GitHub Discussions
+    url: https://github.com/techsquidtv/hermes/discussions
+    about: For questions, ideas, and general discussions about Hermes
+  - name: 📖 Documentation
+    url: https://github.com/techsquidtv/hermes/tree/main/docs
+    about: Check our documentation first - many questions are already answered
+  - name: 🐛 Bug Reports
+    url: https://github.com/techsquidtv/hermes/issues/new?template=bug_report.yml
+    about: Report bugs and unexpected behavior
+  - name: ✨ Feature Requests
+    url: https://github.com/techsquidtv/hermes/issues/new?template=feature_request.yml
+    about: Suggest new features and enhancements
+  - name: 📚 Documentation Issues
+    url: https://github.com/techsquidtv/hermes/issues/new?template=documentation.yml
+    about: Report documentation problems or suggest improvements
+  - name: 🔧 API Issues (hermes-api)
+    url: https://github.com/techsquidtv/hermes/issues/new?template=hermes-api-issue.yml
+    about: Issues specific to the backend API and server-side functionality
+  - name: 🎨 Frontend Issues (hermes-app)
+    url: https://github.com/techsquidtv/hermes/issues/new?template=hermes-app-issue.yml
+    about: Issues specific to the React frontend and UI/UX
+  - name: 🐳 DevOps/Deployment Issues
+    url: https://github.com/techsquidtv/hermes/issues/new?template=devops-issue.yml
+    about: Issues related to Docker, deployment, and infrastructure

@@ -1,0 +1,372 @@
+// API Client for Hermes Video Downloader
+
+import type { components } from '@/types/api.generated'
+
+type VideoInfo = components["schemas"]["VideoInfo"]
+
+// Define types for API responses that aren't in the schema
+interface HealthResponse {
+  status: string
+  timestamp: string
+  version: string
+  environment: string
+}
+
+interface DailyStats {
+  date: string
+  downloads: number
+  success_rate: number
+  total_size: number
+}
+
+interface TimelineSummary {
+  total_downloads: number
+  success_rate: number
+  total_size: number
+  avg_daily_downloads: number
+  trend: string
+  peak_day: string | null
+  peak_downloads: number
+  period: string
+  days_count: number
+}
+type DownloadRequest = components["schemas"]["DownloadRequest"]
+type DownloadResponse = components["schemas"]["DownloadResponse"]
+type DownloadStatus = components["schemas"]["DownloadStatus"]
+type CancelResponse = components["schemas"]["CancelResponse"]
+type FormatInfo = components["schemas"]["FormatInfo"]
+type Configuration = components["schemas"]["Configuration"]
+type ConfigurationUpdate = components["schemas"]["ConfigurationUpdate"]
+type BatchDownloadRequest = components["schemas"]["BatchDownloadRequest"]
+type BatchDownloadResponse = components["schemas"]["BatchDownloadResponse"]
+type DownloadQueue = components["schemas"]["DownloadQueue"]
+type FileList = components["schemas"]["FileList"]
+type DeleteFilesResponse = components["schemas"]["DeleteFilesResponse"]
+type DownloadHistory = components["schemas"]["DownloadHistory"]
+type StorageInfo = components["schemas"]["StorageInfo"]
+type ApiStatistics = components["schemas"]["ApiStatistics"]
+type CleanupRequest = components["schemas"]["CleanupRequest"]
+type CleanupResponse = components["schemas"]["CleanupResponse"]
+type ApiKeyCreate = components["schemas"]["ApiKeyCreate"]
+type ApiKeyResponse = components["schemas"]["ApiKeyResponse"]
+type ApiKeyListResponse = components["schemas"]["ApiKeyListResponse"]
+type TokenResponse = components["schemas"]["TokenResponse"]
+import { TokenStorage } from '@/utils/tokenStorage'
+
+class ApiClient {
+  private baseURL: string
+
+  constructor() {
+    // Simple priority: environment variable > default relative path
+    this.baseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
+    
+    console.log(`[ApiClient] Using API base URL: ${this.baseURL}`)
+  }
+
+  public getBaseURL(): string {
+    return this.baseURL
+  }
+
+  private async getAuthHeaders(): Promise<Record<string, string>> {
+    const token = TokenStorage.getAccessToken()
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+
+    if (token) {
+      headers.Authorization = `Bearer ${token}`
+    }
+
+    return headers
+  }
+
+  // Enhanced method for handling auth errors with better error messages
+  private handleAuthError(error: unknown): Error {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+
+    if (errorMessage.includes('401')) {
+      return new Error('401: Authentication required')
+    }
+
+    if (errorMessage.includes('403')) {
+      return new Error('403: Access denied')
+    }
+
+    if (errorMessage.includes('429')) {
+      return new Error('429: Too many requests, please try again later')
+    }
+
+    return new Error(`Authentication error: ${errorMessage}`)
+  }
+
+  async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    // Use endpoint as-is to match exact backend route definitions
+    // FastAPI routes without trailing slashes should not receive them from the client
+    const url = `${this.baseURL}${endpoint}`
+
+    // Add auth headers
+    const headers = await this.getAuthHeaders()
+    options.headers = {
+      ...headers,
+      ...options.headers,
+    }
+
+    // Handle 401 errors by attempting token refresh
+    const response = await fetch(url, options)
+
+    if (response.status === 401) {
+      try {
+        // Try to refresh token
+        await this.refreshToken()
+
+        // Retry request with new token
+        const newHeaders = await this.getAuthHeaders()
+        options.headers = {
+          ...newHeaders,
+          ...options.headers,
+        }
+
+        const retryResponse = await fetch(url, options)
+        if (!retryResponse.ok) {
+          throw new Error(`HTTP ${retryResponse.status}: ${retryResponse.statusText}`)
+        }
+
+        return retryResponse.json()
+      } catch (refreshError) {
+        // Refresh failed, redirect to login
+        localStorage.removeItem('accessToken')
+        localStorage.removeItem('refreshToken')
+        window.location.href = '/auth/login'
+        throw this.handleAuthError(refreshError)
+      }
+    }
+
+    if (!response.ok) {
+      throw this.handleAuthError(new Error(`HTTP ${response.status}: ${response.statusText}`))
+    }
+
+    return response.json()
+  }
+
+  // Health check
+  async getHealth(): Promise<HealthResponse> {
+    return this.request<HealthResponse>('/health')
+  }
+
+  // Video information
+  async getVideoInfo(url: string, includeFormats = true): Promise<VideoInfo> {
+    const params = new URLSearchParams({ url, include_formats: includeFormats.toString() })
+    return this.request<VideoInfo>(`/info/?${params}`)
+  }
+
+  // Download management
+  async startDownload(request: DownloadRequest): Promise<DownloadResponse> {
+    return this.request<DownloadResponse>('/download', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    })
+  }
+
+  async getDownloadStatus(downloadId: string): Promise<DownloadStatus> {
+    return this.request<DownloadStatus>(`/download/${downloadId}`)
+  }
+
+  async cancelDownload(downloadId: string): Promise<CancelResponse> {
+    return this.request<CancelResponse>(`/download/${downloadId}/cancel`, {
+      method: 'POST',
+    })
+  }
+
+  async startBatchDownload(request: BatchDownloadRequest): Promise<BatchDownloadResponse> {
+    // Remove trailing slash to match FastAPI route definition
+    return this.request<BatchDownloadResponse>('/download/batch', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    })
+  }
+
+  async getDownloadQueue(status?: string, limit = 20, offset = 0): Promise<DownloadQueue> {
+    const params = new URLSearchParams({
+      limit: limit.toString(),
+      offset: offset.toString(),
+    })
+    if (status && status !== 'all') {
+      params.append('status', status)
+    }
+    return this.request<DownloadQueue>(`/queue/?${params}`)
+  }
+
+  // File management
+  async getDownloadedFiles(params?: {
+    directory?: string
+    extension?: string
+    min_size?: number
+    max_size?: number
+    created_after?: string
+    created_before?: string
+    limit?: number
+    offset?: number
+  }): Promise<FileList> {
+    const searchParams = new URLSearchParams()
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) {
+          searchParams.append(key, value.toString())
+        }
+      })
+    }
+    return this.request<FileList>(`/files/?${searchParams}`)
+  }
+
+  // History and statistics
+  async getDownloadHistory(params?: {
+    start_date?: string
+    end_date?: string
+    extractor?: string
+    status?: string
+    limit?: number
+    offset?: number
+  }): Promise<DownloadHistory> {
+    const searchParams = new URLSearchParams()
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) {
+          searchParams.append(key, value.toString())
+        }
+      })
+    }
+    return this.request<DownloadHistory>(`/history/?${searchParams}`)
+  }
+
+  async getApiStats(period: 'day' | 'week' | 'month' | 'year' = 'week'): Promise<ApiStatistics> {
+    return this.request<ApiStatistics>(`/stats/?period=${period}`)
+  }
+
+  // Timeline and analytics endpoints
+  async getTimelineStats(
+    period: 'day' | 'week' | 'month' | 'year' = 'week',
+    params?: {
+      start_date?: string
+      end_date?: string
+      extractor?: string
+      status?: string
+    }
+  ): Promise<DailyStats[]> {
+    const searchParams = new URLSearchParams({ period })
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) {
+          searchParams.append(key, value.toString())
+        }
+      })
+    }
+    return this.request<DailyStats[]>(`/timeline/?${searchParams}`)
+  }
+
+  async getTimelineSummary(
+    period: 'day' | 'week' | 'month' | 'year' = 'week',
+    params?: {
+      start_date?: string
+      end_date?: string
+    }
+  ): Promise<TimelineSummary> {
+    const searchParams = new URLSearchParams({ period })
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) {
+          searchParams.append(key, value.toString())
+        }
+      })
+    }
+    return this.request<TimelineSummary>(`/timeline/summary?${searchParams}`)
+  }
+
+  // Storage management
+  async getStorageInfo(): Promise<StorageInfo> {
+    return this.request<StorageInfo>('/storage')
+  }
+
+  async cleanupDownloads(request: CleanupRequest): Promise<CleanupResponse> {
+    return this.request<CleanupResponse>('/cleanup', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    })
+  }
+
+  // Formats
+  async getAvailableFormats(): Promise<FormatInfo> {
+    return this.request<FormatInfo>('/formats')
+  }
+
+  // Configuration
+  async getConfiguration(): Promise<Configuration> {
+    return this.request<Configuration>('/config')
+  }
+
+  async updateConfiguration(config: ConfigurationUpdate): Promise<Configuration> {
+    return this.request<Configuration>('/config', {
+      method: 'PUT',
+      body: JSON.stringify(config),
+    })
+  }
+
+  // API Key Management
+  async createApiKey(apiKeyData: ApiKeyCreate): Promise<ApiKeyResponse> {
+    return this.request<ApiKeyResponse>('/auth/api-keys', {
+      method: 'POST',
+      body: JSON.stringify(apiKeyData),
+    })
+  }
+
+  async getApiKeys(): Promise<ApiKeyListResponse[]> {
+    return this.request<ApiKeyListResponse[]>('/auth/api-keys')
+  }
+
+  async revokeApiKey(apiKeyId: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>(`/auth/api-keys/${apiKeyId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  // Private method for token refresh
+  private async refreshToken(): Promise<TokenResponse> {
+    const refreshToken = TokenStorage.getRefreshToken()
+    if (!refreshToken) {
+      throw new Error('No refresh token available')
+    }
+
+    const response = await fetch(`${this.baseURL}/auth/refresh`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ refreshToken }),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: 'Token refresh failed' }))
+      throw new Error(`Token refresh failed: ${errorData.detail || response.statusText}`)
+    }
+
+    return response.json()
+  }
+
+  // Delete downloaded files
+  async deleteFiles(filePaths: string[]): Promise<DeleteFilesResponse> {
+    return this.request<DeleteFilesResponse>('/files', {
+      method: 'DELETE',
+      body: JSON.stringify({ 
+        files: filePaths,
+        confirm: true 
+      }),
+    })
+  }
+
+  // Get download file URL for direct download
+  getDownloadFileUrl(filePath: string): string {
+    // Construct the download URL with the file path as a query parameter
+    return `${this.baseURL}/files/download?path=${encodeURIComponent(filePath)}`
+  }
+}
+
+export const apiClient = new ApiClient()

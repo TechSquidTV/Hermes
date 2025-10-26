@@ -1,0 +1,290 @@
+---
+globs:
+  - "packages/hermes-app/src/components/**/*.tsx"
+---
+
+# Hermes App - React Components Rules
+
+## Component Structure
+
+```
+components/
+├── ui/              # shadcn/ui components (styled primitives)
+├── layout/          # Layout components
+├── auth/            # Authentication components
+├── download/        # Download-related components
+├── queue/           # Queue view components
+└── settings/        # Settings components
+```
+
+## Component Definition
+
+```typescript
+interface ComponentNameProps {
+  title: string;
+  onAction?: () => void;
+  items?: Item[];
+  className?: string;
+}
+
+export function ComponentName({
+  title,
+  onAction,
+  items = [],
+  className,
+}: ComponentNameProps) {
+  return (
+    <div className={cn("base-classes", className)}>
+      {title}
+    </div>
+  );
+}
+```
+
+### Rules
+- Use functional components with TypeScript
+- Component names use PascalCase
+- File names match component names
+- Export as named export, not default
+- Use hooks for state management
+- Keep components focused and single-purpose
+
+## Props and TypeScript
+
+### Props Definition
+```typescript
+interface ButtonProps {
+  /** The button's display text */
+  label: string;
+  /** Optional click handler */
+  onClick?: () => void;
+  /** Button visual style */
+  variant?: "primary" | "secondary" | "destructive";
+  disabled?: boolean;
+  className?: string;
+}
+
+export function Button({
+  label,
+  onClick,
+  variant = "primary",
+  disabled = false,
+  className,
+}: ButtonProps) {
+  // Implementation
+}
+```
+
+### Event Handlers
+- Prefix with `on`: `onClick`, `onChange`, `onSubmit`
+- Use proper event types: `React.MouseEvent`, `React.ChangeEvent`
+
+### Children Props
+```typescript
+interface ContainerProps {
+  children: React.ReactNode;
+  className?: string;
+}
+```
+
+## shadcn/ui Integration
+
+### Using UI Components
+```typescript
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+
+export function FeatureCard({ title, className }: Props) {
+  return (
+    <Card className={cn("w-full", className)}>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Button>Action</Button>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+- Import from `@/components/ui/`
+- Don't modify UI component files directly
+- Compose UI components to build features
+- Use `cn()` for className merging
+
+## Styling with Tailwind CSS
+
+### Class Organization
+```typescript
+<div className={cn(
+  // Layout
+  "flex flex-col md:flex-row gap-4",
+  // Spacing
+  "p-4 m-2",
+  // Typography
+  "text-sm font-medium",
+  // Colors
+  "bg-background text-foreground",
+  // Effects
+  "rounded-lg shadow-md hover:shadow-lg",
+  // Conditional
+  isActive && "bg-accent",
+  className
+)}>
+```
+
+### Theme Variables
+Use CSS variables for theme colors (support light/dark):
+```typescript
+<div className="bg-background text-foreground border-border">
+<div className="bg-primary text-primary-foreground">
+<div className="bg-muted text-muted-foreground">
+```
+
+### Responsive Design
+```typescript
+<div className={cn(
+  "grid grid-cols-1",      // Mobile
+  "md:grid-cols-2",        // Tablet
+  "lg:grid-cols-3",        // Desktop
+  "xl:grid-cols-4"         // Large
+)}>
+```
+
+## State Management
+
+### Local State
+```typescript
+const [count, setCount] = useState<number>(0);
+const [items, setItems] = useState<Item[]>([]);
+
+// Functional update
+setCount((prev) => prev + 1);
+setItems((prev) => [...prev, newItem]);
+```
+
+### Effects
+```typescript
+useEffect(() => {
+  const subscription = subscribeToData();
+  return () => subscription.unsubscribe();
+}, [dependency]);
+```
+
+### Server State (TanStack Query)
+```typescript
+import { useQuery } from "@tanstack/react-query";
+
+export function DownloadList() {
+  const { data: downloads, isLoading, error } = useQuery({
+    queryKey: ["downloads"],
+    queryFn: fetchDownloads,
+  });
+
+  if (isLoading) return <LoadingSpinner />;
+  if (error) return <ErrorDisplay error={error} />;
+
+  return <div>{/* Render downloads */}</div>;
+}
+```
+
+## Component Composition
+
+### Container/Presentational Pattern
+```typescript
+// Container - handles data
+export function DownloadListContainer() {
+  const { data, isLoading } = useQuery({
+    queryKey: ["downloads"],
+    queryFn: fetchDownloads,
+  });
+  
+  const handleDelete = (id: string) => { /* ... */ };
+
+  return (
+    <DownloadListPresentation
+      downloads={data}
+      isLoading={isLoading}
+      onDelete={handleDelete}
+    />
+  );
+}
+
+// Presentation - pure rendering
+function DownloadListPresentation({ downloads, isLoading, onDelete }: Props) {
+  // Pure rendering logic
+}
+```
+
+## Accessibility
+
+### Semantic HTML
+- Use appropriate HTML elements
+- Use `<button>` for actions, `<a>` for navigation
+- Don't use `<div>` for interactive elements
+
+### ARIA Attributes
+```typescript
+<button
+  aria-label="Delete download"
+  aria-pressed={isActive}
+  aria-disabled={isDisabled}
+>
+  <TrashIcon />
+</button>
+
+<div role="status" aria-live="polite">
+  {statusMessage}
+</div>
+```
+
+### Keyboard Navigation
+```typescript
+const handleKeyDown = (e: React.KeyboardEvent) => {
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    onClick();
+  }
+};
+```
+
+## Performance
+
+### Memoization
+```typescript
+import { useMemo, useCallback, memo } from "react";
+
+// Memoize calculations
+const sortedItems = useMemo(
+  () => items.sort((a, b) => a.name.localeCompare(b.name)),
+  [items]
+);
+
+// Memoize callbacks
+const handleClick = useCallback(() => {
+  doSomething(id);
+}, [id]);
+
+// Memoize components
+export const ExpensiveComponent = memo(function ExpensiveComponent({ data }: Props) {
+  return <div>{/* ... */}</div>;
+});
+```
+
+## Loading States
+
+```typescript
+import { Skeleton } from "@/components/ui/skeleton";
+
+if (isLoading) {
+  return <Skeleton className="h-10 w-full" />;
+}
+
+// Conditional rendering
+{isLoading && <LoadingSpinner />}
+{error && <ErrorDisplay error={error} />}
+{data && <DataDisplay data={data} />}
+```
+

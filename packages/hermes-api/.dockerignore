@@ -1,0 +1,65 @@
+# Version control
+.git
+.gitignore
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Virtual environments
+.venv
+venv/
+ENV/
+env/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Testing
+tests/
+test_*.py
+*_test.py
+conftest.py
+pytest.ini
+
+# Documentation
+README.md
+*.md
+docs/
+
+# Development files
+docker-build.log
+run_migration.py
+
+# Temporary files
+temp/
+downloads/
+*.log
+*.tmp
+
+# Build artifacts
+dist/
+build/
+
+# Node modules (if any)
+node_modules/
+
+# Docker files
+Dockerfile*
+.dockerignore

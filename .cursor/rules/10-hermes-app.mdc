@@ -1,0 +1,168 @@
+---
+globs:
+  - "packages/hermes-app/**/*.{ts,tsx}"
+---
+
+# Hermes App - TypeScript/React Rules
+
+## TypeScript
+
+### Type Safety
+- Use strict TypeScript settings (`tsconfig.json`)
+- Avoid `any` type - use `unknown` or specific types
+- Define interfaces for all data structures
+- Export types from `src/types/` directory
+
+### Import Conventions
+- Use absolute imports via path aliases configured in `tsconfig.json`
+- Group imports: React, third-party, local components, types, styles
+- Use named imports over default imports when possible
+
+## React Patterns
+
+### Component Structure
+- Prefer functional components with hooks
+- Use TypeScript for props interfaces
+- Export components as named exports
+- Keep components focused and single-purpose
+- Use functional programming patterns, avoid class components
+- Use hooks for state management
+
+Example structure:
+```typescript
+interface MyComponentProps {
+  title: string;
+  onAction: () => void;
+}
+
+export function MyComponent({ title, onAction }: MyComponentProps) {
+  // Component logic
+  return <div>{title}</div>;
+}
+```
+
+### State Management
+- Use React hooks (`useState`, `useEffect`, etc.)
+- TanStack Query for server state
+- Context API for global client state (see `AuthContext`)
+- Custom hooks for reusable logic (see `src/hooks/`)
+
+## TanStack Router
+
+### Route Files
+- Place route files in `src/routes/`
+- Follow file-based routing conventions
+- Route files use special naming (e.g., `auth.login.tsx`, `__root.tsx`)
+- Define loaders and error boundaries when needed
+- Use `createFileRoute` for route definitions
+
+### Navigation
+- Use `<Link>` from `@tanstack/react-router`
+- Use `useNavigate()` hook for programmatic navigation
+- Use type-safe route paths
+
+## TanStack Query
+
+### Query Keys
+- Use array-based query keys with hierarchy: `['resource', 'action', ...params]`
+- Example: `['downloads', 'list', { status: 'completed' }]`
+
+### Hooks Usage
+- Use `useQuery` for fetching data
+- Use `useMutation` for creating/updating/deleting
+- Configure query client in `src/lib/queryClient.ts`
+- Handle loading and error states appropriately
+
+### Mutations
+- Invalidate relevant queries after mutations
+- Optimistic updates for better UX when appropriate
+- Show toast notifications for success/error states
+
+## shadcn/ui Components
+
+### Component Usage
+- Import components from `src/components/ui/`
+- Use composition to build complex components
+- Maintain accessibility (ARIA attributes)
+- Follow shadcn/ui conventions and styling
+
+### Styling
+- Use Tailwind v4 CSS classes
+- Use `cn()` utility from `src/lib/utils.ts` for conditional classes
+- Follow mobile-first responsive design
+- Use `class-variance-authority` for component variants
+
+### Theme
+- Support light/dark themes via `next-themes`
+- Access theme via `useTheme()` hook
+- Use CSS variables for theme colors (defined in `style.css`)
+
+## Custom Hooks
+
+### Naming
+- All custom hooks must start with `use` prefix
+- Place in `src/hooks/` directory
+- One hook per file with same name as hook
+
+### Structure
+- Define clear TypeScript return types
+- Include JSDoc comments for complex hooks
+- Compose smaller hooks into larger ones
+- Handle cleanup in `useEffect` return functions
+
+Examples from codebase:
+- `useConfiguration` - App configuration state
+- `useDownloadActions` - Download queue operations  
+- `useNotifications` - Toast notification system
+- `useKeyboardShortcuts` - Keyboard shortcuts
+
+## State and Effects
+
+### useState
+- Initialize with correct types
+- Use functional updates for derived state
+- Consider using `useReducer` for complex state
+
+### useEffect
+- Declare dependencies accurately
+- Return cleanup functions
+- Avoid unnecessary re-renders
+
+## API Integration
+
+### API Client
+- Use centralized API client from `src/services/api/client.ts`
+- Handle authentication tokens automatically
+- Type API responses using interfaces from `src/types/api.ts`
+
+### Error Handling
+- Catch and display user-friendly error messages
+- Use toast notifications for errors
+- Log errors for debugging
+
+## Performance
+
+### Code Splitting
+- Use dynamic imports for large components
+- Leverage Vite's automatic code splitting
+- Lazy load routes when appropriate
+
+### Memoization
+- Use `useMemo` for expensive computations
+- Use `useCallback` for callback functions passed as props
+- Use `React.memo` for components that re-render frequently
+
+## Accessibility
+
+- Use semantic HTML elements
+- Include ARIA labels and roles
+- Ensure keyboard navigation works
+- Test with screen readers
+- Maintain sufficient color contrast
+
+## Linting and Formatting
+
+- Run `pnpm lint` before committing
+- Run `pnpm lint:fix` to auto-fix issues
+- ESLint configuration in `eslint.config.js`
+- TypeScript checks: `pnpm type-check`

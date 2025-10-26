@@ -1,0 +1,96 @@
+name: 🎨 Frontend Issue (hermes-app)
+description: Issues specific to the React frontend, UI/UX, or client-side functionality
+title: "[FRONTEND] <brief description>"
+labels: ["hermes-app", "frontend", "needs-triage"]
+assignees: []
+body:
+  - type: dropdown
+    id: issue_type
+    attributes:
+      label: 🎯 What kind of issue?
+      description: What type of frontend problem is this?
+      options:
+        - UI/UX bug
+        - JavaScript error
+        - Styling issue
+        - Performance problem
+        - Mobile/responsive issue
+        - API integration
+        - Authentication
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: browser
+    attributes:
+      label: 🌐 Browser
+      description: Which browser were you using?
+      options:
+        - Chrome
+        - Firefox
+        - Safari
+        - Edge
+        - Mobile browser
+        - Multiple browsers
+        - Other
+    validations:
+      required: false
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 🔄 What happened?
+      description: Steps to reproduce this frontend issue
+      placeholder: |
+        1. Start frontend: `pnpm dev` or `docker compose up`
+        2. Go to [page/section]: [URL or describe where]
+        3. Do this: [click button, fill form, etc.]
+        4. See the problem: [what went wrong?]
+
+        **What I expected:** [What should happen]
+        **What actually happened:** [The bug]
+
+        **Console errors:** [F12 → Console → paste any red error messages]
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: visual_context
+    attributes:
+      label: 📸 Screenshots (optional)
+      description: Visual evidence of the issue
+      placeholder: |
+        - Drag and drop screenshots here
+        - Or describe what you see: [broken layout, wrong colors, etc.]
+        - Browser: [Chrome/Firefox/Safari]
+        - Screen size: [desktop/mobile, resolution]
+    validations:
+      required: false
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: 💻 Environment (optional)
+      description: Your setup details
+      placeholder: |
+        - **OS:** Linux / macOS / Windows
+        - **Browser:** Chrome / Firefox / Safari
+        - **How you run it:** Docker / `pnpm dev` / Production
+        - **Any console errors:** [F12 → Console]
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 📝 Anything else? (optional)
+      description: Any other details that might help
+      placeholder: |
+        - Related API calls or backend issues
+        - When this started happening
+        - Workarounds you've found
+        - Similar problems elsewhere in the app
+    validations:
+      required: false

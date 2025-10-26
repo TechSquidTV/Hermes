@@ -1,0 +1,198 @@
+---
+globs:
+  - "packages/hermes-api/app/db/**/*.py"
+---
+
+# Hermes API - Database Layer Rules
+
+## SQLAlchemy Async Patterns
+
+### Session Management
+- Always use async sessions: `AsyncSession`
+- Get sessions via dependency injection: `get_database_session()`
+- Never create sessions directly - use the session factory
+- Sessions are automatically committed/rolled back by FastAPI
+
+Example:
+```python
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.db.session import get_database_session
+
+async def my_endpoint(
+    db: AsyncSession = Depends(get_database_session)
+):
+    # Use db session
+    pass
+```
+
+### Queries
+- Use async query methods: `execute()`, `scalar()`, `scalars()`
+- Always `await` database operations
+- Use `select()` for queries, not legacy query API
+
+Example:
+```python
+from sqlalchemy import select
+from app.db.models import User
+
+result = await session.execute(
+    select(User).where(User.username == username)
+)
+user = result.scalar_one_or_none()
+```
+
+## Repository Pattern
+
+### Structure
+- Define repositories in `app/db/repositories.py`
+- Each model should have a corresponding repository class
+- Repositories encapsulate data access logic
+- Keep business logic out of repositories
+
+### Repository Methods
+- Use descriptive method names: `get_by_id()`, `create()`, `update()`, `delete()`
+- Return model instances or None (not query objects)
+- Handle exceptions at repository level
+- Use type hints for all parameters and returns
+
+Example:
+```python
+class UserRepository:
+    def __init__(self, session: AsyncSession):
+        self.session = session
+    
+    async def get_by_id(self, user_id: str) -> Optional[User]:
+        result = await self.session.execute(
+            select(User).where(User.id == user_id)
+        )
+        return result.scalar_one_or_none()
+    
+    async def create(self, user_data: dict) -> User:
+        user = User(**user_data)
+        self.session.add(user)
+        await self.session.flush()
+        return user
+```
+
+### Repository Access
+- Access repositories via `get_repositories()` function
+- Returns dictionary of repository instances
+- Repositories share the same session
+
+```python
+from app.db.repositories import get_repositories
+
+repos = await get_repositories()
+user = await repos["users"].get_by_id(user_id)
+```
+
+## Models
+
+### Model Definition
+- Define models in `app/db/models.py`
+- Inherit from declarative base defined in `app/db/base.py`
+- Use type hints in column definitions
+- Include `__tablename__` attribute
+
+### Column Definitions
+- Use appropriate SQLAlchemy types
+- Set `nullable=False` for required fields
+- Define `default` or `server_default` for defaults
+- Use `index=True` for frequently queried columns
+
+### Relationships
+- Define relationships using `relationship()`
+- Use `back_populates` for bidirectional relationships
+- Use `lazy="selectin"` for async loading
+- Consider cascade delete behavior
+
+Example:
+```python
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from datetime import datetime
+from typing import Optional
+
+class User(Base):
+    __tablename__ = "users"
+    
+    id: Mapped[str] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(unique=True, index=True)
+    email: Mapped[Optional[str]] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    
+    # Relationships
+    downloads: Mapped[list["Download"]] = relationship(
+        back_populates="user",
+        lazy="selectin"
+    )
+```
+
+## Migrations (Alembic)
+
+### Creating Migrations
+- Use Alembic for schema migrations
+- Configuration in `alembic.ini`
+- Migration scripts in `migrations/versions/`
+- Use descriptive migration messages
+
+### Migration Commands
+```bash
+# Create new migration
+alembic revision --autogenerate -m "Add user table"
+
+# Apply migrations
+alembic upgrade head
+
+# Rollback migration
+alembic downgrade -1
+```
+
+### Migration Best Practices
+- Review auto-generated migrations before applying
+- Test migrations in development first
+- Include both upgrade and downgrade paths
+- Add data migrations when needed
+- Never modify applied migrations
+
+## Database Configuration
+
+### Connection Settings
+- Configure database URL in `app/core/config.py`
+- Use async SQLite driver: `aiosqlite`
+- Connection string format: `sqlite+aiosqlite:///./data/hermes.db`
+
+### Session Configuration
+- Pool settings configured in `app/db/session.py`
+- Echo SQL in development (for debugging)
+- Disable echo in production
+
+## Transactions
+
+### Transaction Boundaries
+- FastAPI handles transactions automatically
+- Manual transaction control when needed:
+
+```python
+async with session.begin():
+    # Multiple operations in one transaction
+    user = await repos["users"].create(user_data)
+    await repos["api_keys"].create(api_key_data)
+```
+
+### Error Handling
+- SQLAlchemy exceptions should be caught and converted to HTTP exceptions
+- Rollback happens automatically on exceptions
+- Log database errors with context
+
+## Testing
+
+### Test Database
+- Use separate database for tests
+- Reset database state between tests
+- Use fixtures for common test data
+
+### Repository Testing
+- Test each repository method independently
+- Mock external dependencies
+- Verify database state after operations
+- Test error conditions

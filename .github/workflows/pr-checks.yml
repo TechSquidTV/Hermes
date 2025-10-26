@@ -1,0 +1,136 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches:
+      - main
+
+# Cancel in-progress runs when a new push is made to the same PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # Determine which packages have changes
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'packages/hermes-app/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+            backend:
+              - 'packages/hermes-api/**'
+
+  # Frontend validation
+  frontend-checks:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.19.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm type-check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test
+        run: pnpm test:hermes-app
+        continue-on-error: true # Tests may not exist yet
+
+  # Backend validation
+  backend-checks:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        working-directory: packages/hermes-api
+        run: uv sync --frozen --all-groups
+
+      - name: Run black (format check)
+        working-directory: packages/hermes-api
+        run: uv run black --check app/ tests/
+
+      - name: Run isort (import sorting check)
+        working-directory: packages/hermes-api
+        run: uv run isort --check-only app/ tests/
+
+      - name: Run flake8 (linting)
+        working-directory: packages/hermes-api
+        run: uv run flake8 app/ tests/
+
+      - name: Run mypy (type checking)
+        working-directory: packages/hermes-api
+        run: uv run mypy app/
+
+      - name: Run tests with coverage
+        working-directory: packages/hermes-api
+        run: uv run pytest --cov=app --cov-report=term-missing
+
+  # Summary job that gates merging
+  pr-checks-complete:
+    runs-on: ubuntu-latest
+    needs: [detect-changes, frontend-checks, backend-checks]
+    if: always()
+    steps:
+      - name: Check all jobs succeeded
+        run: |
+          # Check if any required job failed
+          if [[ "${{ needs.frontend-checks.result }}" == "failure" ]] || [[ "${{ needs.backend-checks.result }}" == "failure" ]]; then
+            echo "One or more checks failed"
+            exit 1
+          fi
+          
+          # If no changes were detected, that's ok
+          if [[ "${{ needs.detect-changes.outputs.frontend }}" != "true" ]] && [[ "${{ needs.detect-changes.outputs.backend }}" != "true" ]]; then
+            echo "No package changes detected, skipping checks"
+            exit 0
+          fi
+          
+          # All required checks passed
+          echo "All checks passed!"

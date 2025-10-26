@@ -1,0 +1,106 @@
+name: 🔧 API Issue (hermes-api)
+description: Issues specific to the backend API, endpoints, or server-side functionality
+title: "[API] <brief description>"
+labels: ["hermes-api", "backend", "needs-triage"]
+assignees: []
+body:
+  - type: dropdown
+    id: issue_type
+    attributes:
+      label: 🔍 What kind of API issue?
+      description: What type of problem are you experiencing?
+      options:
+        - Endpoint not working
+        - Authentication/Authorization issue
+        - Data validation error
+        - Performance problem
+        - Database issue
+        - Background task failure
+        - Rate limiting
+        - Error handling
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: request
+    attributes:
+      label: 📤 What request caused the issue?
+      description: The API call that didn't work as expected
+      placeholder: |
+        **URL:** `GET http://localhost:8000/api/v1/...` or `POST /download/`
+
+        **Request body (if POST/PUT):**
+        ```json
+        {
+          "url": "https://youtube.com/watch?v=...",
+          "format": "best"
+        }
+        ```
+
+        **What I expected:** [What should happen]
+        **What happened instead:** [Error message or unexpected response]
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 🔄 How to reproduce
+      description: Steps to reproduce this API issue
+      placeholder: |
+        1. Start API: `docker compose up api` or `pnpm dev:api`
+        2. Make the request: [describe the API call]
+        3. See the problem: [what happens?]
+
+        **Example curl command:**
+        ```bash
+        curl -X POST "http://localhost:8000/api/v1/download/" \
+          -H "Content-Type: application/json" \
+          -d '{"url": "https://youtube.com/watch?v=...", "format": "best"}'
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 📋 Error logs (optional)
+      description: Any error messages from the API
+      placeholder: |
+        **API logs:**
+        ```bash
+        docker compose logs api
+        ```
+
+        **Error messages:**
+        ```
+        [Paste any error messages here]
+        ```
+      render: shell
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: 🌍 Environment (optional)
+      description: Your setup details
+      placeholder: |
+        - **How you run the API:** Docker / Manual
+        - **Python version:** (if manual setup)
+        - **Database:** SQLite / PostgreSQL
+        - **Any custom config:** [environment variables, etc.]
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 📝 Anything else? (optional)
+      description: Other details that might help
+      placeholder: |
+        - Test URLs that trigger the issue
+        - Similar working endpoints
+        - Recent changes
+        - Error screenshots
+    validations:
+      required: false

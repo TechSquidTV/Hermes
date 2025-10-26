@@ -1,0 +1,80 @@
+/* Nord Theme - Arctic-Inspired Cool Colors */
+
+.theme-nord {
+  /* Dark mode - Polar Night */
+  --background: 220 16% 22%;        /* Nord0 */
+  --foreground: 219 28% 88%;        /* Nord6 */
+  --card: 220 17% 26%;              /* Nord1 */
+  --card-foreground: 219 28% 88%;
+  --popover: 220 17% 26%;
+  --popover-foreground: 219 28% 88%;
+  --primary: 210 34% 63%;           /* Nord8 - Frost */
+  --primary-foreground: 220 16% 22%;
+  --secondary: 220 17% 32%;         /* Nord2 */
+  --secondary-foreground: 219 28% 88%;
+  --muted: 220 17% 32%;
+  --muted-foreground: 220 17% 46%;  /* Nord3 */
+  --accent: 179 25% 65%;            /* Nord7 - Aurora */
+  --accent-foreground: 220 16% 22%;
+  --destructive: 354 42% 56%;       /* Nord11 */
+  --destructive-foreground: 219 28% 88%;
+  --border: 220 17% 32%;
+  --input: 220 17% 32%;
+  --ring: 210 34% 63%;
+
+  /* Sidebar colors */
+  --sidebar-background: 220 16% 22%;
+  --sidebar-foreground: 219 28% 88%;
+  --sidebar-primary: 210 34% 63%;
+  --sidebar-primary-foreground: 220 16% 22%;
+  --sidebar-accent: 220 17% 32%;
+  --sidebar-accent-foreground: 219 28% 88%;
+  --sidebar-border: 220 17% 32%;
+  --sidebar-ring: 210 34% 63%;
+  --sidebar: 220 16% 22%;
+
+  /* Grain effect - subtle for Nord's clean aesthetic */
+  --grain-opacity: 0.03;
+  --grain-blend-mode: soft-light;
+  --grain-visibility: visible;
+}
+
+.theme-nord.light {
+  /* Light mode - Snow Storm */
+  --background: 219 28% 88%;        /* Nord6 */
+  --foreground: 220 16% 22%;        /* Nord0 */
+  --card: 219 27% 94%;              /* Nord5 */
+  --card-foreground: 220 16% 22%;
+  --popover: 219 27% 94%;
+  --popover-foreground: 220 16% 22%;
+  --primary: 213 32% 52%;           /* Nord10 - Darker frost */
+  --primary-foreground: 219 28% 88%;
+  --secondary: 218 27% 82%;         /* Nord4 */
+  --secondary-foreground: 220 16% 22%;
+  --muted: 218 27% 82%;
+  --muted-foreground: 220 17% 32%;
+  --accent: 179 25% 45%;            /* Darker aqua */
+  --accent-foreground: 219 28% 88%;
+  --destructive: 354 42% 56%;
+  --destructive-foreground: 219 28% 88%;
+  --border: 218 27% 82%;
+  --input: 218 27% 82%;
+  --ring: 213 32% 52%;
+
+  /* Sidebar colors */
+  --sidebar-background: 219 27% 94%;
+  --sidebar-foreground: 220 16% 22%;
+  --sidebar-primary: 213 32% 52%;
+  --sidebar-primary-foreground: 219 28% 88%;
+  --sidebar-accent: 218 27% 82%;
+  --sidebar-accent-foreground: 220 16% 22%;
+  --sidebar-border: 218 27% 82%;
+  --sidebar-ring: 213 32% 52%;
+  --sidebar: 219 27% 94%;
+
+  /* Grain effect - very subtle for light mode */
+  --grain-opacity: 0.02;
+  --grain-blend-mode: soft-light;
+  --grain-visibility: visible;
+}
+

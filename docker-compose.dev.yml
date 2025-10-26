@@ -1,0 +1,139 @@
+# Hermes Development Stack
+# Features hot reload for both frontend and backend
+#
+# Usage: docker compose -f docker-compose.dev.yml up
+#
+# Services:
+#   - Frontend: http://localhost:5173 (Vite dev server with hot reload)
+#   - API: http://localhost:8000 (with auto-reload on code changes)
+#   - Redis: localhost:6379 (exposed for debugging)
+
+services:
+  # Frontend development server (Vite with hot reload)
+  app:
+    build:
+      context: .
+      dockerfile: packages/hermes-app/Dockerfile.dev
+    container_name: hermes-app-dev
+    restart: unless-stopped
+    ports:
+      - "${HERMES_DEV_PORT:-5173}:5173"
+    volumes:
+      # Mount source code for hot reload
+      - ./packages/hermes-app/src:/app/src
+      - ./packages/hermes-app/public:/app/public
+      - ./packages/hermes-app/index.html:/app/index.html
+      # Prevent overwriting node_modules from host
+      - /app/node_modules
+    networks:
+      - hermes-network
+    environment:
+      # Optional: Override API URL if needed
+      - VITE_API_BASE_URL=/api/v1
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5173/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # Backend API with hot reload
+  api:
+    build:
+      context: ./packages/hermes-api
+      dockerfile: Dockerfile
+    container_name: hermes-api-dev
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8000}:8000"
+    env_file:
+      - .env
+    environment:
+      - HERMES_SECRET_KEY=${HERMES_SECRET_KEY}
+      - HERMES_DEBUG=true
+      - HERMES_REDIS_URL=${HERMES_REDIS_URL:-redis://redis:6379}
+      - HERMES_ALLOWED_ORIGINS=["http://localhost:5173","http://localhost:3000","http://localhost:8000"]
+    volumes:
+      - ./packages/hermes-api/downloads:/app/downloads
+      - ./packages/hermes-api/temp:/app/temp
+      - ./packages/hermes-api/data:/app/data
+      # Mount source code for hot reload
+      - ./packages/hermes-api/app:/app/app
+    networks:
+      - hermes-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # Enable auto-reload on code changes
+    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --log-level debug
+
+  # Celery worker with hot reload
+  celery_worker:
+    build:
+      context: ./packages/hermes-api
+      dockerfile: Dockerfile
+    container_name: hermes-worker-dev
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - HERMES_SECRET_KEY=${HERMES_SECRET_KEY}
+      - HERMES_DEBUG=true
+      - HERMES_REDIS_URL=${HERMES_REDIS_URL:-redis://redis:6379}
+    volumes:
+      - ./packages/hermes-api/downloads:/app/downloads
+      - ./packages/hermes-api/temp:/app/temp
+      - ./packages/hermes-api/data:/app/data
+      # Mount source code for hot reload
+      - ./packages/hermes-api/app:/app/app
+    networks:
+      - hermes-network
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    command: uv run celery -A app.tasks.celery_app worker --loglevel=debug --concurrency=1 --hostname=hermes-worker@%h
+    healthcheck:
+      test: ["CMD", "celery", "-A", "app.tasks.celery_app", "inspect", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Redis for caching and task queue
+  redis:
+    image: redis:7-alpine
+    container_name: hermes-redis-dev
+    restart: unless-stopped
+    ports:
+      # Expose for debugging with redis-cli
+      - "6379:6379"
+    volumes:
+      - redis_data_dev:/data
+    networks:
+      - hermes-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+networks:
+  hermes-network:
+    driver: bridge
+
+volumes:
+  redis_data_dev:    # Separate Redis data for development
+

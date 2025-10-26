@@ -1,0 +1,78 @@
+/* Tokyo Night Theme - Deep Purples and Blues */
+
+.theme-tokyo-night {
+  /* Dark mode - Tokyo Night Storm */
+  --background: 224 20% 15%;        /* Background */
+  --foreground: 210 50% 96%;        /* Foreground */
+  --card: 224 20% 18%;              /* Elevated background */
+  --card-foreground: 210 50% 96%;
+  --popover: 224 20% 18%;
+  --popover-foreground: 210 50% 96%;
+  --primary: 250 60% 75%;           /* Purple */
+  --primary-foreground: 224 20% 15%;
+  --secondary: 224 20% 25%;         /* Muted */
+  --secondary-foreground: 210 50% 96%;
+  --muted: 224 20% 25%;
+  --muted-foreground: 224 15% 55%;
+  --accent: 210 100% 70%;           /* Blue */
+  --accent-foreground: 224 20% 15%;
+  --destructive: 0 70% 65%;         /* Red */
+  --destructive-foreground: 210 50% 96%;
+  --border: 224 20% 25%;
+  --input: 224 20% 25%;
+  --ring: 250 60% 75%;
+
+  /* Sidebar colors */
+  --sidebar-background: 224 20% 15%;
+  --sidebar-foreground: 210 50% 96%;
+  --sidebar-primary: 250 60% 75%;
+  --sidebar-primary-foreground: 224 20% 15%;
+  --sidebar-accent: 224 20% 18%;
+  --sidebar-accent-foreground: 210 50% 96%;
+  --sidebar-border: 224 20% 25%;
+  --sidebar-ring: 250 60% 75%;
+  --sidebar: 224 20% 15%;
+
+  /* Grain effect - disabled for Tokyo Night's smooth neon aesthetic */
+  --grain-opacity: 0.02;
+  --grain-blend-mode: overlay;
+}
+
+.theme-tokyo-night.light {
+  /* Light mode - Tokyo Night Day */
+  --background: 210 20% 98%;
+  --foreground: 224 20% 15%;
+  --card: 210 20% 100%;
+  --card-foreground: 224 20% 15%;
+  --popover: 210 20% 100%;
+  --popover-foreground: 224 20% 15%;
+  --primary: 250 60% 50%;           /* Darker purple */
+  --primary-foreground: 210 20% 98%;
+  --secondary: 210 20% 95%;
+  --secondary-foreground: 224 20% 15%;
+  --muted: 210 20% 95%;
+  --muted-foreground: 224 15% 40%;
+  --accent: 210 100% 45%;           /* Darker blue */
+  --accent-foreground: 210 20% 98%;
+  --destructive: 0 70% 50%;
+  --destructive-foreground: 210 20% 98%;
+  --border: 210 20% 90%;
+  --input: 210 20% 90%;
+  --ring: 250 60% 50%;
+
+  /* Sidebar colors */
+  --sidebar-background: 210 20% 98%;
+  --sidebar-foreground: 224 20% 15%;
+  --sidebar-primary: 250 60% 50%;
+  --sidebar-primary-foreground: 210 20% 98%;
+  --sidebar-accent: 210 20% 95%;
+  --sidebar-accent-foreground: 224 20% 15%;
+  --sidebar-border: 210 20% 90%;
+  --sidebar-ring: 250 60% 50%;
+  --sidebar: 210 20% 98%;
+
+
+  --grain-opacity: 0.04;
+  --grain-blend-mode: overlay;
+}
+

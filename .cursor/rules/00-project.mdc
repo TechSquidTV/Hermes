@@ -1,0 +1,55 @@
+---
+globs:
+  - "**/*"
+---
+
+# Hermes Project-Wide Rules
+
+## Monorepo Structure
+
+This is a pnpm workspace monorepo with two main packages:
+- `packages/hermes-api` - Python FastAPI backend
+- `packages/hermes-app` - TypeScript React frontend
+
+## General Conventions
+
+### File Organization
+- Keep package-specific code within respective `packages/` directories
+- Shared documentation goes in `docs/` at root level
+- Docker configuration can be at root or package level
+
+### Environment Variables
+- Always provide `.env.example` with placeholder values
+- Use `HERMES_` prefix for all environment variables
+- Document all environment variables in `docs/CONFIGURATION.md`
+
+### Git Commits
+- Use conventional commit format: `type(scope): description`
+- Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
+- Keep commits atomic and focused
+- Reference issue numbers when applicable
+
+### Code Quality
+- All code must pass respective linters before commit
+- Write tests for new features
+- Update documentation when changing behavior
+- Follow language-specific style guides (Black for Python, ESLint for TypeScript)
+
+### Documentation
+- README files should be clear and up-to-date
+
+## pnpm Workspace Commands
+
+Run commands from root using:
+```bash
+pnpm --filter hermes-app <command>
+pnpm --filter hermes-api <command>
+```
+
+Or use the convenience scripts defined in root `package.json`.
+
+## Tooling
+
+- hermes-app uses `pnpm` for package management. Do not use `npm`.
+- hermes-api uses `uv` for package management. Do not use `pip`.
+- Use `docker compose` for container orchestration. Do not use `docker-compose`.

@@ -1,0 +1,19 @@
+{
+  "name": "Hermes",
+  "short_name": "Hermes",
+  "description": "Hermes: open source video downloader",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/hermes.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
+

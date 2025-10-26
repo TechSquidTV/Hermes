@@ -1,0 +1,279 @@
+---
+globs:
+  - "**/tests/**/*"
+  - "**/__tests__/**/*"
+  - "**/*.test.{ts,tsx,py}"
+  - "**/*.spec.{ts,tsx,py}"
+  - "**/test_*.py"
+---
+
+# Cross-Cutting Testing Standards
+
+## Testing Philosophy
+
+### Test Pyramid
+- **Unit Tests (70%)**: Fast, isolated
+- **Integration Tests (20%)**: Component interactions
+- **E2E Tests (10%)**: Complete workflows
+
+### What to Test
+✅ **Do test:**
+- Business logic
+- Edge cases and errors
+- API contracts
+- Critical workflows
+- Data transformations
+
+❌ **Don't test:**
+- Third-party library internals
+- Trivial getters/setters
+- Framework code
+
+## Test Organization
+
+Python (hermes-api):
+```
+tests/
+├── conftest.py              # Shared fixtures
+├── test_api/                # API tests
+├── test_integration/        # Integration tests
+├── test_services/           # Service tests
+└── test_tasks/              # Task tests
+```
+
+TypeScript (hermes-app):
+```
+src/
+├── components/__tests__/    # Component tests
+├── hooks/__tests__/         # Hook tests
+└── services/__tests__/      # Service tests
+```
+
+### File Naming
+- Python: `test_*.py`
+- TypeScript: `*.test.ts`, `*.test.tsx`
+- Match test file to source file name
+
+## Test Structure
+
+### Arrange-Act-Assert
+```python
+def test_create_user():
+    # Arrange
+    user_data = {"username": "test", "email": "test@example.com"}
+    
+    # Act
+    result = create_user(user_data)
+    
+    # Assert
+    assert result.username == "test"
+    assert result.id is not None
+```
+
+### Test Naming
+Follow: `test_<what>_<condition>_<expected>`
+
+```python
+# ✅ Good
+def test_create_download_valid_url_returns_download():
+def test_get_download_not_found_raises_404():
+
+# ❌ Bad
+def test_download():
+def test_1():
+```
+
+## Best Practices
+
+### Test Independence
+- Each test runs independently
+- Don't rely on order
+- Clean up after tests
+- Use fresh data
+
+### Single Assertion Concept
+```python
+# ✅ Good - One concept (user creation)
+def test_create_user():
+    user = create_user({"username": "test"})
+    assert user.username == "test"
+    assert user.id is not None
+    assert user.created_at is not None
+
+# ❌ Bad - Multiple concepts
+def test_user_workflow():
+    user = create_user({"username": "test"})
+    updated = update_user(user)
+    delete_user(user.id)
+```
+
+### Descriptive Assertions
+```python
+assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+assert len(downloads) > 0, "Should return downloads"
+assert "id" in data, "Missing required 'id' field"
+```
+
+## Mocking
+
+### When to Mock
+- External API calls
+- File system operations
+- Database calls (in unit tests)
+- Time-dependent code
+- Slow operations
+
+### Python
+```python
+def test_fetch_video(mocker):
+    mock_api = mocker.patch("app.services.yt_dlp_service.extract_info")
+    mock_api.return_value = {"title": "Test", "duration": 120}
+    
+    result = get_video_info("https://example.com")
+    
+    assert result["title"] == "Test"
+    mock_api.assert_called_once()
+```
+
+### TypeScript
+```typescript
+test("fetches user", async () => {
+  const mockFetch = jest.fn().mockResolvedValue({
+    json: async () => ({ id: "1", name: "Test" }),
+  });
+  global.fetch = mockFetch;
+  
+  const user = await fetchUser("1");
+  expect(user.name).toBe("Test");
+});
+```
+
+## Test Data
+
+### Fixtures (Python)
+```python
+@pytest.fixture
+def test_user():
+    return {
+        "username": "testuser",
+        "email": "test@example.com"
+    }
+
+@pytest.fixture
+def test_download(test_user):
+    return {
+        "url": "https://example.com/video",
+        "user_id": test_user["id"]
+    }
+```
+
+### Builders
+```python
+class DownloadBuilder:
+    def __init__(self):
+        self.data = {"url": "https://example.com", "status": "queued"}
+    
+    def with_url(self, url: str):
+        self.data["url"] = url
+        return self
+    
+    def build(self):
+        return self.data
+
+# Usage
+download = DownloadBuilder().with_status("completed").build()
+```
+
+## Coverage
+
+### Running Coverage
+Python:
+```bash
+pytest --cov=app --cov-report=html
+```
+
+TypeScript:
+```bash
+npm test -- --coverage
+```
+
+### Goals
+- Aim for 80%+ on critical code
+- 100% not required
+- Focus on meaningful coverage
+- Prioritize complex logic
+
+## Performance
+
+### Mark Slow Tests
+```python
+@pytest.mark.slow
+def test_large_download():
+    pass
+
+# Run fast tests only
+# pytest -m "not slow"
+```
+
+## Integration Testing
+
+```python
+@pytest.mark.integration
+async def test_full_flow(db_session, test_user):
+    repos = await get_repositories()
+    
+    # Create
+    download = await repos["downloads"].create({
+        "url": "https://example.com",
+        "user_id": test_user.id
+    })
+    
+    # Verify
+    retrieved = await repos["downloads"].get_by_id(download.id)
+    assert retrieved is not None
+```
+
+## Error Testing
+
+```python
+def test_invalid_url():
+    with pytest.raises(ValidationError) as exc:
+        create_download("not-a-url")
+    assert "Invalid URL" in str(exc.value)
+
+def test_not_found():
+    with pytest.raises(HTTPException) as exc:
+        get_download("nonexistent")
+    assert exc.value.status_code == 404
+```
+
+## CI Integration
+
+- Run full suite on every commit
+- Run linting and type checking
+- Generate coverage reports
+- Fail build on failures
+
+### Skip in CI
+```python
+@pytest.mark.skipif(
+    os.getenv("CI") == "true",
+    reason="Requires external service"
+)
+def test_external():
+    pass
+```
+
+## Documentation
+
+```python
+def test_download_formats():
+    """Test various supported URL formats."""
+    urls = [
+        "https://www.youtube.com/watch?v=abc",
+        "https://youtu.be/abc",
+    ]
+    for url in urls:
+        result = parse_url(url)
+        assert result is not None, f"Failed: {url}"
+```

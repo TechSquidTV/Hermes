@@ -1,0 +1,80 @@
+/* Dracula Theme - Vibrant Purples and Cyans */
+
+.theme-dracula {
+  /* Dark mode - Classic Dracula */
+  --background: 231 15% 18%;        /* Background */
+  --foreground: 60 30% 96%;         /* Foreground */
+  --card: 232 14% 21%;              /* Current Line */
+  --card-foreground: 60 30% 96%;
+  --popover: 232 14% 21%;
+  --popover-foreground: 60 30% 96%;
+  --primary: 326 100% 74%;          /* Pink */
+  --primary-foreground: 231 15% 18%;
+  --secondary: 231 15% 30%;         /* Comment */
+  --secondary-foreground: 60 30% 96%;
+  --muted: 231 15% 30%;
+  --muted-foreground: 231 15% 50%;
+  --accent: 191 97% 77%;            /* Cyan */
+  --accent-foreground: 231 15% 18%;
+  --destructive: 0 100% 67%;        /* Red */
+  --destructive-foreground: 60 30% 96%;
+  --border: 231 15% 30%;
+  --input: 231 15% 30%;
+  --ring: 326 100% 74%;
+
+  /* Sidebar colors */
+  --sidebar-background: 231 15% 18%;
+  --sidebar-foreground: 60 30% 96%;
+  --sidebar-primary: 326 100% 74%;
+  --sidebar-primary-foreground: 231 15% 18%;
+  --sidebar-accent: 232 14% 21%;
+  --sidebar-accent-foreground: 60 30% 96%;
+  --sidebar-border: 231 15% 30%;
+  --sidebar-ring: 326 100% 74%;
+  --sidebar: 231 15% 18%;
+
+  /* Grain effect - moderate for dramatic effect */
+  --grain-opacity: 0.08;
+  --grain-blend-mode: multiply;
+  --grain-visibility: visible;
+}
+
+.theme-dracula.light {
+  /* Light mode - Dracula Light variant */
+  --background: 0 0% 98%;
+  --foreground: 231 15% 18%;
+  --card: 0 0% 100%;
+  --card-foreground: 231 15% 18%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 231 15% 18%;
+  --primary: 326 100% 50%;          /* Darker pink */
+  --primary-foreground: 0 0% 98%;
+  --secondary: 231 15% 95%;
+  --secondary-foreground: 231 15% 18%;
+  --muted: 231 15% 95%;
+  --muted-foreground: 231 15% 40%;
+  --accent: 191 97% 40%;            /* Darker cyan */
+  --accent-foreground: 0 0% 98%;
+  --destructive: 0 100% 50%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 231 15% 90%;
+  --input: 231 15% 90%;
+  --ring: 326 100% 50%;
+
+  /* Sidebar colors */
+  --sidebar-background: 0 0% 98%;
+  --sidebar-foreground: 231 15% 18%;
+  --sidebar-primary: 326 100% 50%;
+  --sidebar-primary-foreground: 0 0% 98%;
+  --sidebar-accent: 231 15% 95%;
+  --sidebar-accent-foreground: 231 15% 18%;
+  --sidebar-border: 231 15% 90%;
+  --sidebar-ring: 326 100% 50%;
+  --sidebar: 0 0% 98%;
+
+  /* Grain effect - minimal for light mode */
+  --grain-opacity: 0.02;
+  --grain-blend-mode: overlay;
+  --grain-visibility: visible;
+}
+

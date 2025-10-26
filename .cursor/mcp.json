@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "shadcn": {
+      "command": "npx",
+      "args": [
+        "shadcn@latest",
+        "mcp"
+      ]
+    },
+    "css": {
+      "command": "npx",
+      "args": ["-y", "css-mcp"]
+    }
+  }
+}

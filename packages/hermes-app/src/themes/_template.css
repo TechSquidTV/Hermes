@@ -1,0 +1,113 @@
+/* Custom Theme Template
+ * 
+ * Instructions:
+ * 1. Copy this file and rename it to your-theme-name.css
+ * 2. Replace 'custom' with your theme name (e.g., 'theme-mycustom')
+ * 3. Update all color values below (HSL format: hue saturation lightness)
+ * 4. Add @import "./themes/your-theme-name.css" to src/style.css
+ * 5. Add metadata to src/themes/index.ts
+ * 
+ * Color Format: All colors use HSL values without the hsl() wrapper
+ * Example: 210 50% 50% means hsl(210, 50%, 50%)
+ * 
+ * Required Variables:
+ * - All variables must be defined for both dark and light modes
+ * - Light mode is optional but recommended
+ */
+
+.theme-custom {
+  /* Dark mode colors */
+  
+  /* Base colors */
+  --background: 0 0% 7%;              /* Main background color */
+  --foreground: 0 0% 98%;             /* Main text color */
+  
+  /* Card/Panel colors */
+  --card: 0 0% 9%;                    /* Card background */
+  --card-foreground: 0 0% 98%;        /* Card text color */
+  
+  /* Popover colors */
+  --popover: 0 0% 9%;                 /* Popover background */
+  --popover-foreground: 0 0% 98%;     /* Popover text color */
+  
+  /* Primary action colors */
+  --primary: 28 60% 52%;              /* Primary button/link color */
+  --primary-foreground: 0 0% 100%;    /* Text on primary color */
+  
+  /* Secondary colors */
+  --secondary: 0 0% 14%;              /* Secondary elements */
+  --secondary-foreground: 0 0% 90%;   /* Text on secondary */
+  
+  /* Muted colors */
+  --muted: 0 0% 14%;                  /* Muted background */
+  --muted-foreground: 0 0% 65%;       /* Muted text */
+  
+  /* Accent colors */
+  --accent: 28 60% 52%;               /* Accent color */
+  --accent-foreground: 0 0% 100%;     /* Text on accent */
+  
+  /* Destructive/Error colors */
+  --destructive: 0 70% 50%;           /* Error/delete color */
+  --destructive-foreground: 0 0% 98%; /* Text on destructive */
+  
+  /* Form colors */
+  --border: 0 0% 20%;                 /* Border color */
+  --input: 0 0% 20%;                  /* Input border */
+  --ring: 28 60% 48%;                 /* Focus ring */
+
+  /* Sidebar colors (required) */
+  --sidebar-background: 0 0% 8%;
+  --sidebar-foreground: 0 0% 96%;
+  --sidebar-primary: 28 60% 52%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 0 0% 12%;
+  --sidebar-accent-foreground: 0 0% 96%;
+  --sidebar-border: 0 0% 14%;
+  --sidebar-ring: 28 60% 48%;
+  --sidebar: 0 0% 8%;
+
+  /* Grain effect (optional) */
+  --grain-opacity: 0.06;              /* 0 to disable, 0.01-0.10 recommended */
+  --grain-blend-mode: overlay;        /* overlay, soft-light, multiply, screen */
+  --grain-visibility: visible;        /* visible or hidden */
+}
+
+.theme-custom.light {
+  /* Light mode colors (optional but recommended) */
+  
+  --background: 0 0% 100%;
+  --foreground: 0 0% 10%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 10%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 10%;
+  --primary: 28 60% 48%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 96%;
+  --secondary-foreground: 0 0% 20%;
+  --muted: 0 0% 96%;
+  --muted-foreground: 0 0% 45%;
+  --accent: 28 60% 48%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 0 0% 90%;
+  --input: 0 0% 90%;
+  --ring: 28 60% 44%;
+
+  --sidebar-background: 0 0% 98%;
+  --sidebar-foreground: 0 0% 20%;
+  --sidebar-primary: 28 60% 48%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 0 0% 96%;
+  --sidebar-accent-foreground: 0 0% 20%;
+  --sidebar-border: 0 0% 88%;
+  --sidebar-ring: 28 60% 44%;
+  --sidebar: 0 0% 98%;
+
+  /* Grain effect (optional) */
+  --grain-opacity: 0.03;              /* Lighter for light mode */
+  --grain-blend-mode: overlay;
+  --grain-visibility: visible;
+}
+

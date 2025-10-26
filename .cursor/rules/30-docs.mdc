@@ -1,0 +1,287 @@
+---
+globs:
+  - "**/*.md"
+---
+
+# Documentation Standards
+
+## Markdown Formatting
+
+### Headings
+- Use ATX-style: `#`, `##`, etc.
+- Start with single `#` for title
+- Use hierarchical structure
+- Keep concise and descriptive
+
+### Code Blocks
+Always specify language:
+
+````markdown
+```python
+def hello_world():
+    print("Hello, World!")
+```
+
+```typescript
+function greet(name: string): string {
+  return `Hello, ${name}!`;
+}
+```
+
+```bash
+docker compose up -d
+```
+````
+
+### Lists
+
+Unordered:
+```markdown
+- First item
+- Second item
+  - Nested item
+- Third item
+```
+
+Ordered:
+```markdown
+1. First step
+1. Second step
+   1. Sub-step
+1. Third step
+```
+
+### Links
+```markdown
+✅ Good:
+See the [Configuration Guide](docs/CONFIGURATION.md) for details.
+
+❌ Bad:
+Click [here](docs/CONFIGURATION.md).
+```
+
+### Emphasis
+- `**bold**` for strong emphasis or UI elements
+- `*italic*` for light emphasis
+- `` `code` `` for inline code, commands, file names
+
+## Document Structure
+
+### Project README
+Required sections:
+1. Title and description
+2. Key features
+3. Quick start
+4. Usage examples
+5. Documentation links
+6. Contributing
+7. License
+
+### Package README
+Required sections:
+1. Package purpose
+2. Installation
+3. API/Usage
+4. Configuration
+5. Development setup
+
+### Configuration Docs
+
+Structure:
+```markdown
+# Configuration Guide
+
+## Environment Variables
+
+### `HERMES_SECRET_KEY`
+- **Type:** String
+- **Required:** Yes
+- **Description:** Secret key for JWT
+- **Example:** `openssl rand -base64 32`
+
+### `LOG_LEVEL`
+- **Type:** String
+- **Required:** No
+- **Default:** `info`
+- **Options:** `debug`, `info`, `warning`, `error`
+```
+
+### API Documentation
+
+```markdown
+### `POST /api/v1/downloads`
+
+Create a new download task.
+
+**Authentication:** Required (Bearer token)
+
+**Request:**
+```json
+{
+  "url": "https://example.com/video",
+  "profile_id": "default"
+}
+```
+
+**Response:** `201 Created`
+```json
+{
+  "id": "abc123",
+  "status": "queued",
+  "created_at": "2024-01-01T00:00:00Z"
+}
+```
+
+**Errors:**
+- `400` - Invalid URL
+- `401` - Invalid token
+- `429` - Rate limit exceeded
+```
+
+## Code Examples
+
+Keep examples:
+- Concise and focused
+- Include necessary imports
+- Show realistic use cases
+- Add comments for complex logic
+
+```markdown
+### Creating a Download
+
+```python
+async def create_download(url: str, token: str):
+    """Create a new download task."""
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            "http://localhost:8000/api/v1/downloads",
+            json={"url": url},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        return response.json()
+```
+```
+
+## Tables
+
+```markdown
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/downloads` | List downloads |
+| POST | `/api/v1/downloads` | Create download |
+| DELETE | `/api/v1/downloads/{id}` | Delete download |
+```
+
+## Badges
+
+```markdown
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
+```
+
+## Admonitions
+
+```markdown
+> **Note:** This feature is experimental.
+
+> **Warning:** Never commit `.env` files.
+
+> **Tip:** Use `docker compose logs -f` for live logs.
+```
+
+## Changelog
+
+Follow [Keep a Changelog](https://keepachangelog.com/):
+
+```markdown
+# Changelog
+
+## [1.2.0] - 2024-01-15
+
+### Added
+- Playlist download feature
+- Custom output formats
+
+### Changed
+- Improved error handling
+
+### Fixed
+- Memory leak in worker
+
+### Deprecated
+- Legacy API endpoints
+```
+
+## Documentation Maintenance
+
+- Update docs with code changes
+- Review docs in PRs
+- Mark deprecated features
+- Remove outdated info
+
+### Docstrings
+
+Python (Google-style):
+```python
+def fetch_data(url: str, timeout: int = 30) -> dict:
+    """Fetch data from URL.
+    
+    Args:
+        url: The URL to fetch from
+        timeout: Request timeout in seconds
+        
+    Returns:
+        Dictionary containing response data
+        
+    Raises:
+        ValueError: If URL is invalid
+        TimeoutError: If request times out
+    """
+    pass
+```
+
+TypeScript (JSDoc):
+```typescript
+/**
+ * Fetch data from URL
+ * 
+ * @param url - The URL to fetch from
+ * @param timeout - Request timeout in seconds
+ * @returns Promise resolving to response data
+ * @throws {Error} If URL is invalid
+ */
+async function fetchData(url: string, timeout: number = 30): Promise<Data> {
+  // ...
+}
+```
+
+## Writing Style
+
+### Guidelines
+- Use clear, simple language
+- Define acronyms on first use
+- Use active voice
+- Keep sentences concise
+- Use inclusive language
+
+### Commands
+```markdown
+✅ Good:
+Run `docker compose up` to start services.
+
+❌ Bad:
+You should probably run docker compose up.
+```
+
+## Images
+
+```markdown
+![Architecture diagram](./images/architecture.png)
+
+*Figure 1: System architecture*
+```
+
+- Store in `docs/images/` or `assets/`
+- Use descriptive file names
+- Optimize sizes
+- Provide alt text

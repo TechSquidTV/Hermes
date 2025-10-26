@@ -1,0 +1,244 @@
+---
+globs:
+  - "packages/hermes-api/tests/**/*.py"
+---
+
+# Hermes API - Testing Rules
+
+## Pytest Configuration
+
+### Test Discovery
+- Test files: `test_*.py`
+- Test classes: `Test*`
+- Test functions: `test_*`
+- Location: `packages/hermes-api/tests/`
+
+### Running Tests
+```bash
+pytest                  # All tests
+pytest -v               # Verbose
+pytest -m unit          # Only unit tests
+pytest -m "not slow"    # Exclude slow tests
+pytest tests/test_api/test_auth.py  # Specific file
+```
+
+## Test Organization
+
+```
+tests/
+├── conftest.py           # Shared fixtures
+├── test_api/             # API endpoint tests
+├── test_integration/     # Integration tests
+├── test_services/        # Service layer tests
+└── test_tasks/           # Celery task tests
+```
+
+### Test Markers
+```python
+@pytest.mark.unit
+def test_simple_function():
+    pass
+
+@pytest.mark.integration
+async def test_full_workflow():
+    pass
+
+@pytest.mark.slow
+async def test_large_download():
+    pass
+```
+
+## Async Testing
+
+```python
+import pytest
+from httpx import AsyncClient
+
+@pytest.mark.asyncio
+async def test_async_endpoint(client: AsyncClient):
+    response = await client.get("/api/v1/health")
+    assert response.status_code == 200
+```
+
+## Fixtures
+
+### Common Fixtures (conftest.py)
+```python
+@pytest.fixture
+async def client():
+    async with AsyncClient(app=app, base_url="http://test") as ac:
+        yield ac
+
+@pytest.fixture
+async def auth_token(client: AsyncClient, test_user):
+    response = await client.post(
+        "/api/v1/auth/login",
+        json={"username": test_user.username, "password": "password123"}
+    )
+    return response.json()["access_token"]
+
+@pytest.fixture
+async def db_session():
+    async for session in get_database_session():
+        yield session
+        await session.rollback()
+```
+
+## API Testing
+
+### Testing Endpoints
+```python
+@pytest.mark.asyncio
+async def test_get_endpoint(client: AsyncClient, auth_token: str):
+    headers = {"Authorization": f"Bearer {auth_token}"}
+    response = await client.get("/api/v1/downloads", headers=headers)
+    
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+
+@pytest.mark.asyncio
+async def test_post_endpoint(client: AsyncClient, auth_token: str):
+    headers = {"Authorization": f"Bearer {auth_token}"}
+    payload = {"url": "https://example.com/video", "profile_id": "default"}
+    
+    response = await client.post(
+        "/api/v1/downloads",
+        headers=headers,
+        json=payload
+    )
+    
+    assert response.status_code == 201
+    assert "id" in response.json()
+```
+
+### Testing Auth
+```python
+@pytest.mark.asyncio
+async def test_protected_without_auth(client: AsyncClient):
+    response = await client.get("/api/v1/downloads")
+    assert response.status_code == 401
+
+@pytest.mark.asyncio
+async def test_protected_invalid_token(client: AsyncClient):
+    headers = {"Authorization": "Bearer invalid"}
+    response = await client.get("/api/v1/downloads", headers=headers)
+    assert response.status_code == 401
+```
+
+### Testing Errors
+```python
+@pytest.mark.asyncio
+async def test_not_found(client: AsyncClient, auth_token: str):
+    headers = {"Authorization": f"Bearer {auth_token}"}
+    response = await client.get("/api/v1/downloads/nonexistent", headers=headers)
+    
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+@pytest.mark.asyncio
+async def test_validation_error(client: AsyncClient, auth_token: str):
+    headers = {"Authorization": f"Bearer {auth_token}"}
+    response = await client.post("/api/v1/downloads", headers=headers, json={})
+    
+    assert response.status_code == 422
+```
+
+## Database Testing
+
+```python
+@pytest.mark.asyncio
+async def test_create_user(db_session: AsyncSession):
+    repo = UserRepository(db_session)
+    
+    user_data = {
+        "username": "testuser",
+        "email": "test@example.com",
+        "password_hash": "hashed"
+    }
+    
+    user = await repo.create(user_data)
+    
+    assert user.id is not None
+    assert user.username == "testuser"
+```
+
+## Mocking
+
+```python
+@pytest.mark.asyncio
+async def test_with_mock(mocker):
+    mock_yt_dlp = mocker.patch("app.services.yt_dlp_service.YtDlpService.get_info")
+    mock_yt_dlp.return_value = {"title": "Test Video", "duration": 120}
+    
+    result = await some_function()
+    
+    assert result["title"] == "Test Video"
+    mock_yt_dlp.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_celery_task(client, auth_token, mocker):
+    mock_task = mocker.patch("app.tasks.download_tasks.process_download.delay")
+    mock_task.return_value.id = "task-123"
+    
+    headers = {"Authorization": f"Bearer {auth_token}"}
+    response = await client.post(
+        "/api/v1/downloads",
+        headers=headers,
+        json={"url": "https://example.com"}
+    )
+    
+    assert response.status_code == 201
+    mock_task.assert_called_once()
+```
+
+## Test Best Practices
+
+### Arrange-Act-Assert
+```python
+def test_something():
+    # Arrange
+    user_data = {"username": "test"}
+    
+    # Act
+    result = create_user(user_data)
+    
+    # Assert
+    assert result.username == "test"
+```
+
+### Test Names
+```python
+# ✅ Good
+def test_create_download_success()
+def test_get_download_not_found()
+def test_delete_download_unauthorized()
+
+# ❌ Bad
+def test_download()
+def test_1()
+```
+
+### Test Independence
+- Each test should be independent
+- Don't rely on execution order
+- Clean up after tests
+- Use fixtures for setup
+
+### Assertions
+```python
+assert response.status_code == 200, "Expected successful response"
+assert "id" in data, "Response should include ID"
+assert len(downloads) > 0, "Should return downloads"
+```
+
+## Coverage
+
+```bash
+pytest --cov=app --cov-report=html
+open htmlcov/index.html
+```
+
+- Aim for 80%+ coverage on critical code
+- Focus on meaningful coverage
+- Test edge cases and error conditions

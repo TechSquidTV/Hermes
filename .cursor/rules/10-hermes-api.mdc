@@ -1,0 +1,114 @@
+---
+globs:
+  - "packages/hermes-api/**/*.py"
+---
+
+# Hermes API - Python/FastAPI Rules
+
+## Python Version
+- Target Python 3.11+
+- Use modern Python features (match/case, type hints, etc.)
+
+## Code Style
+
+### Formatting (Black)
+- Line length: 88 characters (configured in `pyproject.toml`)
+- Let Black handle formatting automatically
+- Run: `black .` before committing
+
+### Import Ordering (isort)
+- Profile: black (configured in `pyproject.toml`)
+- Order: standard library, third-party, local imports
+- Run: `isort .` before committing
+
+### Type Hints (mypy)
+- All functions must have type hints for parameters and return values
+- Use `typing` module for complex types
+- Comply with mypy strict mode settings in `pyproject.toml`
+- Run: `mypy app` to check types
+
+## FastAPI Patterns
+
+### Async/Await
+- Use `async def` for all endpoint handlers
+- Use `await` for database operations and external API calls
+- Import `AsyncSession` for database operations
+
+### Dependencies
+- Use FastAPI's dependency injection system
+- Define dependencies in `app/api/dependencies.py`
+- Common dependencies:
+  - `get_database_session()` - Database session
+  - `get_current_user_from_token()` - Authenticated user
+  - `get_current_user_optional()` - Optional authentication
+
+### Error Handling
+- Use `HTTPException` for API errors
+- Include appropriate status codes from `fastapi.status`
+- Provide clear error messages in `detail` field
+- Log errors using structured logging
+
+### Request/Response Models
+- Define Pydantic models in `app/models/pydantic/`
+- Use type validation and serialization
+- Include field descriptions for API documentation
+- Separate request models from response models
+
+## Project Structure
+
+```
+app/
+├── api/               # API routes and endpoints
+│   ├── dependencies.py
+│   └── v1/
+│       ├── endpoints/  # Individual endpoint files
+│       └── router.py   # Route registration
+├── core/              # Core configuration
+│   ├── config.py      # Settings and configuration
+│   ├── logging.py     # Logging setup
+│   └── security.py    # Auth/security utilities
+├── db/                # Database layer
+│   ├── base.py        # Base model
+│   ├── models.py      # SQLAlchemy models
+│   ├── repositories.py # Repository pattern
+│   └── session.py     # DB session management
+├── models/            # Data models
+│   └── pydantic/      # Pydantic models
+├── services/          # Business logic
+├── tasks/             # Celery tasks
+└── utils/             # Utility functions
+```
+
+## Logging
+
+Use structured logging via `structlog`:
+```python
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
+logger.info("Operation completed", user_id=user_id, action="download")
+logger.error("Operation failed", error=str(e), error_type=type(e).__name__)
+```
+
+## Configuration
+
+- Use `pydantic-settings` for configuration management
+- Access settings via `app.core.config.settings`
+- Environment variables override default values
+- Never hardcode configuration values
+
+## Testing
+
+- Write tests in `tests/` directory
+- Use pytest with async support (`pytest-asyncio`)
+- Follow naming: `test_*.py` for files, `test_*` for functions
+- Use markers: `@pytest.mark.unit`, `@pytest.mark.integration`, `@pytest.mark.slow`
+- Run: `pytest` or `python -m pytest`
+
+## Dependencies
+
+Manage dependencies with UV (following `pyproject.toml`):
+- Production dependencies in `[project.dependencies]`
+- Development dependencies in `[dependency-groups.dev]`
+- Pin versions for stability
+- Run: `uv pip compile` to update `uv.lock`

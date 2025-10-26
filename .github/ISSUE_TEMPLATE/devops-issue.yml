@@ -1,0 +1,153 @@
+name: 🐳 DevOps/Deployment Issue
+description: Issues related to Docker, deployment, reverse proxy, or infrastructure
+title: "[DEVOPS] <brief description>"
+labels: ["devops", "deployment", "needs-triage"]
+assignees: []
+body:
+  - type: dropdown
+    id: deployment_type
+    attributes:
+      label: 🚀 How are you running Hermes?
+      description: Your deployment method
+      options:
+        - Docker Compose
+        - Manual installation
+        - Production deployment
+        - Custom setup
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: issue_category
+    attributes:
+      label: 🔧 What kind of issue?
+      description: What type of deployment problem is this?
+      options:
+        - Containers won't start
+        - Reverse proxy (Caddy) issues
+        - Environment variables
+        - Network/connectivity
+        - SSL/TLS certificates
+        - Performance
+        - Volume mounting
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: setup
+    attributes:
+      label: ⚙️ Your setup
+      description: How you're running Hermes
+      placeholder: |
+        **How you run it:** Docker Compose / Manual / Production
+        **Docker compose file:** docker-compose.yml / docker-compose.dev.yml
+        **Custom changes:** [any modifications to config files?]
+
+        **Environment:**
+        - **OS:** Linux / macOS / Windows
+        - **Docker version:** [if using Docker]
+        - **Key .env settings:** [without secrets]
+      value: |
+        **How you run it:**
+        **Docker compose file:**
+        **Environment:**
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 🔄 What happens?
+      description: Steps to reproduce the deployment issue
+      placeholder: |
+        1. Run: [command that causes the issue]
+        2. See: [what goes wrong?]
+
+        **Commands tried:**
+        ```bash
+        docker compose up -d
+        docker compose logs
+        # etc.
+        ```
+
+        **Error messages:**
+        ```
+        [paste any errors here]
+        ```
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 📋 Logs (optional)
+      description: Any error messages or logs
+      placeholder: |
+        **Commands run:**
+        ```bash
+        docker compose logs
+        docker compose logs api
+        docker compose logs hermes-app
+        ```
+
+        **Error messages:**
+        ```
+        [paste any errors here]
+        ```
+      render: shell
+
+  - type: textarea
+    id: configuration
+    attributes:
+      label: 🔧 Config changes (optional)
+      description: Any custom configuration you've made
+      placeholder: |
+        **Caddyfile changes:**
+        ```
+        [paste any Caddyfile modifications]
+        ```
+
+        **docker-compose.yml changes:**
+        ```yaml
+        [paste any docker-compose modifications]
+        ```
+
+        **Environment variables:**
+        ```
+        [any custom .env settings, without secrets]
+        ```
+      render: yaml
+
+  - type: textarea
+    id: workarounds
+    attributes:
+      label: 🔄 What have you tried? (optional)
+      description: Any attempts to fix this and what worked/didn't work
+      placeholder: |
+        **Tried:**
+        - Restarted containers: `docker compose restart`
+        - Checked logs: `docker compose logs -f`
+        - Rebuilt: `docker compose build --no-cache`
+        - Changed .env settings
+
+        **What works:** [parts that function correctly]
+        **What doesn't:** [the actual problem]
+        **Current workaround:** [how you're working around this]
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 📝 Anything else? (optional)
+      description: Other details that might help
+      placeholder: |
+        - When this started happening
+        - Network setup details
+        - Performance issues
+        - Related infrastructure
+    validations:
+      required: false

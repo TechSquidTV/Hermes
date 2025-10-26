@@ -1,0 +1,80 @@
+/* Catppuccin Theme - Pastel Colors (Mocha variant) */
+
+.theme-catppuccin {
+  /* Dark mode - Catppuccin Mocha */
+  --background: 240 21% 15%;        /* Base */
+  --foreground: 226 64% 88%;        /* Text */
+  --card: 239 19% 18%;              /* Surface0 */
+  --card-foreground: 226 64% 88%;
+  --popover: 239 19% 18%;
+  --popover-foreground: 226 64% 88%;
+  --primary: 267 84% 81%;           /* Mauve */
+  --primary-foreground: 240 21% 15%;
+  --secondary: 237 16% 23%;         /* Surface1 */
+  --secondary-foreground: 226 64% 88%;
+  --muted: 237 16% 23%;
+  --muted-foreground: 240 15% 50%;  /* Overlay0 */
+  --accent: 189 71% 73%;            /* Sky */
+  --accent-foreground: 240 21% 15%;
+  --destructive: 343 81% 75%;       /* Red */
+  --destructive-foreground: 226 64% 88%;
+  --border: 237 16% 23%;
+  --input: 237 16% 23%;
+  --ring: 267 84% 81%;
+
+  /* Sidebar colors */
+  --sidebar-background: 240 21% 15%;
+  --sidebar-foreground: 226 64% 88%;
+  --sidebar-primary: 267 84% 81%;
+  --sidebar-primary-foreground: 240 21% 15%;
+  --sidebar-accent: 239 19% 18%;
+  --sidebar-accent-foreground: 226 64% 88%;
+  --sidebar-border: 237 16% 23%;
+  --sidebar-ring: 267 84% 81%;
+  --sidebar: 240 21% 15%;
+
+  /* Grain effect - light for Catppuccin's soft aesthetic */
+  --grain-opacity: 0.02;
+  --grain-blend-mode: soft-light;
+  --grain-visibility: visible;
+}
+
+.theme-catppuccin.light {
+  /* Light mode - Catppuccin Latte */
+  --background: 220 23% 95%;        /* Base */
+  --foreground: 234 16% 35%;        /* Text */
+  --card: 223 16% 92%;              /* Surface0 */
+  --card-foreground: 234 16% 35%;
+  --popover: 223 16% 92%;
+  --popover-foreground: 234 16% 35%;
+  --primary: 266 85% 58%;           /* Mauve */
+  --primary-foreground: 220 23% 95%;
+  --secondary: 223 10% 88%;         /* Surface1 */
+  --secondary-foreground: 234 16% 35%;
+  --muted: 223 10% 88%;
+  --muted-foreground: 233 10% 47%;  /* Overlay0 */
+  --accent: 189 70% 42%;            /* Sky */
+  --accent-foreground: 220 23% 95%;
+  --destructive: 347 87% 44%;       /* Red */
+  --destructive-foreground: 220 23% 95%;
+  --border: 223 10% 88%;
+  --input: 223 10% 88%;
+  --ring: 266 85% 58%;
+
+  /* Sidebar colors */
+  --sidebar-background: 220 23% 95%;
+  --sidebar-foreground: 234 16% 35%;
+  --sidebar-primary: 266 85% 58%;
+  --sidebar-primary-foreground: 220 23% 95%;
+  --sidebar-accent: 223 16% 92%;
+  --sidebar-accent-foreground: 234 16% 35%;
+  --sidebar-border: 223 10% 88%;
+  --sidebar-ring: 266 85% 58%;
+  --sidebar: 220 23% 95%;
+
+  /* Grain effect - very subtle for pastel light mode */
+  --grain-opacity: 0.025;
+  --grain-blend-mode: soft-light;
+  --grain-visibility: visible;
+}
+

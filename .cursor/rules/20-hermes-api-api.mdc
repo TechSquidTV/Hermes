@@ -1,0 +1,223 @@
+---
+globs:
+  - "packages/hermes-api/app/api/**/*.py"
+---
+
+# Hermes API - FastAPI Endpoints Rules
+
+## Endpoint Structure
+
+### File Organization
+- Endpoints in `app/api/v1/endpoints/`
+- One resource per file: `downloads.py`, `auth.py`
+- Router registration in `app/api/v1/router.py`
+- Shared dependencies in `app/api/dependencies.py`
+
+### Router Definition
+```python
+from fastapi import APIRouter
+
+router = APIRouter(tags=["downloads"])
+
+@router.get("/list")
+async def list_downloads():
+    pass
+```
+
+## Dependency Injection
+
+### Common Dependencies
+```python
+from app.api.dependencies import get_current_user_from_token
+from app.db.session import get_database_session
+
+@router.get("/profile")
+async def get_profile(
+    current_user: dict = Depends(get_current_user_from_token),
+    db: AsyncSession = Depends(get_database_session)
+):
+    return current_user
+```
+
+- `get_database_session()` - Database session
+- `get_current_user_from_token()` - Authenticated user
+- `get_current_user_optional()` - Optional auth
+
+## Request/Response Models
+
+```python
+from pydantic import Field
+from app.models.pydantic.download import DownloadCreateRequest, DownloadResponse
+
+@router.post("/", response_model=DownloadResponse, status_code=201)
+async def create_download(
+    request: DownloadCreateRequest,
+    current_user: dict = Depends(get_current_user_from_token),
+    db: AsyncSession = Depends(get_database_session)
+):
+    # Implementation
+    pass
+```
+
+### Model Naming
+- `CreateRequest` - For creation
+- `UpdateRequest` - For updates
+- `Response` - For responses
+- `ListResponse` - For lists
+
+## Error Handling
+
+### HTTP Exceptions
+```python
+from fastapi import HTTPException, status
+
+if not download:
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=f"Download {download_id} not found"
+    )
+```
+
+Common status codes:
+- `400 BAD_REQUEST` - Invalid input
+- `401 UNAUTHORIZED` - Auth required
+- `403 FORBIDDEN` - Permission denied
+- `404 NOT_FOUND` - Not found
+- `409 CONFLICT` - Duplicate
+- `422 UNPROCESSABLE_ENTITY` - Validation error (automatic)
+- `500 INTERNAL_SERVER_ERROR` - Server error
+
+### Logging
+```python
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
+
+try:
+    # Operation
+    pass
+except Exception as e:
+    logger.error(
+        "Operation failed",
+        error=str(e),
+        error_type=type(e).__name__,
+        user_id=current_user["id"]
+    )
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Operation failed"
+    )
+```
+
+## Endpoint Patterns
+
+### List
+```python
+@router.get("/", response_model=List[ItemResponse])
+async def list_items(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=100),
+    db: AsyncSession = Depends(get_database_session)
+):
+    repos = await get_repositories()
+    items = await repos["items"].get_all(skip=skip, limit=limit)
+    return items
+```
+
+### Create
+```python
+@router.post("/", status_code=status.HTTP_201_CREATED, response_model=ItemResponse)
+async def create_item(
+    request: ItemCreateRequest,
+    current_user: dict = Depends(get_current_user_from_token),
+    db: AsyncSession = Depends(get_database_session)
+):
+    repos = await get_repositories()
+    item = await repos["items"].create({
+        **request.dict(),
+        "user_id": current_user["id"]
+    })
+    return item
+```
+
+### Get
+```python
+@router.get("/{item_id}", response_model=ItemResponse)
+async def get_item(
+    item_id: str,
+    current_user: dict = Depends(get_current_user_from_token),
+    db: AsyncSession = Depends(get_database_session)
+):
+    repos = await get_repositories()
+    item = await repos["items"].get_by_id(item_id)
+    
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Item {item_id} not found"
+        )
+    
+    if item.user_id != current_user["id"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized"
+        )
+    
+    return item
+```
+
+### Delete
+```python
+@router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_item(
+    item_id: str,
+    current_user: dict = Depends(get_current_user_from_token),
+    db: AsyncSession = Depends(get_database_session)
+):
+    repos = await get_repositories()
+    item = await repos["items"].get_by_id(item_id)
+    
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    
+    if item.user_id != current_user["id"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    
+    await repos["items"].delete(item_id)
+```
+
+## Background Tasks
+
+```python
+from app.tasks.download_tasks import process_download
+
+@router.post("/download")
+async def trigger_download(
+    request: DownloadRequest,
+    current_user: dict = Depends(get_current_user_from_token)
+):
+    task = process_download.delay(
+        url=request.url,
+        user_id=current_user["id"]
+    )
+    
+    return {"task_id": task.id, "status": "queued"}
+```
+
+## OpenAPI Documentation
+
+```python
+@router.get("/{item_id}", response_model=ItemResponse)
+async def get_item(item_id: str):
+    """
+    Get a single item by ID.
+    
+    Returns item details if found and user has access.
+    Raises 404 if item doesn't exist.
+    """
+    pass
+```
+
+- Include docstrings for all endpoints
+- Use tags to group related endpoints
+- Document parameters and responses

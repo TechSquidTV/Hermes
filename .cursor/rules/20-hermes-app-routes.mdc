@@ -1,0 +1,299 @@
+---
+globs:
+  - "packages/hermes-app/src/routes/**/*.tsx"
+---
+
+# Hermes App - TanStack Router Rules
+
+## Route File Structure
+
+### File-Based Routing
+- Route files in `src/routes/`
+- File names determine route paths using dot notation
+- Special file names: `__root.tsx`, `index.tsx`
+
+```
+routes/
+├── __root.tsx           # Root layout (wraps all routes)
+├── index.tsx            # Home page (/)
+├── queue.tsx            # /queue
+├── settings.tsx         # /settings
+├── auth.login.tsx       # /auth/login
+└── auth.signup.tsx      # /auth/signup
+```
+
+### Route File Template
+```typescript
+import { createFileRoute } from "@tanstack/react-router";
+
+export const Route = createFileRoute("/route-path")({
+  component: RouteComponent,
+  loader: async ({ context, params }) => {
+    // Load data
+    return { data };
+  },
+  errorComponent: ErrorComponent,
+  pendingComponent: LoadingComponent,
+  beforeLoad: async ({ context, location }) => {
+    // Auth checks, redirects
+  },
+});
+
+function RouteComponent() {
+  const data = Route.useLoaderData();
+  return <div>{/* Route content */}</div>;
+}
+```
+
+## Root Layout (__root.tsx)
+
+```typescript
+import { createRootRoute, Outlet } from "@tanstack/react-router";
+import { AppLayout } from "@/components/layout/AppLayout";
+
+export const Route = createRootRoute({
+  component: RootLayout,
+  errorComponent: RootErrorComponent,
+});
+
+function RootLayout() {
+  return (
+    <AppLayout>
+      <Outlet />
+    </AppLayout>
+  );
+}
+```
+
+## Data Loading
+
+### Loaders
+```typescript
+export const Route = createFileRoute("/downloads")({
+  loader: async ({ context }) => {
+    const downloads = await fetchDownloads();
+    const stats = await fetchStats();
+    return { downloads, stats };
+  },
+  component: DownloadsPage,
+});
+
+function DownloadsPage() {
+  const { downloads, stats } = Route.useLoaderData();
+  return (
+    <div>
+      <Stats data={stats} />
+      <DownloadList items={downloads} />
+    </div>
+  );
+}
+```
+
+### With Search Params
+```typescript
+export const Route = createFileRoute("/downloads")({
+  validateSearch: (search: Record<string, unknown>) => {
+    return {
+      status: (search.status as string) || "all",
+      page: Number(search.page) || 1,
+    };
+  },
+  loader: async ({ context, search }) => {
+    const downloads = await fetchDownloads({
+      status: search.status,
+      page: search.page,
+    });
+    return { downloads };
+  },
+});
+```
+
+## Navigation
+
+### Link Component
+```typescript
+import { Link } from "@tanstack/react-router";
+
+<Link to="/queue" className="nav-link" activeProps={{ className: "active" }}>
+  Queue
+</Link>
+
+// With params
+<Link to="/downloads/$downloadId" params={{ downloadId: "123" }}>
+  View Download
+</Link>
+
+// With search
+<Link to="/downloads" search={{ status: "completed", page: 1 }}>
+  Completed
+</Link>
+```
+
+### Programmatic Navigation
+```typescript
+import { useNavigate } from "@tanstack/react-router";
+
+function MyComponent() {
+  const navigate = useNavigate();
+
+  const handleClick = () => {
+    navigate({ to: "/downloads", search: { status: "active" } });
+  };
+
+  return <button onClick={handleClick}>Go</button>;
+}
+```
+
+## Protected Routes
+
+```typescript
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { isAuthenticated } from "@/services/auth";
+
+export const Route = createFileRoute("/protected")({
+  beforeLoad: async ({ context, location }) => {
+    if (!isAuthenticated()) {
+      throw redirect({
+        to: "/auth/login",
+        search: { redirect: location.href },
+      });
+    }
+  },
+  component: ProtectedPage,
+});
+```
+
+## Search Params
+
+### Validating Search
+```typescript
+import { z } from "zod";
+
+const searchSchema = z.object({
+  status: z.enum(["all", "active", "completed", "failed"]).default("all"),
+  sort: z.enum(["date", "title", "size"]).default("date"),
+  page: z.number().int().positive().default(1),
+  limit: z.number().int().positive().max(100).default(20),
+});
+
+export const Route = createFileRoute("/downloads")({
+  validateSearch: (search) => searchSchema.parse(search),
+});
+
+function Component() {
+  const search = Route.useSearch();
+  // search is fully typed
+}
+```
+
+### Updating Search
+```typescript
+const navigate = useNavigate();
+const search = Route.useSearch();
+
+const updateStatus = (status: string) => {
+  navigate({
+    search: (prev) => ({
+      ...prev,
+      status,
+      page: 1, // Reset page
+    }),
+  });
+};
+```
+
+## Route Params
+
+```typescript
+// File: routes/downloads.$downloadId.tsx
+export const Route = createFileRoute("/downloads/$downloadId")({
+  loader: async ({ params }) => {
+    const download = await fetchDownload(params.downloadId);
+    return { download };
+  },
+  component: DownloadDetail,
+});
+
+function DownloadDetail() {
+  const { download } = Route.useLoaderData();
+  const { downloadId } = Route.useParams();
+  return <div>{download.title}</div>;
+}
+```
+
+## Error Handling
+
+```typescript
+export const Route = createFileRoute("/route")({
+  errorComponent: RouteErrorComponent,
+});
+
+function RouteErrorComponent({ error }: { error: Error }) {
+  return (
+    <div className="error-container">
+      <h1>Something went wrong</h1>
+      <p>{error.message}</p>
+    </div>
+  );
+}
+```
+
+### Loader Errors
+```typescript
+export const Route = createFileRoute("/data")({
+  loader: async () => {
+    const data = await fetchData();
+    if (!data) throw new Error("Data not found");
+    return { data };
+  },
+});
+```
+
+## Loading States
+
+```typescript
+export const Route = createFileRoute("/downloads")({
+  loader: fetchDownloads,
+  pendingComponent: LoadingDownloads,
+  component: DownloadsPage,
+});
+
+function LoadingDownloads() {
+  return <div>Loading...</div>;
+}
+```
+
+## Route Context
+
+### Providing Context
+```typescript
+// In root route
+export const Route = createRootRoute({
+  beforeLoad: async () => {
+    const user = await getCurrentUser();
+    const config = await getConfig();
+    return { auth: { user }, config };
+  },
+});
+```
+
+### Consuming Context
+```typescript
+export const Route = createFileRoute("/profile")({
+  beforeLoad: ({ context }) => {
+    const user = context.auth?.user;
+    return { user };
+  },
+});
+```
+
+## Code Splitting
+
+```typescript
+import { createFileRoute, lazyRouteComponent } from "@tanstack/react-router";
+
+export const Route = createFileRoute("/large")({
+  component: lazyRouteComponent(() => import("./LargeComponent")),
+});
+```
+

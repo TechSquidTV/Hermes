@@ -1,0 +1,147 @@
+# Hermes Production Stack with Caddy Reverse Proxy
+# This is the default deployment configuration for Hermes
+#
+# Quick Start:
+#   1. Copy .env.example to .env and configure your settings
+#   2. Optionally customize Caddyfile for your domain
+#   3. Run: docker compose up -d
+#   4. Access at http://localhost:3000
+
+services:
+  # Caddy reverse proxy - handles routing and SSL
+  proxy:
+    image: caddy:2-alpine
+    container_name: hermes-proxy
+    restart: unless-stopped
+    ports:
+      - "${HERMES_PORT:-3000}:80"
+      - "${HERMES_HTTPS_PORT:-3443}:443"
+    volumes:
+      # User-editable configuration
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Caddy data persistence for certificates
+      - caddy_data:/data
+      - caddy_config:/config
+      # Mount static files from app container
+      - app_dist:/app:ro
+    networks:
+      - hermes-network
+    depends_on:
+      app:
+        condition: service_started
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+  # Frontend - builds and provides static files
+  app:
+    build:
+      context: .
+      dockerfile: packages/hermes-app/Dockerfile
+    container_name: hermes-app
+    restart: unless-stopped
+    volumes:
+      # Share built files with proxy via named volume
+      - app_dist:/app
+    networks:
+      - hermes-network
+    healthcheck:
+      test: ["CMD", "test", "-f", "/app/index.html"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Backend API
+  api:
+    build:
+      context: ./packages/hermes-api
+      dockerfile: Dockerfile
+    container_name: hermes-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - HERMES_SECRET_KEY=${HERMES_SECRET_KEY}
+      - HERMES_REDIS_URL=${HERMES_REDIS_URL:-redis://redis:6379}
+    volumes:
+      - ./packages/hermes-api/downloads:/app/downloads
+      - ./packages/hermes-api/temp:/app/temp
+      - ./packages/hermes-api/data:/app/data
+    networks:
+      - hermes-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --loop asyncio --access-log --log-level info
+
+  # Celery worker for background tasks
+  celery_worker:
+    build:
+      context: ./packages/hermes-api
+      dockerfile: Dockerfile
+    container_name: hermes-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - HERMES_SECRET_KEY=${HERMES_SECRET_KEY}
+      - HERMES_REDIS_URL=${HERMES_REDIS_URL:-redis://redis:6379}
+    volumes:
+      - ./packages/hermes-api/downloads:/app/downloads
+      - ./packages/hermes-api/temp:/app/temp
+      - ./packages/hermes-api/data:/app/data
+    networks:
+      - hermes-network
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    command: uv run celery -A app.tasks.celery_app worker --loglevel=info --concurrency=1 --hostname=hermes-worker@%h
+    healthcheck:
+      test: ["CMD", "celery", "-A", "app.tasks.celery_app", "inspect", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Redis for caching and task queue
+  redis:
+    image: redis:7-alpine
+    container_name: hermes-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - hermes-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+networks:
+  hermes-network:
+    driver: bridge
+
+volumes:
+  app_dist:          # Shared volume for frontend static files
+  caddy_data:        # Caddy data persistence (certificates, etc.)
+  caddy_config:      # Caddy configuration cache
+  redis_data:        # Redis data persistence

@@ -1,0 +1,73 @@
+name: 📚 Documentation
+description: Report documentation issues or suggest improvements
+title: "[DOCS] <brief description>"
+labels: ["documentation", "needs-triage"]
+assignees: []
+body:
+  - type: dropdown
+    id: doc_type
+    attributes:
+      label: 📖 Which documentation?
+      description: Where is the documentation issue?
+      options:
+        - README.md (main readme)
+        - docs/CONFIGURATION.md
+        - docs/DEPLOYMENT.md
+        - docs/CONTRIBUTING.md
+        - docs/REVERSE_PROXY_GUIDE.md
+        - docs/RELEASE_PROCESS.md
+        - packages/hermes-api/README.md
+        - packages/hermes-app/README.md
+        - packages/hermes-app/SDK_GUIDE.md
+        - API documentation (Swagger/OpenAPI)
+        - Code comments
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: issue_type
+    attributes:
+      label: 🔍 What's wrong?
+      description: What kind of issue is this?
+      options:
+        - Missing documentation
+        - Outdated information
+        - Unclear explanation
+        - Incorrect information
+        - Typos/grammar
+        - Better examples needed
+        - Missing screenshots/diagrams
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 📝 What needs to be fixed?
+      description: Describe the documentation issue and your suggested fix
+      placeholder: |
+        **The problem:**
+        [What's wrong with the current documentation?]
+
+        **The fix:**
+        [What should it say instead?]
+
+        **Location:**
+        [Which file and section? e.g., "README.md setup section" or "API docs for /download endpoint"]
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 📎 More details (optional)
+      description: Any additional context or examples
+      placeholder: |
+        - Screenshots (drag and drop)
+        - Links to similar good documentation
+        - Code examples that need docs
+        - Why this matters to users
+    validations:
+      required: false

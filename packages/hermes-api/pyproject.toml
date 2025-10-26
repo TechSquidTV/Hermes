@@ -1,0 +1,79 @@
+[project]
+name = "hermes-api"
+version = "0.1.0"
+description = "Hermes API server for video downloading"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.104.1",
+    "uvicorn[standard]>=0.24.0",
+    "sqlalchemy[asyncio]>=2.0.44",
+    "aiosqlite>=0.19.0",
+    "celery[redis]>=5.4.0,<5.5.0",
+    "redis>=5.0.0,<6.0.0",
+    "yt-dlp>=2025.10.14",
+    "pydantic[email]>=2.12.3",
+    "python-multipart>=0.0.6",
+    "python-jose[cryptography]>=3.3.0",
+    "bcrypt>=4.0.0",
+    "pydantic-settings>=2.0.0",
+    "slowapi>=0.1.9",
+    "structlog>=23.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.27.0",
+    "pytest-mock>=3.14.0",
+    "black>=25.9.0",
+    "isort>=7.0.0",
+    "ruff>=0.7.0",
+    "mypy>=1.18.2",
+]
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+# Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default
+select = ["E", "F", "I"]
+ignore = [
+    "E501",  # Line too long (handled by black)
+    "F401",  # Module imported but unused
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+asyncio_mode = "auto"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
