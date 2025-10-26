@@ -7,9 +7,7 @@ Hermes is a self-hosted video downloader built on [yt-dlp](https://github.com/yt
 _This tool is designed for content creators who wish to **lawfully** use freely available media under [fair use](https://en.wikipedia.org/wiki/Fair_use) (best explained by [Tom Scott](https://www.youtube.com/watch?v=1Jwo5qc78QU)).
 Hermes **does not endorse** piracy, freebooting, or using downloads to bypass advertising._
 
-<p align="center">
-    <video src=".github/img/hermes_demo.mp4" width="720" controls></video>
-</p>
+https://github.com/user-attachments/assets/7d9c6b96-d966-4989-a8b3-d5d49af463ae
 
 ## ✨ Key Features
 
