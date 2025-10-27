@@ -51,6 +51,76 @@ Temporary files are stored separately to avoid cluttering the download directory
 2. **Use a secure `HERMES_SECRET_KEY`** (generate with the methods in CONFIGURATION.md)
 3. **Configure production database URL** (PostgreSQL recommended for production)
 4. **Set up proper Redis configuration**
+5. **Configure CORS origins** for your domain(s)
+6. **Set frontend API URL** if using separate domains
+
+### Domain Configuration Options
+
+#### Option 1: Single Domain (Recommended for most users)
+
+**Setup:**
+- Frontend and API on same domain: `hermes.example.com`
+- API accessible at: `hermes.example.com/api/`
+
+**Environment Variables:**
+```bash
+HERMES_ALLOWED_ORIGINS=https://hermes.example.com
+VITE_API_BASE_URL=/api/v1
+```
+
+**Caddyfile:**
+```caddyfile
+hermes.example.com {
+    handle /api/* {
+        reverse_proxy api:8000
+    }
+
+    handle {
+        root * /app
+        try_files {path} /index.html
+        file_server
+    }
+}
+```
+
+#### Option 2: Separate Domains (Advanced)
+
+**Setup:**
+- Frontend at: `hermes.example.com`
+- API at: `hermes-api.example.com`
+
+**Environment Variables:**
+```bash
+HERMES_ALLOWED_ORIGINS=https://hermes.example.com,https://hermes-api.example.com
+VITE_API_BASE_URL=https://hermes-api.example.com/api/v1
+```
+
+**Caddyfile:**
+```caddyfile
+# API Domain
+hermes-api.example.com {
+    handle /api/v1/* {
+        reverse_proxy api:8000
+    }
+
+    handle {
+        respond "Not Found" 404
+    }
+}
+
+# Frontend Domain
+hermes.example.com {
+    handle /api/* {
+        redir https://hermes-api.example.com{uri} permanent
+    }
+
+    handle {
+        root * /app
+        try_files {path} /index.html
+        file_server
+    }
+}
+```
 
 ### Docker Deployment
 

@@ -76,8 +76,25 @@ All configuration is managed through environment variables with the `HERMES_` pr
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HERMES_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:5173` | Comma-separated list of allowed CORS origins |
+| `HERMES_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:5173,https://hermes.example.com,https://hermes-api.example.com` | Comma-separated list of allowed CORS origins. Includes example domains for separate domain deployments. |
 | `HERMES_ALLOW_CREDENTIALS` | `true` | Allow credentials in CORS requests |
+
+#### CORS Examples
+
+**Development:**
+```bash
+HERMES_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+```
+
+**Single Domain Production:**
+```bash
+HERMES_ALLOWED_ORIGINS=https://hermes.example.com
+```
+
+**Separate Domains Production:**
+```bash
+HERMES_ALLOWED_ORIGINS=https://hermes.example.com,https://hermes-api.example.com
+```
 
 ## Docker Configuration
 
@@ -90,6 +107,35 @@ When using Docker, you can also configure these additional variables:
 | `HERMES_TEMP_DIR` | `/app/temp` | Temporary directory in container |
 
 **Note:** The frontend development server runs on port 5173 when using `pnpm dev`, but Docker builds use port 3000.
+
+## Frontend Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_API_BASE_URL` | `/api/v1` | API base URL for frontend builds. Used during build time to configure API endpoints. |
+
+#### Frontend API URL Examples
+
+**Development (same domain):**
+```bash
+VITE_API_BASE_URL=/api/v1
+```
+
+**Production (same domain):**
+```bash
+VITE_API_BASE_URL=/api/v1
+```
+
+**Separate API domain:**
+```bash
+VITE_API_BASE_URL=https://hermes-api.example.com/api/v1
+```
+
+**Note:** This variable is used at build time by Vite. After setting it, rebuild the frontend:
+```bash
+cd packages/hermes-app
+pnpm run build
+```
 
 ## Configuration Examples
 

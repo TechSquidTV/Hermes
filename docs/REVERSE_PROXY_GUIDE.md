@@ -64,6 +64,63 @@ Then restart: `docker compose restart proxy`
 2. **Connect to your network** - Add your proxy network to services
 3. **Configure your proxy** - Point to the services (see examples below)
 
+### Option 2: Separate Domains Setup
+
+For advanced deployments where you want separate domains for API and frontend:
+
+**Frontend Domain** (e.g., `hermes.example.com`):
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name hermes.example.com;
+
+    # Redirect API calls to API domain
+    location /api/ {
+        return 301 https://hermes-api.example.com$request_uri;
+    }
+
+    # Serve frontend static files
+    location / {
+        root /path/to/app/dist;
+        try_files $uri $uri/ /index.html;
+    }
+}
+```
+
+**API Domain** (e.g., `hermes-api.example.com`):
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name hermes-api.example.com;
+
+    # API routes only
+    location /api/v1/ {
+        proxy_pass http://api:8000/api/v1/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Health check
+    location /health {
+        proxy_pass http://api:8000/health;
+    }
+
+    # Block other requests
+    location / {
+        return 404;
+    }
+}
+```
+
+**Environment Configuration:**
+```bash
+# In .env
+HERMES_ALLOWED_ORIGINS=https://hermes.example.com,https://hermes-api.example.com
+VITE_API_BASE_URL=https://hermes-api.example.com/api/v1
+```
+
 Example modification to `docker-compose.yml`:
 
 ```yaml

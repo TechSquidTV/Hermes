@@ -25,7 +25,7 @@
             header_up X-Forwarded-Host {host}
 
             # Health checks for the backend
-            health_uri /health
+            health_uri /api/v1/health/
             health_interval 30s
             health_timeout 10s
         }
@@ -80,16 +80,84 @@
 # Uncomment and customize the section below for production deployment with a domain.
 # Caddy will automatically obtain and renew Let's Encrypt SSL certificates.
 #
-# hermes.yourdomain.com {
+# ==============================================================================
+# SEPARATE DOMAINS EXAMPLE
+# ==============================================================================
+# For separate API and frontend domains (e.g., hermes-api.example.com and hermes.example.com)
+#
+# hermes-api.example.com {
 #     # Caddy automatically enables HTTPS and obtains certificates
-#     # You can specify an email for Let's Encrypt notifications:
-#     tls admin@yourdomain.com
-#     
+#     tls admin@example.com
+#
 #     # Health check
 #     handle /health {
 #         respond "healthy" 200
 #     }
-#     
+#
+#     # API routes only
+#     handle /api/v1/* {
+#         reverse_proxy api:8000 {
+#             header_up X-Real-IP {remote_host}
+#             header_up X-Forwarded-For {remote_host}
+#             header_up X-Forwarded-Proto {scheme}
+#             header_up X-Forwarded-Host {host}
+#
+#             # Health checks for the backend
+#             health_uri /api/v1/health/
+#             health_interval 30s
+#             health_timeout 10s
+#         }
+#     }
+#
+#     # Block all other requests
+#     handle {
+#         respond "Not Found" 404
+#     }
+# }
+#
+# hermes.example.com {
+#     # Caddy automatically enables HTTPS and obtains certificates
+#     tls admin@example.com
+#
+#     # Redirect API calls to separate API domain
+#     handle /api/* {
+#         redir https://hermes-api.example.com{uri} permanent
+#     }
+#
+#     # Frontend static files
+#     handle {
+#         root * /app
+#         try_files {path} /index.html
+#         file_server
+#
+#         @static {
+#             path *.js *.css *.png *.jpg *.jpeg *.gif *.ico *.svg *.woff *.woff2 *.ttf *.eot
+#         }
+#         header @static Cache-Control "public, max-age=31536000, immutable"
+#
+#         header {
+#             X-Frame-Options "SAMEORIGIN"
+#             X-Content-Type-Options "nosniff"
+#             Referrer-Policy "strict-origin-when-cross-origin"
+#             Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+#         }
+#     }
+# }
+#
+# ==============================================================================
+# SINGLE DOMAIN EXAMPLE
+# ==============================================================================
+# For single domain with API proxy (e.g., hermes.example.com)
+#
+# hermes.example.com {
+#     # Caddy automatically enables HTTPS and obtains certificates
+#     tls admin@example.com
+#
+#     # Health check
+#     handle /health {
+#         respond "healthy" 200
+#     }
+#
 #     # API proxy
 #     handle /api/* {
 #         reverse_proxy api:8000 {
@@ -99,23 +167,23 @@
 #             header_up X-Forwarded-Host {host}
 #
 #             # Health checks for the backend
-#             health_uri /health-check
+#             health_uri /api/v1/health/
 #             health_interval 30s
 #             health_timeout 10s
 #         }
 #     }
-#     
+#
 #     # Frontend static files
 #     handle {
 #         root * /app
 #         try_files {path} /index.html
 #         file_server
-#         
+#
 #         @static {
 #             path *.js *.css *.png *.jpg *.jpeg *.gif *.ico *.svg *.woff *.woff2 *.ttf *.eot
 #         }
 #         header @static Cache-Control "public, max-age=31536000, immutable"
-#         
+#
 #         header {
 #             X-Frame-Options "SAMEORIGIN"
 #             X-Content-Type-Options "nosniff"
@@ -123,7 +191,7 @@
 #             Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
 #         }
 #     }
-#     
+#
 #     # Enable access logs
 #     log {
 #         output file /data/access.log

@@ -1,11 +1,14 @@
-# Hermes Production Stack with Caddy Reverse Proxy
-# This is the default deployment configuration for Hermes
+# Hermes Production Stack using Pre-built Images
+# This example uses the latest published Docker images from GitHub Container Registry
 #
 # Quick Start:
-#   1. Copy .env.example to .env and configure your settings
-#   2. Optionally customize Caddyfile for your domain
-#   3. Run: docker compose up -d
-#   4. Access at http://localhost:3000
+#   1. Copy this file to docker-compose.yml
+#   2. Copy .env.example to .env and configure your settings
+#   3. Optionally customize Caddyfile for your domain
+#   4. Run: docker compose up -d
+#   5. Access at http://localhost:3000
+#
+# For building from source instead, see docker-compose.yml
 
 services:
   # Caddy reverse proxy - handles routing and SSL
@@ -27,9 +30,9 @@ services:
     networks:
       - hermes-network
     depends_on:
-      app:
+      hermes-app:
         condition: service_started
-      api:
+      hermes-api:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/health"]
@@ -38,11 +41,9 @@ services:
       retries: 3
       start_period: 5s
 
-  # Frontend - builds and provides static files
-  app:
-    build:
-      context: .
-      dockerfile: packages/hermes-app/Dockerfile
+  # Frontend - using pre-built image
+  hermes-app:
+    image: ghcr.io/techsquidtv/hermes-app:latest
     container_name: hermes-app
     restart: unless-stopped
     volumes:
@@ -57,11 +58,9 @@ services:
       retries: 3
       start_period: 10s
 
-  # Backend API
-  api:
-    build:
-      context: ./packages/hermes-api
-      dockerfile: Dockerfile
+  # Backend API - using pre-built image
+  hermes-api:
+    image: ghcr.io/techsquidtv/hermes-api:latest
     container_name: hermes-api
     restart: unless-stopped
     ports:
@@ -86,13 +85,10 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --loop asyncio --access-log --log-level info
 
-  # Celery worker for background tasks
+  # Celery worker for background tasks - using pre-built image
   celery_worker:
-    build:
-      context: ./packages/hermes-api
-      dockerfile: Dockerfile
+    image: ghcr.io/techsquidtv/hermes-api:latest
     container_name: hermes-worker
     restart: unless-stopped
     env_file:
@@ -109,7 +105,7 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-      api:
+      hermes-api:
         condition: service_healthy
     command: uv run celery -A app.tasks.celery_app worker --loglevel=info --concurrency=1 --hostname=hermes-worker@%h
     healthcheck:

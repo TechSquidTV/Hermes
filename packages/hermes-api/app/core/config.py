@@ -78,9 +78,15 @@ class Settings(BaseSettings):
     login_attempt_window_minutes: int = Field(default=15)
 
     # CORS Settings
-    # Include both production (3000) and development (5173) frontend ports
+    # Default includes common development ports and example domains
+    # In production, override with HERMES_ALLOWED_ORIGINS environment variable
     allowed_origins: list[str] = Field(
-        default_factory=lambda: ["http://localhost:3000", "http://localhost:5173"]
+        default_factory=lambda: [
+            "http://localhost:3000",  # Production frontend (nginx)
+            "http://localhost:5173",  # Development frontend (Vite)
+            "https://hermes.example.com",  # Example production domain
+            "https://hermes-api.example.com",  # Example separate API domain
+        ]
     )
     allow_credentials: bool = Field(default=True)
 

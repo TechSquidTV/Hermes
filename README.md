@@ -18,7 +18,7 @@ https://github.com/user-attachments/assets/7d9c6b96-d966-4989-a8b3-d5d49af463ae
 
 ## 🚀 Quick Start
 
-### Docker Compose (Recommended)
+### Pre-built Images (Recommended)
 
 ```bash
 # Clone the repository
@@ -31,8 +31,8 @@ cp .env.example .env
 # Edit .env and set a secure HERMES_SECRET_KEY
 nano .env
 
-# Start all services (includes Caddy reverse proxy)
-docker compose up -d
+# Start all services using pre-built images (includes Caddy reverse proxy)
+docker compose -f docker-compose.example.yml up -d
 ```
 
 **That's it!** 🎉 Your Hermes instance will be available at:
@@ -46,6 +46,42 @@ docker compose -f docker-compose.dev.yml up
 - **Dev Server**: http://localhost:5173 (Vite with hot reload)
 - **API**: http://localhost:8000 (direct access)
 
+### Building from Source
+
+If you prefer to build the images from source or want to modify the code:
+
+```bash
+# Use the standard docker-compose.yml (builds from source)
+docker compose up -d
+```
+
+### Deployment Options
+
+Hermes offers two deployment approaches:
+
+#### 🏗️ **Pre-built Images (Recommended)**
+- **Faster startup** - No build time required
+- **Stable releases** - Uses tested, published versions
+- **Smaller downloads** - Only pulls necessary images
+- **File**: `docker-compose.example.yml`
+- **Public packages** - No authentication required
+
+```bash
+# Uses ghcr.io/techsquidtv/hermes-app:latest and ghcr.io/techsquidtv/hermes-api:latest
+docker compose -f docker-compose.example.yml up -d
+```
+
+#### 🔨 **Build from Source**
+- **Full customization** - Modify code and rebuild
+- **Latest changes** - Access to unreleased features
+- **Development** - Perfect for contributors
+- **File**: `docker-compose.yml`
+
+```bash
+# Builds images from local Dockerfiles
+docker compose up -d
+```
+
 ### Customizing the Reverse Proxy
 
 The default setup uses Caddy as a reverse proxy. You can customize it by editing the `Caddyfile`:
@@ -54,6 +90,32 @@ The default setup uses Caddy as a reverse proxy. You can customize it by editing
 nano Caddyfile
 # Add your domain for automatic HTTPS, custom routing, etc.
 docker compose restart proxy
+```
+
+#### 🌐 Domain Configuration Options
+
+**Single Domain** (Recommended for most users):
+- Frontend and API on same domain: `hermes.example.com`
+- API accessible at: `hermes.example.com/api/`
+
+**Separate Domains** (Advanced):
+- Frontend at: `hermes.example.com`
+- API at: `hermes-api.example.com`
+
+See the [Caddyfile examples](Caddyfile) for both configurations.
+
+#### Environment Configuration
+
+Copy `.env.example` to `.env` and configure:
+
+```bash
+# For single domain
+HERMES_ALLOWED_ORIGINS=https://hermes.example.com
+VITE_API_BASE_URL=/api/v1
+
+# For separate domains
+HERMES_ALLOWED_ORIGINS=https://hermes.example.com,https://hermes-api.example.com
+VITE_API_BASE_URL=https://hermes-api.example.com/api/v1
 ```
 
 See our [Reverse Proxy Guide](docs/REVERSE_PROXY_GUIDE.md) for integrating with existing setups (Traefik, nginx, etc.).
@@ -68,7 +130,9 @@ If you run into problems, please use our [issue templates](https://github.com/te
 
 These templates help us help you faster! 🚀
 
-### Manual Installation
+### Manual Installation (Development)
+
+For development and contribution purposes:
 
 ```bash
 # Install dependencies
@@ -90,6 +154,7 @@ pnpm dev
 - **[API Documentation](packages/hermes-api/README.md)** - Complete API reference and examples
 - **[Frontend Guide](packages/hermes-app/README.md)** - React app development guide
 - **[Interactive API Docs](http://localhost:8000/docs)** - Live Swagger documentation
+- **[docker-compose.example.yml](docker-compose.example.yml)** - Pre-built images deployment configuration
 
 ## 🤝 Contributing
 
@@ -105,7 +170,14 @@ Use our [issue templates](https://github.com/techsquidtv/hermes/issues/new/choos
 - **[📚 Documentation](https://github.com/techsquidtv/hermes/issues/new?template=documentation.yml)** - Documentation improvements
 
 ### 💻 Contributing Code
-See our [contribution guidelines](docs/CONTRIBUTING.md) for development setup, testing, and code standards.
+
+**For Development:**
+- Use `docker-compose.dev.yml` for hot-reload development
+- Use `docker-compose.yml` to build from source with your local changes
+- See our [contribution guidelines](docs/CONTRIBUTING.md) for development setup, testing, and code standards
+
+**For Production Deployments:**
+- Use `docker-compose.example.yml` with pre-built images for faster, more reliable deployments
 
 ## 📄 License
 

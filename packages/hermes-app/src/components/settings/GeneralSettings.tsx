@@ -40,7 +40,21 @@ export function GeneralSettings() {
               </div>
               <div className="flex items-center gap-2">
                 <Badge variant="secondary">API Server</Badge>
-                <span className="text-sm">localhost:8000</span>
+                <span className="text-sm">
+                  {(() => {
+                    const apiBase = import.meta.env.VITE_API_BASE_URL
+                    if (import.meta.env.DEV) {
+                      // Development: API runs on localhost:8000
+                      return 'localhost:8000'
+                    }
+                    // Production: Extract domain from VITE_API_BASE_URL
+                    if (apiBase && apiBase.startsWith('http')) {
+                      return apiBase.replace(/^https?:\/\//, '').replace(/\/api\/v1$/, '')
+                    }
+                    // Fallback to current domain
+                    return `${window.location.hostname}${window.location.port ? ':' + window.location.port : ''}`
+                  })()}
+                </span>
               </div>
             </div>
             <div className="space-y-2">

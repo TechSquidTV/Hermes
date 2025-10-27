@@ -33,7 +33,7 @@ export function VersionStatus({ className }: VersionStatusProps) {
 
       // Fetch API version from health endpoint
       const healthResponse = await apiClient.getHealth()
-      const apiVersion = healthResponse.version
+      const apiVersion = healthResponse.version || 'unknown'
 
       // Fetch GitHub release info
       const info = await githubService.getVersionInfo(CURRENT_APP_VERSION, apiVersion)
