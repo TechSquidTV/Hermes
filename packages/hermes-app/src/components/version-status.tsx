@@ -35,7 +35,7 @@ export function VersionStatus({ className }: VersionStatusProps) {
       const healthResponse = await apiClient.getHealth()
       const apiVersion = healthResponse.version || 'unknown'
 
-      // Fetch GitHub release info
+      // Fetch GitHub tag info
       const info = await githubService.getVersionInfo(CURRENT_APP_VERSION, apiVersion)
 
       setVersionInfo({
@@ -231,7 +231,7 @@ export function VersionStatus({ className }: VersionStatusProps) {
             </div>
             {isPreRelease && (
               <div className="text-xs text-muted-foreground mt-1">
-                Pre-release: No tags published yet
+                Pre-release: No version tags found yet
               </div>
             )}
             {hasUpdates && (
@@ -295,7 +295,7 @@ export function VersionStatus({ className }: VersionStatusProps) {
               </div>
               {isPreRelease && (
                 <div className="text-xs text-muted-foreground mt-1">
-                  Pre-release: No tags published yet
+                  Pre-release: No version tags found yet
                 </div>
               )}
               {hasUpdates && (
