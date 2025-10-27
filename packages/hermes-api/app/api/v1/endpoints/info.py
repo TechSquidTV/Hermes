@@ -107,12 +107,20 @@ async def extract_video_info(
                 extractor=info.get("extractor", ""),
                 formats=[],  # Playlists don't have formats
                 thumbnails=[
-                    ThumbnailDetail(url=thumb.get("url", ""), width=thumb.get("width"), height=thumb.get("height"))
+                    ThumbnailDetail(
+                        url=thumb.get("url", ""),
+                        width=thumb.get("width"),
+                        height=thumb.get("height"),
+                    )
                     for thumb in info.get("thumbnails", [])
                 ],
                 subtitles={
-                    lang: [SubtitleDetail(url=sub.get("url", ""), ext=sub.get("ext", ""), lang=lang)
-                          for sub in subs]
+                    lang: [
+                        SubtitleDetail(
+                            url=sub.get("url", ""), ext=sub.get("ext", ""), lang=lang
+                        )
+                        for sub in subs
+                    ]
                     for lang, subs in info.get("subtitles", {}).items()
                 },
                 playlist_count=len(valid_entries),
@@ -165,12 +173,20 @@ async def extract_video_info(
                     for f in (info.get("formats", []) if include_formats else [])
                 ],
                 thumbnails=[
-                    ThumbnailDetail(url=thumb.get("url", ""), width=thumb.get("width"), height=thumb.get("height"))
+                    ThumbnailDetail(
+                        url=thumb.get("url", ""),
+                        width=thumb.get("width"),
+                        height=thumb.get("height"),
+                    )
                     for thumb in info.get("thumbnails", [])
                 ],
                 subtitles={
-                    lang: [SubtitleDetail(url=sub.get("url", ""), ext=sub.get("ext", ""), lang=lang)
-                          for sub in subs]
+                    lang: [
+                        SubtitleDetail(
+                            url=sub.get("url", ""), ext=sub.get("ext", ""), lang=lang
+                        )
+                        for sub in subs
+                    ]
                     for lang, subs in info.get("subtitles", {}).items()
                 },
             )

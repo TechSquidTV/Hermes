@@ -79,9 +79,9 @@ def create_application() -> FastAPI:
                 "error": {
                     "code": f"http_{exc.status_code}",
                     "message": exc.detail,
-                    "details": None
+                    "details": None,
                 }
-            }
+            },
         )
 
     @app.exception_handler(Exception)
@@ -94,9 +94,9 @@ def create_application() -> FastAPI:
                 "error": {
                     "code": "internal_server_error",
                     "message": "An internal server error occurred",
-                    "details": str(exc) if settings.debug else None
+                    "details": str(exc) if settings.debug else None,
                 }
-            }
+            },
         )
 
     # Security headers middleware

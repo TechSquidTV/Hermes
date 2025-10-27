@@ -249,9 +249,7 @@ class WebhookRepository(BaseRepository):
     async def get_active_webhooks(self) -> List[Webhook]:
         """Get all active webhooks."""
         result = await self.session.execute(
-            select(Webhook)
-            .where(Webhook.is_active)
-            .order_by(Webhook.created_at)
+            select(Webhook).where(Webhook.is_active).order_by(Webhook.created_at)
         )
         return result.scalars().all()
 

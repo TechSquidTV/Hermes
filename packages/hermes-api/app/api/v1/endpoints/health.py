@@ -16,10 +16,6 @@ from app.models.pydantic.response import HealthResponse
 router = APIRouter()
 
 
-
-
-
-
 @router.get("/")
 async def get_health():
     """Get API health status."""

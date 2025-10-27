@@ -176,7 +176,9 @@ async def _cleanup_old_downloads_async(
                 }
 
                 for download_id in download_ids:
-                    files = await repos["download_files"].get_by_download_id(download_id)
+                    files = await repos["download_files"].get_by_download_id(
+                        download_id
+                    )
                     total_files += len(files)
 
             return {

@@ -1,6 +1,6 @@
 [project]
 name = "hermes-api"
-version = "0.1.0"
+version = "0.1.1"
 description = "Hermes API server for video downloading"
 requires-python = ">=3.11"
 dependencies = [
@@ -45,6 +45,7 @@ python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+files = ["app"]
 
 [tool.ruff]
 line-length = 88
