@@ -25,7 +25,7 @@
     "security:check": "echo 'Checking for potential security issues...' && echo '✓ .env file should not be committed' && echo '✓ Database files are gitignored' && echo '✓ Consider using .dockerignore for production'",
     "pre-check": "pnpm --filter hermes-app lint && cd packages/hermes-api && uv run ruff check app/ tests/ && pnpm --filter hermes-app type-check && pnpm test:all && pnpm --filter hermes-app build && docker compose build",
     "format:check": "cd packages/hermes-api && uv run black --check --diff app/ tests/ && uv run isort --check-only --diff app/ tests/",
-    "pre-check:api": "cd packages/hermes-api && uv run black --check app/ tests/ && uv run isort --check-only app/ tests/ && uv run ruff check app/ tests/ && uv run mypy app/ && uv run pytest --cov=app --cov-report=term-missing",
+    "pre-check:api": "cd packages/hermes-api && uv run black --check app/ tests/ && uv run isort --check-only app/ tests/ && uv run ruff check app/ tests/ && uv run python -m mypy --explicit-package-bases app/ tests/ && uv run pytest",
     "pre-check:app": "pnpm --filter hermes-app lint && pnpm --filter hermes-app type-check && pnpm --filter hermes-app test",
     "pre-check:full": "pnpm pre-check:api && pnpm pre-check:app",
     "release": "./scripts/release.sh"
