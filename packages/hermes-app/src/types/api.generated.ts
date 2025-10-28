@@ -1436,6 +1436,42 @@ export interface components {
             per_page: number;
         };
         /**
+         * DownloadProgress
+         * @description Download progress information.
+         */
+        DownloadProgress: {
+            /**
+             * Percentage
+             * @description Download percentage (0-100)
+             */
+            percentage?: number | null;
+            /**
+             * Status
+             * @description Current progress status
+             */
+            status?: string | null;
+            /**
+             * Downloaded Bytes
+             * @description Number of bytes downloaded
+             */
+            downloaded_bytes?: number | null;
+            /**
+             * Total Bytes
+             * @description Total bytes to download
+             */
+            total_bytes?: number | null;
+            /**
+             * Speed
+             * @description Download speed in bytes per second
+             */
+            speed?: number | null;
+            /**
+             * Eta
+             * @description Estimated time remaining in seconds
+             */
+            eta?: number | null;
+        };
+        /**
          * DownloadQueue
          * @description Response model for download queue information.
          */
@@ -1574,6 +1610,47 @@ export interface components {
             estimated_completion?: string | null;
         };
         /**
+         * DownloadResult
+         * @description Final video information when download is completed.
+         */
+        DownloadResult: {
+            /**
+             * Url
+             * @description Original video URL
+             */
+            url?: string | null;
+            /**
+             * Title
+             * @description Video title
+             */
+            title?: string | null;
+            /**
+             * File Size
+             * @description File size in bytes
+             */
+            file_size?: number | null;
+            /**
+             * Duration
+             * @description Video duration in seconds
+             */
+            duration?: number | null;
+            /**
+             * Thumbnail Url
+             * @description Thumbnail URL
+             */
+            thumbnail_url?: string | null;
+            /**
+             * Extractor
+             * @description Extractor used (youtube, vimeo, etc)
+             */
+            extractor?: string | null;
+            /**
+             * Description
+             * @description Video description
+             */
+            description?: string | null;
+        };
+        /**
          * DownloadStatus
          * @description Response model for download status.
          */
@@ -1588,13 +1665,8 @@ export interface components {
              * @description Current download status
              */
             status: string;
-            /**
-             * Progress
-             * @description Progress information
-             */
-            progress?: {
-                [key: string]: unknown;
-            } | null;
+            /** @description Progress information */
+            progress?: components["schemas"]["DownloadProgress"] | null;
             /**
              * Current Filename
              * @description Current output filename being written
@@ -1610,13 +1682,8 @@ export interface components {
              * @description Error message if failed
              */
             error?: string | null;
-            /**
-             * Result
-             * @description Final video information when completed
-             */
-            result?: {
-                [key: string]: unknown;
-            } | null;
+            /** @description Final video information when completed */
+            result?: components["schemas"]["DownloadResult"] | null;
         };
         /**
          * DownloadedFile

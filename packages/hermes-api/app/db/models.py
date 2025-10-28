@@ -44,6 +44,13 @@ class Download(Base):
         nullable=False,
     )
     progress = Column(Float, default=0.0)  # 0.0 to 100.0
+
+    # Progress tracking fields
+    downloaded_bytes = Column(Integer, nullable=True)  # Bytes downloaded so far
+    total_bytes = Column(Integer, nullable=True)  # Total bytes to download
+    download_speed = Column(Float, nullable=True)  # Download speed in bytes per second
+    eta = Column(Float, nullable=True)  # Estimated time remaining in seconds
+
     format_spec = Column(String, default="best")
     output_path = Column(String, nullable=True)
     file_size = Column(Integer, nullable=True)  # Final file size in bytes

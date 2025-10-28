@@ -15,10 +15,13 @@ from app.models.pydantic.download import (
     BatchDownloadRequest,
     BatchDownloadResponse,
     CancelResponse,
+    DownloadProgress,
     DownloadRequest,
     DownloadResponse,
+    DownloadResult,
     DownloadStatus,
 )
+from app.services.redis_progress import redis_progress_service
 from app.tasks.download_tasks import batch_download_task, download_video_task
 
 router = APIRouter()
@@ -151,9 +154,52 @@ async def get_download_status(
             raise HTTPException(status_code=404, detail="Download not found")
 
         # Build progress information
+        # Try Redis first for active downloads (fast, real-time)
         progress_info = None
-        if download.progress is not None:
-            progress_info = {"percentage": download.progress, "status": download.status}
+        if download.status == "downloading":
+            redis_progress = await redis_progress_service.get_progress(download_id)
+            if redis_progress:
+                # Use Redis data for active downloads
+                progress_info = DownloadProgress(
+                    percentage=redis_progress.get("percentage", 0.0),
+                    status=redis_progress.get("status", "downloading"),
+                    downloaded_bytes=redis_progress.get("downloaded_bytes"),
+                    total_bytes=redis_progress.get("total_bytes"),
+                    speed=redis_progress.get("speed"),
+                    eta=redis_progress.get("eta"),
+                )
+
+        # Fall back to database if not in Redis or not downloading
+        if progress_info is None and download.progress is not None:
+            progress_info = DownloadProgress(
+                percentage=download.progress,
+                status=download.status,
+                downloaded_bytes=download.downloaded_bytes,
+                total_bytes=download.total_bytes,
+                speed=download.download_speed,
+                eta=download.eta,
+            )
+
+        # Build result information
+        result_info = None
+        if download.status == "completed":
+            result_info = DownloadResult(
+                url=download.url,
+                title=download.title,
+                file_size=download.file_size,
+                duration=download.duration,
+                thumbnail_url=download.thumbnail_url,
+                extractor=download.extractor,
+                description=download.description,
+            )
+        else:
+            # Include partial information for non-completed statuses
+            result_info = DownloadResult(
+                url=download.url,
+                title=download.title,
+                thumbnail_url=download.thumbnail_url,
+                extractor=download.extractor,
+            )
 
         # Build response
         response = DownloadStatus(
@@ -163,24 +209,7 @@ async def get_download_status(
             current_filename=download.output_path,
             message=f"Download {download.status}",
             error=download.error_message,
-            result=(
-                {
-                    "url": download.url,
-                    "title": download.title,
-                    "file_size": download.file_size,
-                    "duration": download.duration,
-                    "thumbnail_url": download.thumbnail_url,
-                    "extractor": download.extractor,
-                    "description": download.description,
-                }
-                if download.status == "completed"
-                else {
-                    "url": download.url,  # Include URL for all statuses
-                    "title": download.title,
-                    "thumbnail_url": download.thumbnail_url,
-                    "extractor": download.extractor,
-                }
-            ),
+            result=result_info,
         )
 
         return response

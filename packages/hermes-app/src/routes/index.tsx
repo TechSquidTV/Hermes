@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Progress } from '@/components/ui/progress'
 import { Keyboard, X, Download, AlertCircle } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '@/services/api/client'
@@ -12,7 +13,6 @@ import { KeyboardShortcutsHelp } from '@/components/ui/keyboard-shortcuts-help'
 import { useState, useEffect, useMemo } from 'react'
 import { TokenStorage } from '@/utils/tokenStorage'
 import { toast } from 'sonner'
-import { calculateProgressPercentage } from '@/lib/utils'
 import { Blur } from '@/components/animate-ui/primitives/effects/blur'
 import type { components } from '@/types/api.generated'
 
@@ -303,25 +303,38 @@ function DashboardPage() {
                         </p>
                       </div>
                       
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        {isActive && task.progress && typeof task.progress === 'object' && task.progress !== null && (
-                          <span>
-                            {(() => {
-                              const progress = calculateProgressPercentage(task.progress)
-                              return progress !== undefined ? `${Math.round(progress)}%` : 'Processing...'
-                            })()}
-                          </span>
-                        )}
-                        {isCompleted && hasDownloadResult(task.result) && task.result.file_size && (
+                      {/* Progress Bar for Active Downloads */}
+                      {isActive && task.progress?.percentage !== null && task.progress?.percentage !== undefined && (
+                        <div className="space-y-1 mt-2">
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span>{Math.round(task.progress.percentage)}%</span>
+                            {task.progress.speed && (
+                              <span>{(task.progress.speed / 1024 / 1024).toFixed(2)} MB/s</span>
+                            )}
+                          </div>
+                          <Progress value={task.progress.percentage} className="h-2" />
+                        </div>
+                      )}
+
+                      {/* Status Info for Non-Active or No Progress */}
+                      {(isActive && (task.progress?.percentage === null || task.progress?.percentage === undefined)) && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          <span>Processing...</span>
+                        </div>
+                      )}
+
+                      {isCompleted && hasDownloadResult(task.result) && task.result.file_size && (
+                        <div className="text-xs text-muted-foreground mt-1">
                           <span>{(Number(task.result.file_size) / 1024 / 1024).toFixed(2)} MB</span>
-                        )}
-                        {isFailed && task.error && (
-                          <span className="text-red-600 dark:text-red-400 flex items-center gap-1">
-                            <AlertCircle className="h-3 w-3" />
-                            {task.error}
-                          </span>
-                        )}
-                      </div>
+                        </div>
+                      )}
+
+                      {isFailed && task.error && (
+                        <div className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1 mt-1">
+                          <AlertCircle className="h-3 w-3" />
+                          {task.error}
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0 ml-3">

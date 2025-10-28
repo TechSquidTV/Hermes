@@ -10,28 +10,14 @@ import { VideoPreview } from '@/components/download/VideoPreview'
 import { VideoPreviewSkeleton } from '@/components/loading/VideoPreviewSkeleton'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { useDownloadProgress } from '@/hooks/useDownloadProgress'
-import type { components } from '@/types/api.generated'
-
-type DownloadStatus = components["schemas"]["DownloadStatus"]
 
 export function UrlInput() {
   const [url, setUrl] = useState('')
   const [isDragOver, setIsDragOver] = useState(false)
-  const [currentDownloadId, setCurrentDownloadId] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const debouncedUrl = useDebounce(url, 500)
   const queryClient = useQueryClient()
 
-  // Track download progress for real-time updates
-  const downloadProgress = useDownloadProgress({
-    downloadId: currentDownloadId,
-    enabled: !!currentDownloadId,
-    refetchInterval: 1000, // Poll every second
-  })
-
-  // Note: currentDownloadId doesn't need to be cleared manually
-  // The polling automatically stops when download completes/fails due to the refetchInterval condition
 
   const { data: videoInfo, isLoading, error } = useQuery({
     queryKey: ['videoInfo', debouncedUrl],
@@ -109,9 +95,6 @@ export function UrlInput() {
         const trackedTasks = JSON.parse(sessionStorage.getItem('homePageTasks') || '[]')
         trackedTasks.push(data.download_id)
         sessionStorage.setItem('homePageTasks', JSON.stringify(trackedTasks))
-
-        // Set the download ID for progress tracking in VideoPreview
-        setCurrentDownloadId(data.download_id)
       }
     },
     onError: (error) => {
@@ -194,8 +177,7 @@ export function UrlInput() {
         <VideoPreview
           info={videoInfo}
           onDownload={handleDownload}
-          isDownloading={downloadMutation.isPending || downloadProgress.isDownloading}
-          progress={(downloadProgress.downloadStatus as DownloadStatus | null)?.progress || undefined}
+          isDownloading={downloadMutation.isPending}
         />
       )}
       {error && !isLoading && <ErrorMessage error={error} />}

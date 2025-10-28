@@ -79,6 +79,35 @@ class DownloadRequest(BaseModel):
         return v
 
 
+class DownloadResult(BaseModel):
+    """Final video information when download is completed."""
+
+    url: Optional[str] = Field(None, description="Original video URL")
+    title: Optional[str] = Field(None, description="Video title")
+    file_size: Optional[int] = Field(None, description="File size in bytes")
+    duration: Optional[float] = Field(None, description="Video duration in seconds")
+    thumbnail_url: Optional[str] = Field(None, description="Thumbnail URL")
+    extractor: Optional[str] = Field(
+        None, description="Extractor used (youtube, vimeo, etc)"
+    )
+    description: Optional[str] = Field(None, description="Video description")
+
+
+class DownloadProgress(BaseModel):
+    """Download progress information."""
+
+    percentage: Optional[float] = Field(None, description="Download percentage (0-100)")
+    status: Optional[str] = Field(None, description="Current progress status")
+    downloaded_bytes: Optional[int] = Field(
+        None, description="Number of bytes downloaded"
+    )
+    total_bytes: Optional[int] = Field(None, description="Total bytes to download")
+    speed: Optional[float] = Field(None, description="Download speed in bytes per second")
+    eta: Optional[float] = Field(
+        None, description="Estimated time remaining in seconds"
+    )
+
+
 class DownloadResponse(BaseModel):
     """Response model for download initiation."""
 
@@ -95,13 +124,15 @@ class DownloadStatus(BaseModel):
 
     download_id: str = Field(..., description="Unique download identifier")
     status: str = Field(..., description="Current download status")
-    progress: Optional[Dict[str, Any]] = Field(None, description="Progress information")
+    progress: Optional[DownloadProgress] = Field(
+        None, description="Progress information"
+    )
     current_filename: Optional[str] = Field(
         None, description="Current output filename being written"
     )
     message: str = Field(..., description="Current status message")
     error: Optional[str] = Field(None, description="Error message if failed")
-    result: Optional[Dict[str, Any]] = Field(
+    result: Optional[DownloadResult] = Field(
         None, description="Final video information when completed"
     )
 

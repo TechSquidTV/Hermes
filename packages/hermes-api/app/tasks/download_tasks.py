@@ -6,6 +6,7 @@ import asyncio
 import os
 import re
 import tempfile
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -19,6 +20,7 @@ from app.db.repositories import (
     DownloadRepository,
     WebhookRepository,
 )
+from app.services.redis_progress import redis_progress_service
 from app.services.yt_dlp_service import YTDLPService
 
 logger = get_logger(__name__)
@@ -62,6 +64,10 @@ async def _update_download_status(
     status: str,
     progress: float = None,
     error_message: str = None,
+    downloaded_bytes: int = None,
+    total_bytes: int = None,
+    download_speed: float = None,
+    eta: float = None,
     **kwargs,
 ) -> None:
     """Helper function to update download status."""
@@ -75,6 +81,10 @@ async def _update_download_status(
             status=status,
             progress=progress,
             error_message=error_message,
+            downloaded_bytes=downloaded_bytes,
+            total_bytes=total_bytes,
+            download_speed=download_speed,
+            eta=eta,
             **kwargs,
         )
 
@@ -184,9 +194,84 @@ async def _download_video_task(
         # Ensure output directory exists
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-        # Download the video
+        # Create progress callback to update Redis and database (throttled)
+        # Get the current event loop to schedule updates from the sync callback
+        loop = asyncio.get_event_loop()
+
+        # Throttling variables for database writes
+        last_db_update_time = [0]  # Use list for mutable closure variable
+        last_db_percentage = [0.0]
+
+        def progress_hook(d: Dict[str, Any]) -> None:
+            """Progress callback for yt-dlp downloads."""
+            try:
+                if d.get("status") == "downloading":
+                    # Extract progress information
+                    downloaded = d.get("downloaded_bytes", 0)
+                    total = d.get("total_bytes") or d.get("total_bytes_estimate")
+                    speed = d.get("speed")
+                    eta_seconds = d.get("eta")
+
+                    # Convert to appropriate types (yt-dlp sometimes returns floats)
+                    downloaded_int = int(downloaded) if downloaded is not None else None
+                    total_int = int(total) if total is not None else None
+                    speed_float = float(speed) if speed is not None else None
+                    eta_float = float(eta_seconds) if eta_seconds is not None else None
+
+                    # Calculate percentage
+                    percentage = 0.0
+                    if total_int and total_int > 0:
+                        percentage = (downloaded_int / total_int) * 100
+
+                    # Prepare progress data
+                    progress_data = {
+                        "status": "downloading",
+                        "percentage": percentage,
+                        "downloaded_bytes": downloaded_int,
+                        "total_bytes": total_int,
+                        "speed": speed_float,
+                        "eta": eta_float,
+                    }
+
+                    # ALWAYS write to Redis (fast, ephemeral) - use sync method
+                    redis_progress_service.set_progress_sync(download_id, progress_data)
+
+                    # THROTTLED database writes (every 5% or 2 seconds)
+                    current_time = time.time()
+                    percentage_diff = abs(percentage - last_db_percentage[0])
+                    time_diff = current_time - last_db_update_time[0]
+
+                    should_update_db = (
+                        percentage_diff >= 5.0 or  # 5% change
+                        time_diff >= 2.0 or  # 2 seconds passed
+                        percentage >= 99.9  # Near completion
+                    )
+
+                    if should_update_db:
+                        asyncio.run_coroutine_threadsafe(
+                            _update_download_status(
+                                download_id=download_id,
+                                status="downloading",
+                                progress=percentage,
+                                downloaded_bytes=downloaded_int,
+                                total_bytes=total_int,
+                                download_speed=speed_float,
+                                eta=eta_float,
+                            ),
+                            loop
+                        )
+                        last_db_update_time[0] = current_time
+                        last_db_percentage[0] = percentage
+            except Exception as e:
+                logger.error("Progress hook error", download_id=download_id, error=str(e))
+
+        # Download the video with progress callback
         result_path = await yt_service.download_video(
-            url=url, output_path=output_path, format_spec=format_spec, **kwargs
+            url=url,
+            output_path=output_path,
+            format_spec=format_spec,
+            progress_callback=progress_hook,
+            **kwargs
         )
 
         if result_path and os.path.exists(result_path):
@@ -252,6 +337,9 @@ async def _download_video_task(
                 {"url": url, "file_path": result_path, "file_size": file_size},
             )
 
+            # Clean up Redis progress data (download complete)
+            await redis_progress_service.delete_progress(download_id)
+
             return {
                 "success": True,
                 "download_id": download_id,
@@ -282,6 +370,9 @@ async def _download_video_task(
             await _trigger_webhooks(
                 "download_failed", download_id, {"url": url, "error": error_message}
             )
+
+            # Clean up Redis progress data (download failed)
+            await redis_progress_service.delete_progress(download_id)
 
             return {
                 "success": False,
@@ -316,6 +407,9 @@ async def _download_video_task(
         await _trigger_webhooks(
             "download_failed", download_id, {"url": url, "error": error_message}
         )
+
+        # Clean up Redis progress data (download exception)
+        await redis_progress_service.delete_progress(download_id)
 
         return {"success": False, "download_id": download_id, "error": error_message}
 
