@@ -4,7 +4,6 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Separator } from '@/components/ui/separator'
-import { Progress } from '@/components/ui/progress'
 import { Input } from '@/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Checkbox, CheckboxIndicator } from '@/components/animate-ui/primitives/radix/checkbox'
@@ -26,21 +25,16 @@ import { apiClient } from '@/services/api/client'
 import { toast } from 'sonner'
 import { cn, formatDate } from '@/lib/utils'
 import { useQueryClient } from '@tanstack/react-query'
-import { calculateProgressPercentage } from '@/lib/utils'
 
 interface VideoPreviewProps {
   info: VideoInfo
   onDownload?: (format: string) => void
   isDownloading?: boolean
-  progress?: { [key: string]: unknown } | null | undefined
 }
 
-export function VideoPreview({ info, onDownload, isDownloading, progress }: VideoPreviewProps) {
+export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewProps) {
   const [selectedFormat, setSelectedFormat] = useState<string>('best')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-
-  // Calculate actual download progress from the progress object
-  const downloadProgress = calculateProgressPercentage(progress) || 0
   const queryClient = useQueryClient()
   
   // Playlist-specific state
@@ -509,22 +503,6 @@ export function VideoPreview({ info, onDownload, isDownloading, progress }: Vide
               {formatOptions.find(opt => opt.value === selectedFormat)?.description}
             </p>
           </div>
-
-          {isDownloading && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Downloading...</span>
-                <span className="font-medium">
-                  {typeof downloadProgress === 'number' && !isNaN(downloadProgress) && downloadProgress > 0
-                    ? `${Math.round(downloadProgress)}%`
-                    : 'Processing...'}
-                </span>
-              </div>
-              {typeof downloadProgress === 'number' && !isNaN(downloadProgress) && downloadProgress > 0 && (
-                <Progress value={downloadProgress} className="h-2" />
-              )}
-            </div>
-          )}
 
           <Button
             onClick={isPlaylist ? handlePlaylistDownload : handleDownload}

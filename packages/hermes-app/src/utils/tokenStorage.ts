@@ -25,7 +25,11 @@ export class TokenStorage {
       console.log('[TokenStorage] Access token stored securely')
     } catch (error) {
       console.warn('[TokenStorage] SessionStorage failed, falling back to localStorage:', error)
-      localStorage.setItem(this.ACCESS_TOKEN_KEY, token)
+      try {
+        localStorage.setItem(this.ACCESS_TOKEN_KEY, token)
+      } catch (localStorageError) {
+        console.error('[TokenStorage] Failed to store token in localStorage:', localStorageError)
+      }
     }
   }
 
@@ -61,7 +65,11 @@ export class TokenStorage {
       return token
     } catch (error) {
       console.warn('[TokenStorage] Error retrieving token:', error)
-      return localStorage.getItem(this.ACCESS_TOKEN_KEY)
+      try {
+        return localStorage.getItem(this.ACCESS_TOKEN_KEY)
+      } catch {
+        return null
+      }
     }
   }
 
@@ -82,7 +90,12 @@ export class TokenStorage {
    * Get refresh token
    */
   static getRefreshToken(): string | null {
-    return localStorage.getItem(this.REFRESH_TOKEN_KEY)
+    try {
+      return localStorage.getItem(this.REFRESH_TOKEN_KEY)
+    } catch (error) {
+      console.warn('[TokenStorage] Error retrieving refresh token:', error)
+      return null
+    }
   }
 
   /**
@@ -95,9 +108,13 @@ export class TokenStorage {
       console.warn('[TokenStorage] Failed to clear sessionStorage:', error)
     }
 
-    localStorage.removeItem(this.ACCESS_TOKEN_KEY)
-    localStorage.removeItem(this.REFRESH_TOKEN_KEY)
-    localStorage.removeItem(this.TOKEN_EXPIRY_KEY)
+    try {
+      localStorage.removeItem(this.ACCESS_TOKEN_KEY)
+      localStorage.removeItem(this.REFRESH_TOKEN_KEY)
+      localStorage.removeItem(this.TOKEN_EXPIRY_KEY)
+    } catch (error) {
+      console.warn('[TokenStorage] Failed to clear localStorage:', error)
+    }
 
     console.log('[TokenStorage] All tokens cleared')
   }
@@ -115,8 +132,13 @@ export class TokenStorage {
    * Get token expiry time
    */
   static getTokenExpiry(): number | null {
-    const expiryTime = localStorage.getItem(this.TOKEN_EXPIRY_KEY)
-    return expiryTime ? parseInt(expiryTime) : null
+    try {
+      const expiryTime = localStorage.getItem(this.TOKEN_EXPIRY_KEY)
+      return expiryTime ? parseInt(expiryTime) : null
+    } catch (error) {
+      console.warn('[TokenStorage] Error retrieving token expiry:', error)
+      return null
+    }
   }
 
   /**

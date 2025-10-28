@@ -74,6 +74,10 @@ class DownloadRepository(BaseRepository):
         status: str,
         progress: float = None,
         error_message: str = None,
+        downloaded_bytes: int = None,
+        total_bytes: int = None,
+        download_speed: float = None,
+        eta: float = None,
         **kwargs,
     ) -> Optional[Download]:
         """Update download status and progress."""
@@ -83,6 +87,16 @@ class DownloadRepository(BaseRepository):
 
         download.status = status
         download.progress = progress if progress is not None else download.progress
+
+        # Update progress tracking fields
+        if downloaded_bytes is not None:
+            download.downloaded_bytes = downloaded_bytes
+        if total_bytes is not None:
+            download.total_bytes = total_bytes
+        if download_speed is not None:
+            download.download_speed = download_speed
+        if eta is not None:
+            download.eta = eta
 
         if status == "downloading" and not download.started_at:
             download.started_at = datetime.now(timezone.utc)

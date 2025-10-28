@@ -5,7 +5,7 @@ YoutubeDL service wrapper for async operations.
 import asyncio
 import os
 import tempfile
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 import yt_dlp
 from yt_dlp.utils import DownloadError, ExtractorError
@@ -62,7 +62,12 @@ class YTDLPService:
         return await loop.run_in_executor(None, _extract_info_sync)
 
     async def download_video(
-        self, url: str, output_path: str, format_spec: str = "best", **kwargs
+        self,
+        url: str,
+        output_path: str,
+        format_spec: str = "best",
+        progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+        **kwargs,
     ) -> Optional[str]:
         """
         Download video asynchronously.
@@ -71,6 +76,7 @@ class YTDLPService:
             url: Video URL to download
             output_path: Path where to save the video
             format_spec: Format selection specification
+            progress_callback: Optional callback for progress updates
             **kwargs: Additional yt-dlp options
 
         Returns:
@@ -88,6 +94,10 @@ class YTDLPService:
                         **kwargs,
                     }
                 )
+
+                # Add progress hook if callback provided
+                if progress_callback:
+                    opts["progress_hooks"] = [progress_callback]
 
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     info = ydl.extract_info(url, download=True)
