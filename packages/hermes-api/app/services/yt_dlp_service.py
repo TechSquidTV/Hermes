@@ -67,7 +67,7 @@ class YTDLPService:
         output_path: str,
         format_spec: str = "best",
         progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
-        **kwargs
+        **kwargs,
     ) -> Optional[str]:
         """
         Download video asynchronously.

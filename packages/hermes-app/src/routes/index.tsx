@@ -14,13 +14,11 @@ import { useState, useEffect, useMemo } from 'react'
 import { TokenStorage } from '@/utils/tokenStorage'
 import { toast } from 'sonner'
 import { Blur } from '@/components/animate-ui/primitives/effects/blur'
-import type { components } from '@/types/api.generated'
-
-type DownloadStatus = components["schemas"]["DownloadStatus"]
+import type { DownloadStatus, DownloadResult } from '@/types'
 
 // Type guard to check if result has the expected download result properties
-const hasDownloadResult = (result: unknown): result is { title: string; url?: string; file_size?: number } => {
-  return result !== null && typeof result === 'object' && 'title' in result
+const hasDownloadResult = (result: unknown): result is DownloadResult => {
+  return result !== null && typeof result === 'object' && ('title' in result || 'url' in result)
 }
 
 function DashboardPage() {
@@ -299,7 +297,12 @@ function DashboardPage() {
                           {statusInfo.text}
                         </span>
                         <p className="text-sm font-medium truncate flex-1">
-                          {hasDownloadResult(task.result) ? task.result.title : ((task.result as any)?.url || 'Processing...')}
+                          {(() => {
+                            if (hasDownloadResult(task.result)) {
+                              return task.result.title || task.result.url || 'Processing...'
+                            }
+                            return 'Processing...'
+                          })()}
                         </p>
                       </div>
                       
@@ -343,7 +346,7 @@ function DashboardPage() {
                           size="sm"
                           onClick={() => handleDownloadFile(
                             task.current_filename,
-                            hasDownloadResult(task.result) ? task.result.title : 'download',
+                            hasDownloadResult(task.result) ? (task.result.title ?? 'download') : 'download',
                             task.download_id
                           )}
                           className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600"

@@ -13,30 +13,17 @@ import { TokenStorage } from '@/utils/tokenStorage'
 import { toast } from 'sonner'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { DownloadProgress } from '@/components/ui/download-progress'
-import { formatFileSize, formatRelativeTime } from '@/lib/utils'
+import { formatFileSize } from '@/lib/utils'
 import { useConfirmation } from '@/hooks/useConfirmation'
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
 import { Blur } from '@/components/animate-ui/primitives/effects/blur'
 import { useState } from 'react'
-import type { components } from '@/types/api.generated'
-
-// Define proper types for the result object based on backend API response
-interface DownloadResult {
-  url: string
-  title: string
-  file_size?: number
-  duration?: number
-  thumbnail_url?: string
-  extractor: string
-  description?: string
-}
+import type { DownloadStatus, DownloadResult } from '@/types'
 
 // Type guard to check if result is a proper DownloadResult
 const isDownloadResult = (result: unknown): result is DownloadResult => {
   return typeof result === 'object' && result !== null && ('url' in result || 'title' in result || 'extractor' in result)
 }
-
-type DownloadStatus = components["schemas"]["DownloadStatus"]
 
 interface QueueCardProps {
   download: DownloadStatus
@@ -161,27 +148,14 @@ export function QueueCard({ download, isSelectable = false, isSelected = false, 
     toast.info('Retry functionality coming soon!')
   }
 
-  // Get timestamp
+  // Get status-based label
   const getTimestamp = () => {
-    // Try different timestamp fields that might be available in result object first
-    const resultTimestamp = isDownloadResult(download.result)
-      ? (download.result as any)?.completed_at || (download.result as any)?.timestamp || (download.result as any)?.created_at || (download.result as any)?.upload_date
-      : undefined
-
-    if (resultTimestamp && typeof resultTimestamp === 'string') {
-      try {
-        return formatRelativeTime(new Date(resultTimestamp))
-      } catch {
-        return 'Unknown time'
-      }
-    }
-
     // For active downloads, show current status
     if (download.status === 'downloading' || download.status === 'processing' || download.status === 'queued') {
       return 'Processing...'
     }
 
-    // For completed downloads without result timestamps, show completion status
+    // For completed downloads, show completion status
     if (download.status === 'completed') {
       return 'Completed'
     }
@@ -191,7 +165,7 @@ export function QueueCard({ download, isSelectable = false, isSelected = false, 
       return 'Failed'
     }
 
-    return 'Unknown time'
+    return 'Unknown'
   }
 
   // Helper function to safely extract progress values
@@ -230,30 +204,30 @@ export function QueueCard({ download, isSelectable = false, isSelected = false, 
             />
           )}
           <p className="text-sm font-medium truncate">
-            {isDownloadResult(download.result) && download.result.title
-              ? download.result.title
-              : (download.result && typeof download.result === 'object' && 'title' in download.result && (download.result as any).title)
-              ? (download.result as any).title
-              : `Download ${download.download_id}`}
+            {(() => {
+              const result = isDownloadResult(download.result) ? download.result : undefined
+              return result?.title || `Download ${download.download_id}`
+            })()}
           </p>
         </div>
 
         <p className="text-xs text-muted-foreground truncate">
-          {isDownloadResult(download.result) && download.result.url
-            ? download.result.url
-            : (download.result && typeof download.result === 'object' && 'url' in download.result && (download.result as any).url)
-            ? (download.result as any).url
-            : 'Processing...'}
+          {(() => {
+            const result = isDownloadResult(download.result) ? download.result : undefined
+            return result?.url || 'Processing...'
+          })()}
         </p>
 
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span>{getTimestamp()}</span>
-          {(download.result && typeof download.result === 'object' && 'file_size' in download.result && (download.result as any).file_size) && (
-            <span>• {formatFileSize((download.result as any).file_size)}</span>
-          )}
-          {(download.result && typeof download.result === 'object' && 'extractor' in download.result && (download.result as any).extractor) && (
-            <span>• {(download.result as any).extractor}</span>
-          )}
+          {(() => {
+            const result = isDownloadResult(download.result) ? download.result : undefined
+            return result?.file_size && <span>• {formatFileSize(result.file_size)}</span>
+          })()}
+          {(() => {
+            const result = isDownloadResult(download.result) ? download.result : undefined
+            return result?.extractor && <span>• {result.extractor}</span>
+          })()}
         </div>
 
         <DownloadProgress
@@ -300,12 +274,10 @@ export function QueueCard({ download, isSelectable = false, isSelected = false, 
                 size="icon"
                 className="h-8 w-8"
                 title="Download File"
-                onClick={() => handleDownloadFile(
-                  download.current_filename,
-                  (download.result && typeof download.result === 'object' && 'title' in download.result && (download.result as any).title)
-                    ? (download.result as any).title
-                    : 'download'
-                )}
+                onClick={() => {
+                  const result = isDownloadResult(download.result) ? download.result : undefined
+                  handleDownloadFile(download.current_filename, result?.title || 'download')
+                }}
               >
                 <Download className="h-4 w-4" />
               </Button>
@@ -314,12 +286,10 @@ export function QueueCard({ download, isSelectable = false, isSelected = false, 
                 size="icon"
                 className="h-8 w-8 text-destructive hover:text-destructive"
                 title="Delete"
-                onClick={() => handleDeleteFile(
-                  download.current_filename,
-                  (download.result && typeof download.result === 'object' && 'title' in download.result && (download.result as any).title)
-                    ? (download.result as any).title
-                    : 'download'
-                )}
+                onClick={() => {
+                  const result = isDownloadResult(download.result) ? download.result : undefined
+                  handleDeleteFile(download.current_filename, result?.title || 'download')
+                }}
                 disabled={deleteMutation.isPending}
               >
                 {deleteMutation.isPending ? (

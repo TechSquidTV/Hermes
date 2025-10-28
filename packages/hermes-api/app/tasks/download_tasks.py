@@ -242,9 +242,9 @@ async def _download_video_task(
                     time_diff = current_time - last_db_update_time[0]
 
                     should_update_db = (
-                        percentage_diff >= 5.0 or  # 5% change
-                        time_diff >= 2.0 or  # 2 seconds passed
-                        percentage >= 99.9  # Near completion
+                        percentage_diff >= 5.0  # 5% change
+                        or time_diff >= 2.0  # 2 seconds passed
+                        or percentage >= 99.9  # Near completion
                     )
 
                     if should_update_db:
@@ -258,12 +258,14 @@ async def _download_video_task(
                                 download_speed=speed_float,
                                 eta=eta_float,
                             ),
-                            loop
+                            loop,
                         )
                         last_db_update_time[0] = current_time
                         last_db_percentage[0] = percentage
             except Exception as e:
-                logger.error("Progress hook error", download_id=download_id, error=str(e))
+                logger.error(
+                    "Progress hook error", download_id=download_id, error=str(e)
+                )
 
         # Download the video with progress callback
         result_path = await yt_service.download_video(
@@ -271,7 +273,7 @@ async def _download_video_task(
             output_path=output_path,
             format_spec=format_spec,
             progress_callback=progress_hook,
-            **kwargs
+            **kwargs,
         )
 
         if result_path and os.path.exists(result_path):

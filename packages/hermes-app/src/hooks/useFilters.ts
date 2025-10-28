@@ -1,8 +1,10 @@
 import { useState, useMemo } from 'react'
-import type { components } from '@/types/api.generated'
+import type { DownloadStatus, DownloadResult } from '@/types'
 
-type DownloadStatus = components["schemas"]["DownloadStatus"]
-
+// Type guard to check if result is a proper DownloadResult
+const isDownloadResult = (result: unknown): result is DownloadResult => {
+  return typeof result === 'object' && result !== null && ('url' in result || 'title' in result || 'extractor' in result)
+}
 
 export type ViewMode = 'active' | 'history' | 'all'
 
@@ -101,12 +103,9 @@ export function useFilteredDownloads<T extends DownloadStatus>(
       // Search filter
       if (filters.searchQuery) {
         const query = filters.searchQuery.toLowerCase()
-        const title = (download.result && typeof download.result === 'object' && 'title' in download.result && (download.result as any).title)
-          ? (download.result as any).title?.toLowerCase() || ''
-          : ''
-        const url = (download.result && typeof download.result === 'object' && 'url' in download.result && (download.result as any).url)
-          ? (download.result as any).url?.toLowerCase() || ''
-          : ''
+        const result = isDownloadResult(download.result) ? download.result : undefined
+        const title = result?.title?.toLowerCase() || ''
+        const url = result?.url?.toLowerCase() || ''
 
         if (!title.includes(query) && !url.includes(query)) {
           return false
@@ -126,14 +125,20 @@ export function useFilteredDownloads<T extends DownloadStatus>(
           aValue = a.download_id
           bValue = b.download_id
           break
-        case 'size':
-          aValue = (a.result && typeof a.result === 'object' && 'file_size' in a.result) ? (a.result as any).file_size || 0 : 0
-          bValue = (b.result && typeof b.result === 'object' && 'file_size' in b.result) ? (b.result as any).file_size || 0 : 0
+        case 'size': {
+          const aResult = isDownloadResult(a.result) ? a.result : undefined
+          const bResult = isDownloadResult(b.result) ? b.result : undefined
+          aValue = aResult?.file_size || 0
+          bValue = bResult?.file_size || 0
           break
-        case 'title':
-          aValue = (a.result && typeof a.result === 'object' && 'title' in a.result) ? (a.result as any).title || '' : ''
-          bValue = (b.result && typeof b.result === 'object' && 'title' in b.result) ? (b.result as any).title || '' : ''
+        }
+        case 'title': {
+          const aResult = isDownloadResult(a.result) ? a.result : undefined
+          const bResult = isDownloadResult(b.result) ? b.result : undefined
+          aValue = aResult?.title || ''
+          bValue = bResult?.title || ''
           break
+        }
         case 'status':
           aValue = a.status
           bValue = b.status

@@ -102,7 +102,9 @@ class DownloadProgress(BaseModel):
         None, description="Number of bytes downloaded"
     )
     total_bytes: Optional[int] = Field(None, description="Total bytes to download")
-    speed: Optional[float] = Field(None, description="Download speed in bytes per second")
+    speed: Optional[float] = Field(
+        None, description="Download speed in bytes per second"
+    )
     eta: Optional[float] = Field(
         None, description="Estimated time remaining in seconds"
     )
