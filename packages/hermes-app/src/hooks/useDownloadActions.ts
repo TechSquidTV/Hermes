@@ -62,8 +62,12 @@ export function useDownloadFile() {
         throw new Error('File path not available')
       }
 
-      const url = apiClient.getDownloadFileUrl(filePath)
       const token = TokenStorage.getAccessToken()
+      if (!token) {
+        throw new Error('Authentication required. Please log in again.')
+      }
+
+      const url = apiClient.getDownloadFileUrl(filePath)
       const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -76,9 +80,20 @@ export function useDownloadFile() {
 
       const blob = await response.blob()
       const downloadUrl = window.URL.createObjectURL(blob)
+
+      // Extract full filename from filePath if available
+      let filename = title || 'download'
+      if (filePath) {
+        const pathParts = filePath.split('/')
+        const fullFilename = pathParts[pathParts.length - 1]
+        if (fullFilename && fullFilename.includes('.')) {
+          filename = fullFilename
+        }
+      }
+
       const link = document.createElement('a')
       link.href = downloadUrl
-      link.download = title || 'download'
+      link.download = filename
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)

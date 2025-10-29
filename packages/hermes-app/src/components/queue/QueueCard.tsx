@@ -9,8 +9,8 @@ import {
 } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '@/services/api/client'
-import { TokenStorage } from '@/utils/tokenStorage'
 import { toast } from 'sonner'
+import { useDownloadFile } from '@/hooks/useDownloadActions'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { DownloadProgress } from '@/components/ui/download-progress'
 import { formatFileSize } from '@/lib/utils'
@@ -36,6 +36,7 @@ export function QueueCard({ download, isSelectable = false, isSelected = false, 
   const queryClient = useQueryClient()
   const { isOpen, title, description, confirmText, cancelText, variant, showConfirmation, hideConfirmation, confirm } = useConfirmation()
   const [isDismissing, setIsDismissing] = useState(false)
+  const downloadFile = useDownloadFile()
 
   // Delete mutation
   const deleteMutation = useMutation({
@@ -69,61 +70,12 @@ export function QueueCard({ download, isSelectable = false, isSelected = false, 
   })
 
   // Download file handler
-  const handleDownloadFile = async (filePath: string | null | undefined, title: string) => {
+  const handleDownloadFile = (filePath: string | null | undefined, title: string) => {
     if (!filePath) {
-      toast.error('File path not available')
       return
     }
 
-    try {
-      const token = TokenStorage.getAccessToken()
-      if (!token) {
-        toast.error('Authentication required. Please log in again.')
-        return
-      }
-
-      const url = apiClient.getDownloadFileUrl(filePath)
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          toast.error('Authentication failed. Please log in again.')
-          TokenStorage.clearTokens()
-          return
-        }
-        throw new Error(`Download failed: ${response.statusText}`)
-      }
-
-      const blob = await response.blob()
-      const downloadUrl = window.URL.createObjectURL(blob)
-
-      // Extract filename from filePath if available, otherwise use title
-      let filename = title || 'download'
-      if (filePath) {
-        const pathParts = filePath.split('/')
-        const fullFilename = pathParts[pathParts.length - 1]
-        // Use the actual filename from the path if it has an extension
-        if (fullFilename && fullFilename.includes('.')) {
-          filename = fullFilename
-        }
-      }
-
-      const link = document.createElement('a')
-      link.href = downloadUrl
-      link.download = filename
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(downloadUrl)
-
-      toast.success('Download started!')
-    } catch (error) {
-      toast.error(`Failed to download: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    }
+    downloadFile.mutate({ filePath, title })
   }
 
   // Delete file handler

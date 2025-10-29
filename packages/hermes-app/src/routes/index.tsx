@@ -5,12 +5,10 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Keyboard, X, Download, AlertCircle } from 'lucide-react'
 import { useDownloadProgress } from '@/hooks/useDownloadProgress'
-import { apiClient } from '@/services/api/client'
 import { UrlInput } from '@/components/forms/UrlInput'
 import { KeyboardShortcutsHelp } from '@/components/ui/keyboard-shortcuts-help'
 import { useState, useEffect } from 'react'
-import { TokenStorage } from '@/utils/tokenStorage'
-import { toast } from 'sonner'
+import { useDownloadFile } from '@/hooks/useDownloadActions'
 import { Blur } from '@/components/animate-ui/primitives/effects/blur'
 import { taskTracker } from '@/lib/taskTracking'
 import type { DownloadResult } from '@/types'
@@ -34,55 +32,22 @@ function TrackedTask({ downloadId, onRemove, isDismissing }: TrackedTaskProps) {
     refetchInterval: 2000
   })
 
-  const handleDownloadFile = async (filePath: string | null | undefined, title: string, downloadId: string) => {
+  const downloadFile = useDownloadFile()
+
+  const handleDownloadFile = (filePath: string | null | undefined, title: string, downloadId: string) => {
     if (!filePath) {
-      toast.error('File path not available')
       return
     }
 
-    try {
-      const token = TokenStorage.getAccessToken()
-      if (!token) {
-        toast.error('Authentication required. Please log in again.')
-        return
-      }
-
-      const url = apiClient.getDownloadFileUrl(filePath)
-      const response = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-
-      if (!response.ok) {
-        throw new Error(`Download failed: ${response.statusText}`)
-      }
-
-      const blob = await response.blob()
-      const downloadUrl = window.URL.createObjectURL(blob)
-
-      let filename = title || 'download'
-      if (filePath) {
-        const pathParts = filePath.split('/')
-        const fullFilename = pathParts[pathParts.length - 1]
-        if (fullFilename && fullFilename.includes('.')) {
-          filename = fullFilename
+    downloadFile.mutate(
+      { filePath, title },
+      {
+        onSuccess: () => {
+          // Auto-dismiss task after successful download
+          onRemove(downloadId)
         }
       }
-
-      const link = document.createElement('a')
-      link.href = downloadUrl
-      link.download = filename
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(downloadUrl)
-
-      toast.success('Download started!')
-
-      // Auto-dismiss task after successful download
-      onRemove(downloadId)
-    } catch (error) {
-      toast.error(`Failed to download file: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    }
+    )
   }
 
   const getStatusInfo = (status: string) => {
