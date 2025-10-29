@@ -54,13 +54,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Type check
-        run: pnpm type-check
+        run: pnpm --filter hermes-app type-check
 
       - name: Lint
-        run: pnpm lint
+        run: pnpm --filter hermes-app lint
 
       - name: Build
-        run: pnpm build
+        run: pnpm --filter hermes-app build
 
       - name: Test
         run: pnpm test:hermes-app
@@ -104,7 +104,7 @@ jobs:
 
       - name: Run mypy (type checking)
         working-directory: packages/hermes-api
-        run: uv run mypy app/
+        run: uv run python -m mypy --explicit-package-bases app/ tests/
 
       - name: Run tests with coverage
         working-directory: packages/hermes-api
