@@ -39,7 +39,7 @@
     "@typescript-eslint/eslint-plugin": "^8.46.2",
     "@typescript-eslint/parser": "^8.46.2",
     "@vitejs/plugin-react": "^4.3.4",
-    "@vitest/coverage-v8": "^2.0.5",
+    "@vitest/coverage-v8": "^4.0.4",
     "autoprefixer": "^10.4.21",
     "eslint": "^9.38.0",
     "eslint-plugin-react": "^7.37.5",
@@ -54,7 +54,7 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.2",
     "vite": "^7.1.7",
-    "vitest": "^2.0.5"
+    "vitest": "^4.0.4"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
