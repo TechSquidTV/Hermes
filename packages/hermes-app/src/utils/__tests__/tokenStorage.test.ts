@@ -75,6 +75,38 @@ describe('TokenStorage', () => {
         token
       )
     })
+
+    it('should handle both localStorage and sessionStorage errors gracefully', () => {
+      sessionStorageMock.setItem.mockImplementation(() => {
+        throw new Error('SessionStorage full')
+      })
+      localStorageMock.setItem.mockImplementation(() => {
+        throw new Error('LocalStorage full')
+      })
+
+      const token = 'test-access-token'
+
+      // Should not throw error even when both storages fail
+      expect(() => {
+        TokenStorage.setAccessToken(token)
+      }).not.toThrow()
+    })
+
+    it('should store token without expiry when expiresInMinutes not provided', () => {
+      const token = 'test-access-token'
+
+      TokenStorage.setAccessToken(token)
+
+      expect(localStorageMock.setItem).toHaveBeenCalledWith(
+        'hermes_access_token',
+        token
+      )
+      // Should not set expiry
+      expect(localStorageMock.setItem).not.toHaveBeenCalledWith(
+        'hermes_token_expiry',
+        expect.any(String)
+      )
+    })
   })
 
   describe('getAccessToken', () => {
@@ -121,6 +153,54 @@ describe('TokenStorage', () => {
       expect(localStorageMock.removeItem).toHaveBeenCalledWith('hermes_refresh_token')
       expect(localStorageMock.removeItem).toHaveBeenCalledWith('hermes_token_expiry')
     })
+
+    it('should handle storage errors and fall back gracefully', () => {
+      sessionStorageMock.getItem.mockImplementation(() => {
+        throw new Error('Storage error')
+      })
+      localStorageMock.getItem.mockReturnValue('fallback-token')
+
+      const result = TokenStorage.getAccessToken()
+
+      expect(result).toBe('fallback-token')
+    })
+
+    it('should return null when both storages throw errors', () => {
+      sessionStorageMock.getItem.mockImplementation(() => {
+        throw new Error('SessionStorage error')
+      })
+      localStorageMock.getItem.mockImplementation(() => {
+        throw new Error('LocalStorage error')
+      })
+
+      const result = TokenStorage.getAccessToken()
+
+      expect(result).toBeNull()
+    })
+
+    it('should handle invalid expiry time gracefully', () => {
+      localStorageMock.getItem
+        .mockReturnValueOnce('test-token')
+        .mockReturnValueOnce('invalid-expiry-time')
+
+      // Should not throw, parseInt will return NaN
+      const result = TokenStorage.getAccessToken()
+
+      // Should return token when expiry is invalid (NaN)
+      expect(result).toBe('test-token')
+    })
+
+    it('should return token when expiry is exactly now', () => {
+      const nowTime = Date.now()
+      localStorageMock.getItem
+        .mockReturnValueOnce('test-token')
+        .mockReturnValueOnce(nowTime.toString())
+
+      const result = TokenStorage.getAccessToken()
+
+      // Token is NOT expired when Date.now() === expiry time (requires Date.now() > expiry to be expired)
+      expect(result).toBe('test-token')
+    })
   })
 
   describe('setRefreshToken', () => {
@@ -134,6 +214,19 @@ describe('TokenStorage', () => {
         token
       )
     })
+
+    it('should handle localStorage errors gracefully', () => {
+      localStorageMock.setItem.mockImplementation(() => {
+        throw new Error('LocalStorage full')
+      })
+
+      const token = 'test-refresh-token'
+
+      // Should not throw error
+      expect(() => {
+        TokenStorage.setRefreshToken(token)
+      }).not.toThrow()
+    })
   })
 
   describe('getRefreshToken', () => {
@@ -145,6 +238,16 @@ describe('TokenStorage', () => {
 
       expect(localStorageMock.getItem).toHaveBeenCalledWith('hermes_refresh_token')
       expect(result).toBe(token)
+    })
+
+    it('should handle localStorage errors gracefully', () => {
+      localStorageMock.getItem.mockImplementation(() => {
+        throw new Error('LocalStorage error')
+      })
+
+      const result = TokenStorage.getRefreshToken()
+
+      expect(result).toBeNull()
     })
   })
 
@@ -173,6 +276,17 @@ describe('TokenStorage', () => {
       expect(localStorageMock.removeItem).toHaveBeenCalledWith('hermes_refresh_token')
       expect(localStorageMock.removeItem).toHaveBeenCalledWith('hermes_token_expiry')
     })
+
+    it('should handle localStorage errors gracefully', () => {
+      localStorageMock.removeItem.mockImplementation(() => {
+        throw new Error('LocalStorage error')
+      })
+
+      // Should not throw error
+      expect(() => {
+        TokenStorage.clearTokens()
+      }).not.toThrow()
+    })
   })
 
   describe('hasValidTokens', () => {
@@ -193,6 +307,44 @@ describe('TokenStorage', () => {
       const result = TokenStorage.hasValidTokens()
 
       expect(result).toBe(false)
+    })
+  })
+
+  describe('getTokenExpiry', () => {
+    it('should return expiry time when set', () => {
+      const expiryTime = Date.now() + (15 * 60 * 1000)
+      localStorageMock.getItem.mockReturnValue(expiryTime.toString())
+
+      const result = TokenStorage.getTokenExpiry()
+
+      expect(result).toBe(expiryTime)
+    })
+
+    it('should return null when no expiry set', () => {
+      localStorageMock.getItem.mockReturnValue(null)
+
+      const result = TokenStorage.getTokenExpiry()
+
+      expect(result).toBeNull()
+    })
+
+    it('should handle localStorage errors gracefully', () => {
+      localStorageMock.getItem.mockImplementation(() => {
+        throw new Error('LocalStorage error')
+      })
+
+      const result = TokenStorage.getTokenExpiry()
+
+      expect(result).toBeNull()
+    })
+
+    it('should handle invalid expiry string', () => {
+      localStorageMock.getItem.mockReturnValue('not-a-number')
+
+      const result = TokenStorage.getTokenExpiry()
+
+      // parseInt('not-a-number') returns NaN
+      expect(isNaN(result as number)).toBe(true)
     })
   })
 
@@ -221,6 +373,24 @@ describe('TokenStorage', () => {
       const result = TokenStorage.isTokenNearExpiry()
 
       expect(result).toBe(false)
+    })
+
+    it('should return true when token expires exactly in 5 minutes', () => {
+      const fiveMinutesFromNow = Date.now() + (5 * 60 * 1000)
+      localStorageMock.getItem.mockReturnValue(fiveMinutesFromNow.toString())
+
+      const result = TokenStorage.isTokenNearExpiry()
+
+      expect(result).toBe(true)
+    })
+
+    it('should return true when token is already expired', () => {
+      const oneMinuteAgo = Date.now() - (1 * 60 * 1000)
+      localStorageMock.getItem.mockReturnValue(oneMinuteAgo.toString())
+
+      const result = TokenStorage.isTokenNearExpiry()
+
+      expect(result).toBe(true)
     })
   })
 })
