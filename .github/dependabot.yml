@@ -41,8 +41,8 @@ updates:
       timezone: "America/New_York"
     labels:
       - "dependencies"
-      - "npm"
-      - "root"
+      - "pnpm"
+      - "workspace"
       - "automated"
     groups:
       root-dev-dependencies:
@@ -70,7 +70,7 @@ updates:
       timezone: "America/New_York"
     labels:
       - "dependencies"
-      - "npm"
+      - "pnpm"
       - "frontend"
       - "hermes-app"
       - "automated"
@@ -148,7 +148,7 @@ updates:
 #   Grouped PRs (minor + patch updates):
 #     - 1 PR: GitHub Actions updates
 #     - 1 PR: Root workspace (shadcn, etc)
-#     - 1 PR: Frontend (all ~70 npm dependencies)
+#     - 1 PR: Frontend (all ~70 pnpm dependencies)
 #     - 1 PR: Backend (all ~25 python dependencies)
 #
 #   Individual PRs (major version updates):
