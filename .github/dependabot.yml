@@ -133,8 +133,6 @@ updates:
     # - Linting (ruff)
     # - Type checking (mypy)
     # - Tests with coverage (pytest)
-    pip-compile:
-      uv: true
 
 # Configuration Philosophy:
 # 1. Monthly schedules to minimize PR noise while staying current
