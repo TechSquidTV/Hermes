@@ -27,6 +27,7 @@
     "generate:types": "openapi-typescript http://localhost:8000/openapi.json -o ./src/types/api.generated.ts"
   },
   "devDependencies": {
+    "@codecov/vite-plugin": "^1.9.1",
     "@eslint/js": "^9.38.0",
     "@tailwindcss/postcss": "^4.1.15",
     "@tanstack/react-query-devtools": "^5.90.2",

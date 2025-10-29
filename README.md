@@ -1,5 +1,7 @@
 # Hermes — Self-Hosted Video Downloader
 
+[![codecov](https://codecov.io/gh/TechSquidTV/Hermes/branch/main/graph/badge.svg)](https://codecov.io/gh/TechSquidTV/Hermes)
+
 🎥 **Download videos from YouTube and 1000+ sites with a robust API and beautiful, modern interface**
 
 Hermes is a self-hosted video downloader built on [yt-dlp](https://github.com/yt-dlp/yt-dlp).
