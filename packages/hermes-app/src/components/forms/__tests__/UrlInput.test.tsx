@@ -288,7 +288,6 @@ describe('UrlInput Component', () => {
 
   describe('Paste Handling', () => {
     it('handles paste event with valid URL', async () => {
-      const { toast } = await import('sonner')
       const user = userEvent.setup()
       render(<UrlInput />, { wrapper: createWrapper() })
 
