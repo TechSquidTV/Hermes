@@ -1,0 +1,160 @@
+version: 2
+
+# Dependabot configuration for Hermes monorepo
+# Uses grouping to reduce PR noise and optimize update management
+
+updates:
+  # GitHub Actions - Update all actions together
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+      day: "monday"
+      time: "02:00"
+      timezone: "America/New_York"
+    labels:
+      - "dependencies"
+      - "github-actions"
+      - "automated"
+    # Group all GitHub Actions updates into a single PR
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "kyletryon"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+
+  # Root pnpm workspace - monorepo-level dependencies
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+      day: "monday"
+      time: "03:00"
+      timezone: "America/New_York"
+    labels:
+      - "dependencies"
+      - "npm"
+      - "root"
+      - "automated"
+    groups:
+      root-dev-dependencies:
+        patterns:
+          - "*"
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "kyletryon"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    versioning-strategy: increase
+
+  # Frontend app (hermes-app) - TypeScript/React dependencies
+  - package-ecosystem: "npm"
+    directory: "/packages/hermes-app"
+    schedule:
+      interval: "monthly"
+      day: "monday"
+      time: "04:00"
+      timezone: "America/New_York"
+    labels:
+      - "dependencies"
+      - "npm"
+      - "frontend"
+      - "hermes-app"
+      - "automated"
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    open-pull-requests-limit: 2
+    reviewers:
+      - "kyletryon"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    versioning-strategy: increase
+    # Allow both direct and indirect updates
+    allow:
+      - dependency-type: "all"
+    # PRs will trigger pr-checks.yml workflow which runs:
+    # - Type checking (tsc)
+    # - Linting (eslint)
+    # - Build verification
+    # - Tests (vitest)
+
+  # Backend API (hermes-api) - Python/uv dependencies
+  - package-ecosystem: "pip"
+    directory: "/packages/hermes-api"
+    schedule:
+      interval: "monthly"
+      day: "monday"
+      time: "05:00"
+      timezone: "America/New_York"
+    labels:
+      - "dependencies"
+      - "python"
+      - "backend"
+      - "hermes-api"
+      - "automated"
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    open-pull-requests-limit: 2
+    reviewers:
+      - "kyletryon"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    # Allow both direct and indirect updates
+    allow:
+      - dependency-type: "all"
+    # PRs will trigger pr-checks.yml workflow which runs:
+    # - Format checking (black)
+    # - Import sorting (isort)
+    # - Linting (ruff)
+    # - Type checking (mypy)
+    # - Tests with coverage (pytest)
+    pip-compile:
+      uv: true
+
+# Configuration Philosophy:
+# 1. Monthly schedules to minimize PR noise while staying current
+# 2. Ultra-grouped: ALL dependencies per ecosystem in ONE PR
+# 3. Minor + patch updates grouped together (grouped PRs)
+# 4. Major version updates get separate individual PRs for careful review
+# 5. GitHub Security alerts handle critical security issues independently
+# 6. Total: ~4 grouped PRs + 0-6 individual major version PRs per month
+# 7. Labels and commit prefixes follow Conventional Commits
+# 8. All updates on Monday, staggered overnight: 2am (actions) → 3am (root) → 4am (frontend) → 5am (python)
+#
+# PR Breakdown per month:
+#   Grouped PRs (minor + patch updates):
+#     - 1 PR: GitHub Actions updates
+#     - 1 PR: Root workspace (shadcn, etc)
+#     - 1 PR: Frontend (all ~70 npm dependencies)
+#     - 1 PR: Backend (all ~25 python dependencies)
+#
+#   Individual PRs (major version updates):
+#     - 0-6 PRs: Breaking changes that need individual review
+#     (e.g., React 18→19, FastAPI 0.x→1.0, etc.)
+#
+# All PRs automatically run full test suite via pr-checks.yml before merge
