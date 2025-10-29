@@ -31,7 +31,9 @@ class TestCleanupTempFiles:
             with open(old_file, "w") as f:
                 f.write("old content" * 100)
 
-            old_time = datetime.now(timezone.utc).timestamp() - (25 * 3600)  # 25 hours ago
+            old_time = datetime.now(timezone.utc).timestamp() - (
+                25 * 3600
+            )  # 25 hours ago
             os.utime(old_file, (old_time, old_time))
 
             # Create new file (modify time to 1 hour ago)
