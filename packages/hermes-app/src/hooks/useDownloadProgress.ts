@@ -13,6 +13,7 @@ interface UseDownloadProgressOptions {
 
 /**
  * Hook to poll download progress for a specific download
+ * Uses simple React Query polling - stops when download completes or fails
  */
 export function useDownloadProgress(options: UseDownloadProgressOptions) {
   const { downloadId, enabled = true, refetchInterval = 2000 } = options
@@ -25,12 +26,13 @@ export function useDownloadProgress(options: UseDownloadProgressOptions) {
     },
     enabled: enabled && !!downloadId,
     refetchInterval: (query) => {
-      // Stop polling if download is completed or failed
       const data = query.state.data
-      if (data?.status === 'completed' || data?.status === 'failed') {
-        return false
+      // Stop polling if download is completed or failed
+      if (!data) return refetchInterval
+      if (data.status === 'completed' || data.status === 'failed') {
+        return false  // Stop polling
       }
-      return refetchInterval
+      return refetchInterval  // Keep polling
     },
     staleTime: 0, // Always consider stale to ensure fresh data
   })

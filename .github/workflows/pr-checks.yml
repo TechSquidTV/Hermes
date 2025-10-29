@@ -43,8 +43,6 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10.19.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -56,13 +54,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Type check
-        run: pnpm type-check
+        run: pnpm --filter hermes-app type-check
 
       - name: Lint
-        run: pnpm lint
+        run: pnpm --filter hermes-app lint
 
       - name: Build
-        run: pnpm build
+        run: pnpm --filter hermes-app build
 
       - name: Test
         run: pnpm test:hermes-app
@@ -100,13 +98,13 @@ jobs:
         working-directory: packages/hermes-api
         run: uv run isort --check-only app/ tests/
 
-      - name: Run flake8 (linting)
+      - name: Run ruff (linting)
         working-directory: packages/hermes-api
-        run: uv run flake8 app/ tests/
+        run: uv run ruff check app/ tests/
 
       - name: Run mypy (type checking)
         working-directory: packages/hermes-api
-        run: uv run mypy app/
+        run: uv run python -m mypy --explicit-package-bases app/ tests/
 
       - name: Run tests with coverage
         working-directory: packages/hermes-api

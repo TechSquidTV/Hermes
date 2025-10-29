@@ -1,5 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
-import { apiClient } from '@/services/api/client'
+import { useQueuePolling } from '@/hooks/useQueuePolling'
 import { QueueCard } from './QueueCard'
 import { QueueSkeleton } from './QueueSkeleton'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -39,52 +38,11 @@ export function QueueList({
   onDeselectAll,
 }: QueueListProps) {
 
-  // Fetch download queue
-  const { data: queueData, isLoading, error, refetch } = useQuery({
-    queryKey: ['queue', viewMode, statusFilter, searchQuery],
-    queryFn: () => {
-      // Map frontend view modes to API status filters
-      let apiStatus: string | undefined
-      if (viewMode === 'active') {
-        apiStatus = statusFilter === 'all' ? undefined : statusFilter
-      } else if (viewMode === 'history') {
-        apiStatus = 'completed'
-      }
-      // For 'all' view mode, don't filter by status
-
-      return apiClient.getDownloadQueue(apiStatus)
-    },
-    // Smart polling based on view mode and data state
-    refetchInterval: (query) => {
-      const data = query.state.data
-      
-      // No polling for history view
-      if (viewMode === 'history') {
-        return false
-      }
-
-      // Check if there are active downloads
-      const hasActiveDownloads = data?.items?.some(
-        (item: DownloadStatus) => item.status === 'downloading' || item.status === 'processing'
-      )
-
-      const hasQueuedDownloads = data?.items?.some(
-        (item: DownloadStatus) => item.status === 'queued'
-      )
-
-      // 2s polling for active downloads
-      if (hasActiveDownloads) {
-        return 2000
-      }
-
-      // 10s polling for queued downloads
-      if (hasQueuedDownloads) {
-        return 10000
-      }
-
-      // 30s polling when nothing is active
-      return 30000
-    },
+  // Use unified polling hook with smart adaptive intervals
+  const { data: queueData, isLoading, error, refetch } = useQueuePolling({
+    status: viewMode === 'active' ? (statusFilter === 'all' ? undefined : statusFilter) :
+            viewMode === 'history' ? 'completed' : undefined,
+    viewMode,
   })
 
   // Use the useFilteredDownloads hook for filtering and sorting

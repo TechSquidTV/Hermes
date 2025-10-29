@@ -103,7 +103,9 @@ class TestRedisProgressServiceAsync:
         await redis_service.delete_progress(download_id)
 
         # Verify async delete was called
-        mock_async_redis.delete.assert_called_once_with(f"download:{download_id}:progress")
+        mock_async_redis.delete.assert_called_once_with(
+            f"download:{download_id}:progress"
+        )
 
     @pytest.mark.asyncio
     async def test_get_progress_success(self, redis_service):
@@ -169,7 +171,9 @@ class TestRedisProgressServiceAsync:
 
         await redis_service.delete_progress(download_id)
 
-        mock_async_redis.delete.assert_called_once_with(f"download:{download_id}:progress")
+        mock_async_redis.delete.assert_called_once_with(
+            f"download:{download_id}:progress"
+        )
 
     @pytest.mark.asyncio
     async def test_delete_progress_error(self, redis_service, mock_async_redis):

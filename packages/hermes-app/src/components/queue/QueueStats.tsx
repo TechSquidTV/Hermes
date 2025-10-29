@@ -1,14 +1,10 @@
-import { useQuery } from '@tanstack/react-query'
-import { apiClient } from '@/services/api/client'
+import { useDownloadStatsPolling } from '@/hooks/useQueuePolling'
 import { StatsCard } from '@/components/ui/stats-card'
 import { formatFileSize } from '@/lib/utils'
 import { Download, CheckCircle, TrendingUp, HardDrive } from 'lucide-react'
 
 export function QueueStats() {
-  const { data: stats, isLoading } = useQuery({
-    queryKey: ['queue', 'stats'],
-    queryFn: () => apiClient.getApiStats(),
-  })
+  const { data: stats, isLoading } = useDownloadStatsPolling()
 
   if (isLoading) {
     return (

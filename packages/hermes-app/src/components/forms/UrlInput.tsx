@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react'
 import { useDebounce } from '@/hooks/useDebounce'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -10,14 +10,15 @@ import { VideoPreview } from '@/components/download/VideoPreview'
 import { VideoPreviewSkeleton } from '@/components/loading/VideoPreviewSkeleton'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { taskTracker } from '@/lib/taskTracking'
+import { useStartDownload } from '@/hooks/useDownloadActions'
 
 export function UrlInput() {
   const [url, setUrl] = useState('')
   const [isDragOver, setIsDragOver] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const debouncedUrl = useDebounce(url, 500)
-  const queryClient = useQueryClient()
-
+  const startDownload = useStartDownload()
 
   const { data: videoInfo, isLoading, error } = useQuery({
     queryKey: ['videoInfo', debouncedUrl],
@@ -77,36 +78,21 @@ export function UrlInput() {
     }
   }, [])
 
-  const downloadMutation = useMutation({
-    mutationFn: (request: { url: string; format: string }) =>
-      apiClient.startDownload({
-        url: request.url,
-        format: request.format,
-        download_subtitles: false,
-        download_thumbnail: false,
-      }),
-    onSuccess: (data) => {
-      toast.success('Download started successfully!')
-      queryClient.invalidateQueries({ queryKey: ['queueStats'] })
-      queryClient.invalidateQueries({ queryKey: ['recentDownloadsQueue'] })
-
-      // Store the download ID for tracking on the home page (session only)
-      if (data?.download_id) {
-        const trackedTasks = JSON.parse(sessionStorage.getItem('homePageTasks') || '[]')
-        trackedTasks.push(data.download_id)
-        sessionStorage.setItem('homePageTasks', JSON.stringify(trackedTasks))
-      }
-    },
-    onError: (error) => {
-      toast.error(`Failed to start download: ${error.message}`)
-    },
-  })
-
   const handleDownload = async (format: string) => {
     if (!url || !format) return
 
     try {
-      await downloadMutation.mutateAsync({ url, format })
+      const data = await startDownload.mutateAsync({
+        url,
+        format,
+        download_subtitles: false,
+        download_thumbnail: false,
+      })
+
+      // Track the download ID for the home page using event-driven system
+      if (data?.download_id) {
+        taskTracker.addTask(data.download_id)
+      }
     } catch (_error) {
       // Error is handled by the mutation
     }
@@ -177,7 +163,7 @@ export function UrlInput() {
         <VideoPreview
           info={videoInfo}
           onDownload={handleDownload}
-          isDownloading={downloadMutation.isPending}
+          isDownloading={startDownload.isPending}
         />
       )}
       {error && !isLoading && <ErrorMessage error={error} />}

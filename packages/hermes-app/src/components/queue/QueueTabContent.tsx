@@ -2,8 +2,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { QueueList } from './QueueList'
 import { QueueStats } from './QueueStats'
 import { BulkOperations } from './BulkOperations'
-import { useQuery } from '@tanstack/react-query'
-import { apiClient } from '@/services/api/client'
+import { useQueuePolling } from '@/hooks/useQueuePolling'
 import type { components } from '@/types/api.generated'
 import { useBulkOperations } from '@/hooks/useBulkOperations'
 
@@ -31,19 +30,11 @@ export function QueueTabContent({
   const typedSortOrder = sortOrder as FilterState['sortOrder']
   const bulkOperations = useBulkOperations()
 
-  // Get current queue data for bulk operations
-  const { data: queueData } = useQuery<components["schemas"]["DownloadQueue"]>({
-    queryKey: ['queue', viewMode, statusFilter, searchQuery],
-    queryFn: () => {
-      let apiStatus: string | undefined
-      if (viewMode === 'active') {
-        apiStatus = statusFilter === 'all' ? undefined : statusFilter
-      } else if (viewMode === 'history') {
-        apiStatus = 'completed'
-      }
-      return apiClient.getDownloadQueue(apiStatus)
-    },
-    enabled: false, // Only run when needed for bulk operations
+  // Get current queue data for bulk operations using unified polling hook
+  const { data: queueData } = useQueuePolling({
+    status: viewMode === 'active' ? (statusFilter === 'all' ? undefined : statusFilter) :
+            viewMode === 'history' ? 'completed' : undefined,
+    viewMode,
   })
 
   return (

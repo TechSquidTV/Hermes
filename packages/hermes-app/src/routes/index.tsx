@@ -4,165 +4,50 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Keyboard, X, Download, AlertCircle } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
-import { apiClient } from '@/services/api/client'
+import { useDownloadProgress } from '@/hooks/useDownloadProgress'
 import { UrlInput } from '@/components/forms/UrlInput'
-import { DashboardSkeleton } from '@/components/loading/DashboardSkeleton'
-import { ErrorDisplay } from '@/components/ui/error-display'
 import { KeyboardShortcutsHelp } from '@/components/ui/keyboard-shortcuts-help'
-import { useState, useEffect, useMemo } from 'react'
-import { TokenStorage } from '@/utils/tokenStorage'
-import { toast } from 'sonner'
+import { useState, useEffect } from 'react'
+import { useDownloadFile } from '@/hooks/useDownloadActions'
 import { Blur } from '@/components/animate-ui/primitives/effects/blur'
-import type { DownloadStatus, DownloadResult } from '@/types'
+import { taskTracker } from '@/lib/taskTracking'
+import type { DownloadResult } from '@/types'
 
 // Type guard to check if result has the expected download result properties
 const hasDownloadResult = (result: unknown): result is DownloadResult => {
   return result !== null && typeof result === 'object' && ('title' in result || 'url' in result)
 }
 
-function DashboardPage() {
-  const [trackedTaskIds, setTrackedTaskIds] = useState<string[]>([])
-  const [forceQueryEnabled, setForceQueryEnabled] = useState(false)
-  const [dismissingTasks, setDismissingTasks] = useState<Set<string>>(new Set())
+// Component to track a single download task
+interface TrackedTaskProps {
+  downloadId: string
+  onRemove: (downloadId: string) => void
+  isDismissing: boolean
+}
 
-  // Load tracked task IDs from sessionStorage on mount
-  useEffect(() => {
-    const stored = sessionStorage.getItem('homePageTasks')
-    if (stored) {
-      try {
-        const ids = JSON.parse(stored)
-        setTrackedTaskIds(ids)
-        if (ids.length > 0) {
-          setForceQueryEnabled(true)
-        }
-      } catch {
-        setTrackedTaskIds([])
-      }
-    }
-  }, [])
-
-  // Poll sessionStorage for changes (in case UrlInput updates it)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const stored = sessionStorage.getItem('homePageTasks')
-      if (stored) {
-        try {
-          const ids = JSON.parse(stored)
-          if (JSON.stringify(ids) !== JSON.stringify(trackedTaskIds)) {
-            setTrackedTaskIds(ids)
-            if (ids.length > 0) {
-              setForceQueryEnabled(true)
-            }
-          }
-        } catch {
-          // ignore parse errors
-        }
-      }
-    }, 500) // Check every 500ms
-
-    return () => clearInterval(interval)
-  }, [trackedTaskIds])
-
-  // Query for queue to get task statuses
-  const { data: queueData, isLoading: isLoadingQueue, error: queueError, refetch: refetchQueue } = useQuery({
-    queryKey: ['recentDownloadsQueue'],
-    queryFn: () => apiClient.getDownloadQueue(),
-    refetchInterval: 2000,
-    enabled: trackedTaskIds.length > 0 || forceQueryEnabled, // Poll if we have tasks or force enabled
+function TrackedTask({ downloadId, onRemove, isDismissing }: TrackedTaskProps) {
+  const { downloadStatus, progressPercentage } = useDownloadProgress({
+    downloadId,
+    enabled: true,
+    refetchInterval: 2000
   })
 
-  // Filter to only show tracked tasks
-  const tasks = useMemo(() => {
-    if (!queueData?.items || trackedTaskIds.length === 0) return []
-    
-    return queueData.items.filter((download: DownloadStatus) =>
-      trackedTaskIds.includes(download.download_id)
-    )
-  }, [queueData, trackedTaskIds])
+  const downloadFile = useDownloadFile()
 
-  const removeTask = (downloadId: string, withAnimation = true) => {
-    if (withAnimation) {
-      // Start the animation
-      setDismissingTasks(prev => new Set(prev).add(downloadId))
-      
-      // After animation completes, actually remove the task
-      setTimeout(() => {
-        const updated = trackedTaskIds.filter(id => id !== downloadId)
-        setTrackedTaskIds(updated)
-        sessionStorage.setItem('homePageTasks', JSON.stringify(updated))
-        setDismissingTasks(prev => {
-          const next = new Set(prev)
-          next.delete(downloadId)
-          return next
-        })
-      }, 600) // Match animation duration
-    } else {
-      const updated = trackedTaskIds.filter(id => id !== downloadId)
-      setTrackedTaskIds(updated)
-      sessionStorage.setItem('homePageTasks', JSON.stringify(updated))
-    }
-  }
-
-  const clearCompletedTasks = () => {
-    const activeTasks = tasks.filter((t: DownloadStatus) =>
-      t.status !== 'completed' && t.status !== 'failed'
-    )
-    const activeIds = activeTasks.map((t: DownloadStatus) => t.download_id)
-    setTrackedTaskIds(activeIds)
-    sessionStorage.setItem('homePageTasks', JSON.stringify(activeIds))
-    toast.success('Completed tasks cleared')
-  }
-
-  const handleDownloadFile = async (filePath: string | null | undefined, title: string, downloadId: string) => {
+  const handleDownloadFile = (filePath: string | null | undefined, title: string, downloadId: string) => {
     if (!filePath) {
-      toast.error('File path not available')
       return
     }
 
-    try {
-      const token = TokenStorage.getAccessToken()
-      if (!token) {
-        toast.error('Authentication required. Please log in again.')
-        return
-      }
-
-      const url = apiClient.getDownloadFileUrl(filePath)
-      const response = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-
-      if (!response.ok) {
-        throw new Error(`Download failed: ${response.statusText}`)
-      }
-
-      const blob = await response.blob()
-      const downloadUrl = window.URL.createObjectURL(blob)
-
-      let filename = title || 'download'
-      if (filePath) {
-        const pathParts = filePath.split('/')
-        const fullFilename = pathParts[pathParts.length - 1]
-        if (fullFilename && fullFilename.includes('.')) {
-          filename = fullFilename
+    downloadFile.mutate(
+      { filePath, title },
+      {
+        onSuccess: () => {
+          // Auto-dismiss task after successful download
+          onRemove(downloadId)
         }
       }
-
-      const link = document.createElement('a')
-      link.href = downloadUrl
-      link.download = filename
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(downloadUrl)
-
-      toast.success('Download started!')
-      
-      // Auto-dismiss task after successful download
-      removeTask(downloadId, true)
-    } catch (error) {
-      toast.error(`Failed to download file: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    }
+    )
   }
 
   const getStatusInfo = (status: string) => {
@@ -212,15 +97,142 @@ function DashboardPage() {
     }
   }
 
-  if (isLoadingQueue && trackedTaskIds.length > 0) {
-    return <DashboardSkeleton />
+  if (!downloadStatus) {
+    // Task is loading
+    return null
   }
 
-  const hasError = queueError
+  const task = downloadStatus
+  const statusInfo = getStatusInfo(task.status)
+  const isCompleted = task.status === 'completed'
+  const isFailed = task.status === 'failed'
+  const isActive = !isCompleted && !isFailed
 
-  const hasCompletedOrFailed = tasks.some((t: DownloadStatus) =>
-    t.status === 'completed' || t.status === 'failed'
+  return (
+    <Blur
+      key={downloadId}
+      initialBlur={isDismissing ? 0 : 10}
+      blur={isDismissing ? 10 : 0}
+      className={`
+        flex items-center justify-between p-3 rounded-md border
+        ${isCompleted ? 'border-green-200 bg-green-50/50 dark:border-green-800 dark:bg-green-950/20' : ''}
+        ${isFailed ? 'border-red-200 bg-red-50/50 dark:border-red-800 dark:bg-red-950/20' : ''}
+        ${isActive ? 'bg-card' : ''}
+        ${isDismissing ? 'pointer-events-none' : ''}
+      `}
+    >
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <div className={`h-2 w-2 rounded-full ${statusInfo.color} ${isActive ? 'animate-pulse' : ''}`} />
+          <span className={`text-xs font-medium ${statusInfo.textColor}`}>
+            {statusInfo.text}
+          </span>
+          <p className="text-sm font-medium truncate flex-1">
+            {(() => {
+              if (hasDownloadResult(task.result)) {
+                return task.result.title || task.result.url || 'Processing...'
+              }
+              return 'Processing...'
+            })()}
+          </p>
+        </div>
+
+        {/* Progress Bar for Active Downloads */}
+        {isActive && progressPercentage !== null && progressPercentage !== undefined && (
+          <div className="space-y-1 mt-2">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>{Math.round(progressPercentage)}%</span>
+              {task.progress?.speed && (
+                <span>{(task.progress.speed / 1024 / 1024).toFixed(2)} MB/s</span>
+              )}
+            </div>
+            <Progress value={progressPercentage} className="h-2" />
+          </div>
+        )}
+
+        {/* Status Info for Non-Active or No Progress */}
+        {(isActive && (progressPercentage === null || progressPercentage === undefined)) && (
+          <div className="text-xs text-muted-foreground mt-1">
+            <span>Processing...</span>
+          </div>
+        )}
+
+        {isCompleted && hasDownloadResult(task.result) && task.result.file_size && (
+          <div className="text-xs text-muted-foreground mt-1">
+            <span>{(Number(task.result.file_size) / 1024 / 1024).toFixed(2)} MB</span>
+          </div>
+        )}
+
+        {isFailed && task.error && (
+          <div className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1 mt-1">
+            <AlertCircle className="h-3 w-3" />
+            {task.error}
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2 shrink-0 ml-3">
+        {isCompleted && (
+          <Button
+            size="sm"
+            onClick={() => handleDownloadFile(
+              task.current_filename,
+              hasDownloadResult(task.result) ? (task.result.title ?? 'download') : 'download',
+              downloadId
+            )}
+            className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600"
+          >
+            <Download className="h-4 w-4 mr-1" />
+            Download
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => onRemove(downloadId)}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+    </Blur>
   )
+}
+
+function DashboardPage() {
+  // Initialize state with tracked task IDs from taskTracker
+  const [trackedTaskIds, setTrackedTaskIds] = useState<string[]>(() => taskTracker.getTasks())
+  const [dismissingTasks, setDismissingTasks] = useState<Set<string>>(new Set())
+
+  // Subscribe to task changes using event-driven system (no polling!)
+  useEffect(() => {
+    const unsubscribe = taskTracker.subscribe((taskIds) => {
+      setTrackedTaskIds(taskIds)
+    })
+
+    return () => {
+      unsubscribe()
+    }
+  }, [])
+
+  const removeTask = (downloadId: string, withAnimation = true) => {
+    if (withAnimation) {
+      // Start the animation
+      setDismissingTasks(prev => new Set(prev).add(downloadId))
+
+      // After animation completes, actually remove the task
+      setTimeout(() => {
+        taskTracker.removeTask(downloadId)
+        setDismissingTasks(prev => {
+          const next = new Set(prev)
+          next.delete(downloadId)
+          return next
+        })
+      }, 600) // Match animation duration
+    } else {
+      taskTracker.removeTask(downloadId)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -233,15 +245,6 @@ function DashboardPage() {
         </KeyboardShortcutsHelp>
       </div>
 
-      {hasError && (
-        <ErrorDisplay
-          message="Failed to load dashboard data. Please check your connection and try again."
-          onRetry={() => {
-            refetchQueue()
-          }}
-        />
-      )}
-
       <Card>
         <CardHeader>
           <CardTitle>Quick Download</CardTitle>
@@ -252,121 +255,21 @@ function DashboardPage() {
       </Card>
 
       {/* Tasks Section - Only shows when there are tracked tasks */}
-      {tasks.length > 0 && (
+      {trackedTaskIds.length > 0 && (
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Tasks</CardTitle>
-              {hasCompletedOrFailed && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={clearCompletedTasks}
-                >
-                  Clear Completed
-                </Button>
-              )}
-            </div>
+            <CardTitle>Tasks</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {tasks.map((task: DownloadStatus) => {
-                const statusInfo = getStatusInfo(task.status)
-                const isCompleted = task.status === 'completed'
-                const isFailed = task.status === 'failed'
-                const isActive = !isCompleted && !isFailed
-                const isDismissing = dismissingTasks.has(task.download_id)
-
-                return (
-                  <Blur
-                    key={task.download_id}
-                    initialBlur={isDismissing ? 0 : 10}
-                    blur={isDismissing ? 10 : 0}
-                    className={`
-                      flex items-center justify-between p-3 rounded-md border
-                      ${isCompleted ? 'border-green-200 bg-green-50/50 dark:border-green-800 dark:bg-green-950/20' : ''}
-                      ${isFailed ? 'border-red-200 bg-red-50/50 dark:border-red-800 dark:bg-red-950/20' : ''}
-                      ${isActive ? 'bg-card' : ''}
-                      ${isDismissing ? 'pointer-events-none' : ''}
-                    `}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className={`h-2 w-2 rounded-full ${statusInfo.color} ${isActive ? 'animate-pulse' : ''}`} />
-                        <span className={`text-xs font-medium ${statusInfo.textColor}`}>
-                          {statusInfo.text}
-                        </span>
-                        <p className="text-sm font-medium truncate flex-1">
-                          {(() => {
-                            if (hasDownloadResult(task.result)) {
-                              return task.result.title || task.result.url || 'Processing...'
-                            }
-                            return 'Processing...'
-                          })()}
-                        </p>
-                      </div>
-                      
-                      {/* Progress Bar for Active Downloads */}
-                      {isActive && task.progress?.percentage !== null && task.progress?.percentage !== undefined && (
-                        <div className="space-y-1 mt-2">
-                          <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span>{Math.round(task.progress.percentage)}%</span>
-                            {task.progress.speed && (
-                              <span>{(task.progress.speed / 1024 / 1024).toFixed(2)} MB/s</span>
-                            )}
-                          </div>
-                          <Progress value={task.progress.percentage} className="h-2" />
-                        </div>
-                      )}
-
-                      {/* Status Info for Non-Active or No Progress */}
-                      {(isActive && (task.progress?.percentage === null || task.progress?.percentage === undefined)) && (
-                        <div className="text-xs text-muted-foreground mt-1">
-                          <span>Processing...</span>
-                        </div>
-                      )}
-
-                      {isCompleted && hasDownloadResult(task.result) && task.result.file_size && (
-                        <div className="text-xs text-muted-foreground mt-1">
-                          <span>{(Number(task.result.file_size) / 1024 / 1024).toFixed(2)} MB</span>
-                        </div>
-                      )}
-
-                      {isFailed && task.error && (
-                        <div className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1 mt-1">
-                          <AlertCircle className="h-3 w-3" />
-                          {task.error}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0 ml-3">
-                      {isCompleted && (
-                        <Button
-                          size="sm"
-                          onClick={() => handleDownloadFile(
-                            task.current_filename,
-                            hasDownloadResult(task.result) ? (task.result.title ?? 'download') : 'download',
-                            task.download_id
-                          )}
-                          className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600"
-                        >
-                          <Download className="h-4 w-4 mr-1" />
-                          Download
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => removeTask(task.download_id)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </Blur>
-                )
-              })}
+              {trackedTaskIds.map((downloadId) => (
+                <TrackedTask
+                  key={downloadId}
+                  downloadId={downloadId}
+                  onRemove={removeTask}
+                  isDismissing={dismissingTasks.has(downloadId)}
+                />
+              ))}
             </div>
           </CardContent>
         </Card>
