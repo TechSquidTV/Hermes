@@ -74,6 +74,8 @@ jobs:
           files: ./packages/hermes-app/coverage/lcov.info
           flags: frontend
           name: frontend-coverage
+          fail_ci_if_error: false
+          verbose: true
 
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
@@ -124,7 +126,11 @@ jobs:
 
       - name: Run tests with coverage
         working-directory: packages/hermes-api
-        run: uv run pytest --cov=app --cov-report=term-missing --cov-report=xml --junitxml=junit.xml
+        run: uv run pytest --cov=app --cov-report=term-missing --cov-report=xml:coverage.xml --junitxml=junit.xml
+
+      - name: List coverage files (debug)
+        working-directory: packages/hermes-api
+        run: ls -la *.xml || echo "No XML files found"
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -133,6 +139,8 @@ jobs:
           files: ./packages/hermes-api/coverage.xml
           flags: backend
           name: backend-coverage
+          fail_ci_if_error: false
+          verbose: true
 
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}

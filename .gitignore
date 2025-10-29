@@ -27,6 +27,7 @@ pids
 # Coverage directory used by tools like istanbul
 coverage/
 *.lcov
+coverage.xml
 
 # Test reports
 junit.xml

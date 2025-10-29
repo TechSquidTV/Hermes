@@ -1,0 +1,55 @@
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+        informational: true
+    patch:
+      default:
+        target: auto
+        threshold: 1%
+
+# Monorepo configuration
+flag_management:
+  default_rules:
+    carryforward: true
+    statuses:
+      - type: project
+        target: auto
+        threshold: 1%
+      - type: patch
+        target: auto
+        threshold: 1%
+
+flags:
+  frontend:
+    paths:
+      - packages/hermes-app/src/
+    carryforward: true
+  backend:
+    paths:
+      - packages/hermes-api/app/
+    carryforward: true
+
+# Component configuration for monorepo
+component_management:
+  individual_components:
+    - component_id: hermes-app
+      name: Frontend (hermes-app)
+      paths:
+        - packages/hermes-app/**
+      flag_regexes:
+        - frontend
+    - component_id: hermes-api
+      name: Backend (hermes-api)
+      paths:
+        - packages/hermes-api/**
+      flag_regexes:
+        - backend
+
+comment:
+  layout: "header, diff, flags, components, files"
+  behavior: default
+  require_changes: false
+  show_carryforward_flags: true
