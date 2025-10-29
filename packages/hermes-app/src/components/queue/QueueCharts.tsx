@@ -1,32 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { useQuery } from '@tanstack/react-query'
-import { apiClient } from '@/services/api/client'
+import { useTimelinePolling, useTimelineSummaryPolling, useAnalyticsPolling } from '@/hooks/useAnalyticsPolling'
 import { useState } from 'react'
-import type { components } from '@/types/api.generated'
-
-type ApiStatistics = components["schemas"]["ApiStatistics"]
-
-// Define types for API responses that aren't in the schema
-interface DailyStats {
-  date: string
-  downloads: number
-  success_rate: number
-  total_size: number
-}
-
-interface TimelineSummary {
-  total_downloads: number
-  success_rate: number
-  total_size: number
-  avg_daily_downloads: number
-  trend: string
-  peak_day: string | null
-  peak_downloads: number
-  period: string
-  days_count: number
-}
 import {
   LineChart,
   Line,
@@ -48,26 +24,10 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'
 export function QueueCharts() {
   const [selectedPeriod, setSelectedPeriod] = useState<'day' | 'week' | 'month' | 'year'>('week')
 
-  // Fetch timeline data for charts
-  const { data: timelineData, isLoading: isLoadingTimeline } = useQuery<DailyStats[]>({
-    queryKey: ['timeline', selectedPeriod],
-    queryFn: () => apiClient.getTimelineStats(selectedPeriod),
-    refetchInterval: 30000, // Refresh every 30 seconds
-  })
-
-  // Fetch timeline summary for overview stats
-  const { data: timelineSummary, isLoading: isLoadingSummary } = useQuery<TimelineSummary>({
-    queryKey: ['timeline', 'summary', selectedPeriod],
-    queryFn: () => apiClient.getTimelineSummary(selectedPeriod),
-    refetchInterval: 30000,
-  })
-
-  // Fetch general stats for extractor data
-  const { data: statsData, isLoading: isLoadingStats } = useQuery<ApiStatistics>({
-    queryKey: ['stats', selectedPeriod],
-    queryFn: () => apiClient.getApiStats(selectedPeriod),
-    refetchInterval: 30000,
-  })
+  // Use unified polling hooks for all data fetching
+  const { data: timelineData, isLoading: isLoadingTimeline } = useTimelinePolling(selectedPeriod)
+  const { data: timelineSummary, isLoading: isLoadingSummary } = useTimelineSummaryPolling(selectedPeriod)
+  const { stats: { data: statsData, isLoading: isLoadingStats } } = useAnalyticsPolling({ period: selectedPeriod })
 
   const isLoading = isLoadingTimeline || isLoadingSummary || isLoadingStats
 

@@ -25,6 +25,7 @@ const routeNames: Record<string, string> = {
   '/queue': 'Queue',
   '/settings': 'Settings',
   '/settings/general': 'General',
+  '/settings/polling': 'Polling',
   '/settings/api-keys': 'API Keys',
   '/settings/appearance': 'Appearance',
   '/auth/login': 'Login',

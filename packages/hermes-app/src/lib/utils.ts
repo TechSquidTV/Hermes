@@ -153,6 +153,41 @@ export function calculateProgressPercentage(progressObj: { [key: string]: unknow
   return undefined
 }
 
+/**
+ * Creates a debounced callback function that delays execution
+ * @param callback The function to debounce
+ * @param delay Delay in milliseconds
+ * @returns Debounced function with cleanup
+ */
+export function createDebouncedCallback<T extends (...args: any[]) => void>(
+  callback: T,
+  delay: number
+): {
+  debouncedFn: (...args: Parameters<T>) => void
+  cancel: () => void
+} {
+  let timeoutId: NodeJS.Timeout | null = null
+
+  const debouncedFn = (...args: Parameters<T>) => {
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+    }
+    timeoutId = setTimeout(() => {
+      callback(...args)
+      timeoutId = null
+    }, delay)
+  }
+
+  const cancel = () => {
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+      timeoutId = null
+    }
+  }
+
+  return { debouncedFn, cancel }
+}
+
 
 
 
