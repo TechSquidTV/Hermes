@@ -116,7 +116,8 @@ updates:
         patterns:
           - "*"
         update-types:
-          - "patch"  # Conservative: only patch updates for stability
+          - "minor"
+          - "patch"
     open-pull-requests-limit: 2
     reviewers:
       - "kyletryon"
@@ -138,16 +139,22 @@ updates:
 # Configuration Philosophy:
 # 1. Monthly schedules to minimize PR noise while staying current
 # 2. Ultra-grouped: ALL dependencies per ecosystem in ONE PR
-# 3. Major version updates get separate PRs for careful review
-# 4. GitHub Security alerts handle critical security issues independently
-# 5. Backend: patch-only for stability (conservative)
-# 6. Frontend: minor + patch for latest features
-# 7. Total: 4 PRs per month (vs 40+ without grouping)
-# 8. Labels and commit prefixes follow Conventional Commits
-# 9. All updates on Monday, staggered overnight: 2am (actions) → 3am (root) → 4am (frontend) → 5am (python)
+# 3. Minor + patch updates grouped together (grouped PRs)
+# 4. Major version updates get separate individual PRs for careful review
+# 5. GitHub Security alerts handle critical security issues independently
+# 6. Total: ~4 grouped PRs + 0-6 individual major version PRs per month
+# 7. Labels and commit prefixes follow Conventional Commits
+# 8. All updates on Monday, staggered overnight: 2am (actions) → 3am (root) → 4am (frontend) → 5am (python)
 #
 # PR Breakdown per month:
-#   - 1 PR: GitHub Actions updates
-#   - 1 PR: Root workspace (shadcn, etc)
-#   - 1 PR: Frontend (all ~70 npm dependencies)
-#   - 1 PR: Backend (all ~25 python dependencies)
+#   Grouped PRs (minor + patch updates):
+#     - 1 PR: GitHub Actions updates
+#     - 1 PR: Root workspace (shadcn, etc)
+#     - 1 PR: Frontend (all ~70 npm dependencies)
+#     - 1 PR: Backend (all ~25 python dependencies)
+#
+#   Individual PRs (major version updates):
+#     - 0-6 PRs: Breaking changes that need individual review
+#     (e.g., React 18→19, FastAPI 0.x→1.0, etc.)
+#
+# All PRs automatically run full test suite via pr-checks.yml before merge
