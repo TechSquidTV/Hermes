@@ -199,7 +199,7 @@ async def _download_video_task(
         loop = asyncio.get_event_loop()
 
         # Throttling variables for database writes
-        last_db_update_time = [0]  # Use list for mutable closure variable
+        last_db_update_time = [0.0]  # Use list for mutable closure variable
         last_db_percentage = [0.0]
 
         def progress_hook(d: Dict[str, Any]) -> None:
