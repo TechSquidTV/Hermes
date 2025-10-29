@@ -194,16 +194,8 @@ describe('UrlInput Component', () => {
 
       const input = screen.getByPlaceholderText(/paste video url here/i)
 
-      // Rapidly type characters
-      await user.type(input, 'h')
-      await user.type(input, 't')
-      await user.type(input, 't')
-      await user.type(input, 'p')
-      await user.type(input, 's')
-      await user.type(input, ':')
-      await user.type(input, '/')
-      await user.type(input, '/')
-      await user.type(input, 'youtube.com/watch?v=test')
+      // Rapidly type full URL - each character triggers a change event
+      await user.type(input, 'https://youtube.com/watch?v=test')
 
       // Should only call API once after debounce period
       await waitFor(() => {

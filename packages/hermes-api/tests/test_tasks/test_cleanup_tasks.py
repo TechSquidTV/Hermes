@@ -4,7 +4,7 @@ Tests for cleanup tasks.
 
 import os
 import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -31,14 +31,14 @@ class TestCleanupTempFiles:
             with open(old_file, "w") as f:
                 f.write("old content" * 100)
 
-            old_time = datetime.now().timestamp() - (25 * 3600)  # 25 hours ago
+            old_time = datetime.now(timezone.utc).timestamp() - (25 * 3600)  # 25 hours ago
             os.utime(old_file, (old_time, old_time))
 
             # Create new file (modify time to 1 hour ago)
             with open(new_file, "w") as f:
                 f.write("new content" * 100)
 
-            new_time = datetime.now().timestamp() - 3600  # 1 hour ago
+            new_time = datetime.now(timezone.utc).timestamp() - 3600  # 1 hour ago
             os.utime(new_file, (new_time, new_time))
 
             old_file_size = os.path.getsize(old_file)
@@ -83,7 +83,7 @@ class TestCleanupTempFiles:
                     f.write(f"content {i}" * 100)
 
                 # Set modification time to 1 hour ago
-                new_time = datetime.now().timestamp() - 3600
+                new_time = datetime.now(timezone.utc).timestamp() - 3600
                 os.utime(file_path, (new_time, new_time))
 
             with patch.dict(os.environ, {"HERMES_TEMP_DIR": tmpdir}):
@@ -104,7 +104,7 @@ class TestCleanupTempFiles:
                 f.write("content" * 100)
 
             # Set modification time to 2 hours ago
-            old_time = datetime.now().timestamp() - (2 * 3600)
+            old_time = datetime.now(timezone.utc).timestamp() - (2 * 3600)
             os.utime(old_file, (old_time, old_time))
 
             file_size = os.path.getsize(old_file)
@@ -125,7 +125,7 @@ class TestCleanupTempFiles:
                 f.write("test" * 100)
 
             # Set old modification time
-            old_time = datetime.now().timestamp() - (25 * 3600)
+            old_time = datetime.now(timezone.utc).timestamp() - (25 * 3600)
             os.utime(test_file, (old_time, old_time))
 
             with patch.dict(os.environ, {"HERMES_TEMP_DIR": tmpdir}):
