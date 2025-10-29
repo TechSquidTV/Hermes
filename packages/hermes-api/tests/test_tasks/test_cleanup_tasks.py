@@ -4,7 +4,7 @@ Tests for cleanup tasks.
 
 import os
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
