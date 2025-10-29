@@ -159,7 +159,7 @@ export function calculateProgressPercentage(progressObj: { [key: string]: unknow
  * @param delay Delay in milliseconds
  * @returns Debounced function with cleanup
  */
-export function createDebouncedCallback<T extends (...args: any[]) => void>(
+export function createDebouncedCallback<T extends (...args: unknown[]) => void>(
   callback: T,
   delay: number
 ): {
