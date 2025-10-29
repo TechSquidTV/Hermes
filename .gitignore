@@ -28,6 +28,9 @@ pids
 coverage/
 *.lcov
 
+# Test reports
+junit.xml
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

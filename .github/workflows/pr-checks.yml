@@ -61,10 +61,26 @@ jobs:
 
       - name: Build
         run: pnpm --filter hermes-app build
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-      - name: Test
-        run: pnpm test:hermes-app
-        continue-on-error: true # Tests may not exist yet
+      - name: Test with coverage
+        run: pnpm --filter hermes-app test:coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./packages/hermes-app/coverage/lcov.info
+          flags: frontend
+          name: frontend-coverage
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./packages/hermes-app/junit.xml
 
   # Backend validation
   backend-checks:
@@ -108,7 +124,22 @@ jobs:
 
       - name: Run tests with coverage
         working-directory: packages/hermes-api
-        run: uv run pytest --cov=app --cov-report=term-missing
+        run: uv run pytest --cov=app --cov-report=term-missing --cov-report=xml --junitxml=junit.xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./packages/hermes-api/coverage.xml
+          flags: backend
+          name: backend-coverage
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./packages/hermes-api/junit.xml
 
   # Summary job that gates merging
   pr-checks-complete:

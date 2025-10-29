@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
+import { codecovVitePlugin } from '@codecov/vite-plugin'
 import path from 'path'
 
 export default defineConfig({
@@ -11,6 +12,12 @@ export default defineConfig({
       autoCodeSplitting: true,
     }),
     react(),
+    // Put the Codecov vite plugin after all other plugins
+    codecovVitePlugin({
+      enableBundleAnalysis: process.env.CODECOV_TOKEN !== undefined,
+      bundleName: 'hermes-app',
+      uploadToken: process.env.CODECOV_TOKEN,
+    }),
   ],
   resolve: {
     alias: {
