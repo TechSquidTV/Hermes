@@ -74,7 +74,6 @@ jobs:
           files: ./packages/hermes-app/coverage/lcov.info
           flags: frontend
           name: frontend-coverage
-          fail_ci_if_error: false
           verbose: true
 
       - name: Upload test results to Codecov
@@ -139,7 +138,6 @@ jobs:
           files: ./packages/hermes-api/coverage.xml
           flags: backend
           name: backend-coverage
-          fail_ci_if_error: false
           verbose: true
 
       - name: Upload test results to Codecov
