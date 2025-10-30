@@ -111,9 +111,9 @@ services:
         condition: service_healthy
       api:
         condition: service_healthy
-    command: uv run celery -A app.tasks.celery_app worker --loglevel=info --concurrency=1 --hostname=hermes-worker@%h
+    command: uv run celery -A app.worker worker --loglevel=info --concurrency=1 --hostname=hermes-worker@%h --queues=hermes.downloads,hermes.cleanup,hermes.default
     healthcheck:
-      test: ["CMD", "celery", "-A", "app.tasks.celery_app", "inspect", "ping"]
+      test: ["CMD", "celery", "-A", "app.worker", "inspect", "ping"]
       interval: 30s
       timeout: 10s
       retries: 3

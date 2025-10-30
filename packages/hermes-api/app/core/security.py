@@ -9,7 +9,7 @@ from typing import List, Optional
 
 import bcrypt
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +22,9 @@ logger = get_logger(__name__)
 
 # HTTP Bearer token security scheme
 security = HTTPBearer()
+
+# Optional HTTP Bearer for SSE endpoints (doesn't raise error if missing)
+optional_security = HTTPBearer(auto_error=False)
 
 
 def create_api_key() -> str:
@@ -159,6 +162,58 @@ async def validate_database_api_key(
 
     except Exception as e:
         logger.warning(f"Database API key validation error: {str(e)}")
+
+    return None
+
+
+async def get_current_api_key_optional(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
+    token: Optional[str] = Query(None),
+) -> Optional[str]:
+    """
+    Extract and validate API key from Authorization header or query param.
+
+    For SSE endpoints where EventSource cannot send custom headers,
+    accepts token as query parameter as fallback.
+
+    Args:
+        credentials: HTTP Bearer token from Authorization header
+        token: Optional token from query parameter (for SSE)
+
+    Returns:
+        Validated API key/user marker or None if no auth provided
+    """
+    # Try Authorization header first
+    auth_token = None
+    if credentials:
+        auth_token = credentials.credentials
+    # Fall back to query param (for EventSource SSE connections)
+    elif token:
+        auth_token = token
+    else:
+        return None
+
+    # Validate token (JWT or API key)
+    payload = verify_token(auth_token)
+    if payload:
+        user_id = payload.get("user_id")
+        if user_id:
+            logger.info(f"Accepting user token for user_id: {user_id}")
+            return f"user:{user_id}"
+
+        api_key = payload.get("api_key")
+        if api_key:
+            return api_key
+
+    # Check configured API keys
+    for configured_key in settings.api_keys:
+        if verify_api_key(auth_token, hash_api_key(configured_key)):
+            return configured_key
+
+    # Check database API keys
+    if len(auth_token) >= 32:
+        logger.info(f"Database API key provided, length: {len(auth_token)}")
+        return f"db_api_key:{auth_token}"
 
     return None
 

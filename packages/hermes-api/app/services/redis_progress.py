@@ -2,8 +2,10 @@
 Redis service for storing ephemeral download progress data.
 """
 
+import asyncio
 import json
-from typing import Any, Dict, Optional
+from datetime import datetime, timezone
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
 import redis
 import redis.asyncio as aioredis
@@ -19,16 +21,33 @@ class RedisProgressService:
 
     def __init__(self):
         self._async_redis: Optional[aioredis.Redis] = None
+        self._async_redis_loop: Optional[Any] = None
         self._sync_redis: Optional[redis.Redis] = None
 
     async def get_async_redis(self) -> aioredis.Redis:
-        """Get or create async Redis connection."""
-        if self._async_redis is None:
+        """Get or create async Redis connection for the current event loop."""
+        import asyncio
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            current_loop = None
+
+        # Create new connection if:
+        # 1. No connection exists yet
+        # 2. The connection was created in a different event loop
+        # 3. The connection is closed
+        if (
+            self._async_redis is None
+            or self._async_redis_loop != current_loop
+            or self._async_redis.connection_pool is None
+        ):
             self._async_redis = aioredis.from_url(
                 settings.redis_url,
                 encoding="utf-8",
                 decode_responses=True,
             )
+            self._async_redis_loop = current_loop
+
         return self._async_redis
 
     def get_sync_redis(self) -> redis.Redis:
@@ -128,6 +147,166 @@ class RedisProgressService:
                 download_id=download_id,
                 error=str(e),
             )
+
+    # ============================================================
+    # PUB/SUB METHODS FOR SSE
+    # ============================================================
+
+    def _serialize_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Serialize data for JSON encoding, converting datetime objects to ISO strings.
+
+        Args:
+            data: Data dictionary to serialize
+
+        Returns:
+            Serialized data dictionary
+        """
+        serialized = {}
+        for key, value in data.items():
+            if isinstance(value, datetime):
+                serialized[key] = value.isoformat()
+            elif isinstance(value, dict):
+                serialized[key] = self._serialize_data(value)
+            else:
+                serialized[key] = value
+        return serialized
+
+    async def publish_event(
+        self,
+        channel: str,
+        event_type: str,
+        data: Dict[str, Any],
+    ) -> None:
+        """
+        Publish an event to a Redis pub/sub channel.
+
+        Args:
+            channel: Redis channel name (e.g., 'download:updates')
+            event_type: Event type identifier (e.g., 'progress_update')
+            data: Event data to publish
+        """
+        try:
+            r = await self.get_async_redis()
+            # Serialize datetime objects before JSON encoding
+            serialized_data = self._serialize_data(data)
+            message = json.dumps(
+                {
+                    "type": event_type,
+                    "data": serialized_data,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+            await r.publish(channel, message)
+            logger.debug(
+                f"Published event to {channel}", event_type=event_type, channel=channel
+            )
+        except Exception as e:
+            logger.error(
+                "Failed to publish event to Redis",
+                channel=channel,
+                event_type=event_type,
+                error=str(e),
+            )
+
+    async def subscribe_to_channels(
+        self, channels: List[str]
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        Subscribe to Redis pub/sub channels and yield messages.
+
+        Args:
+            channels: List of channel names to subscribe to
+
+        Yields:
+            Dict with 'channel', 'type', 'data', and 'timestamp'
+        """
+        r = await self.get_async_redis()
+        pubsub = r.pubsub()
+
+        try:
+            # Subscribe to all specified channels
+            await pubsub.subscribe(*channels)
+            logger.info(f"Subscribed to channels: {', '.join(channels)}")
+
+            # Listen for messages
+            async for message in pubsub.listen():
+                if message["type"] == "message":
+                    try:
+                        data = json.loads(message["data"])
+                        yield {
+                            "channel": message["channel"],
+                            "type": data.get("type"),
+                            "data": data.get("data"),
+                            "timestamp": data.get("timestamp"),
+                        }
+                    except json.JSONDecodeError as e:
+                        logger.error(
+                            "Failed to decode pub/sub message",
+                            error=str(e),
+                            message=message["data"],
+                        )
+        finally:
+            await pubsub.unsubscribe(*channels)
+            await pubsub.close()
+            logger.info(f"Unsubscribed from channels: {', '.join(channels)}")
+
+    async def publish_download_progress(
+        self, download_id: str, progress_data: Dict[str, Any]
+    ) -> None:
+        """
+        Publish download progress update to Redis pub/sub.
+
+        Args:
+            download_id: Download ID
+            progress_data: Progress information
+        """
+        await self.publish_event(
+            channel="download:updates",
+            event_type="download_progress",
+            data={"download_id": download_id, **progress_data},
+        )
+
+    async def publish_queue_update(
+        self, action: str, download_id: str, data: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """
+        Publish queue update to Redis pub/sub.
+
+        Args:
+            action: Action type ('added', 'removed', 'status_changed')
+            download_id: Download ID
+            data: Additional data
+        """
+        await self.publish_event(
+            channel="queue:updates",
+            event_type="queue_update",
+            data={"action": action, "download_id": download_id, **(data or {})},
+        )
+
+    async def publish_system_notification(
+        self,
+        notification_type: str,
+        message: str,
+        data: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """
+        Publish system notification to Redis pub/sub.
+
+        Args:
+            notification_type: Type of notification ('info', 'warning', 'error')
+            message: Notification message
+            data: Additional data
+        """
+        await self.publish_event(
+            channel="system:notifications",
+            event_type="system_notification",
+            data={
+                "notification_type": notification_type,
+                "message": message,
+                **(data or {}),
+            },
+        )
 
     async def close(self) -> None:
         """Close Redis connections."""

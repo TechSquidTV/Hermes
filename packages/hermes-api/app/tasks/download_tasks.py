@@ -14,6 +14,7 @@ from typing import Any, Dict, Optional
 from celery import current_task
 
 from app.core.logging import get_logger
+from app.tasks.celery_app import celery_app
 from app.db.base import async_session_maker
 from app.db.repositories import (
     DownloadHistoryRepository,
@@ -59,6 +60,57 @@ def sanitize_filename(filename: str) -> str:
     return filename or "video"
 
 
+async def _publish_sse_progress(
+    download_id: str,
+    status: str,
+    progress: float = None,
+    downloaded_bytes: int = None,
+    total_bytes: int = None,
+    download_speed: float = None,
+    eta: float = None,
+    result: dict = None,
+) -> None:
+    """
+    Publish real-time progress updates via SSE (Redis Pub/Sub only).
+
+    This is lightweight and can be called frequently (e.g., every 1% or 0.5s)
+    without hitting the database.
+
+    Structures data to match DownloadStatus schema with nested progress object.
+    """
+    # Structure to match DownloadStatus schema
+    # Note: download_id is added by publish_download_progress
+    sse_data = {
+        "status": status,
+        "message": f"Downloading: {progress:.1f}%" if progress else "Downloading...",
+        "progress": {
+            "percentage": progress,
+            "status": status,
+            "downloaded_bytes": downloaded_bytes,
+            "total_bytes": total_bytes,
+            "speed": download_speed,
+            "eta": eta,
+        },
+    }
+
+    # Include result object if provided (for video metadata)
+    if result:
+        sse_data["result"] = result
+
+    # Debug logging
+    logger.info(
+        "Publishing lightweight SSE progress (from hook)",
+        download_id=download_id,
+        progress_percentage=progress,
+        status=status,
+    )
+
+    await redis_progress_service.publish_download_progress(
+        download_id=download_id,
+        progress_data=sse_data,
+    )
+
+
 async def _update_download_status(
     download_id: str,
     status: str,
@@ -68,9 +120,16 @@ async def _update_download_status(
     total_bytes: int = None,
     download_speed: float = None,
     eta: float = None,
+    publish_sse: bool = True,
     **kwargs,
 ) -> None:
-    """Helper function to update download status."""
+    """
+    Update download status in database and optionally publish to SSE.
+
+    Args:
+        publish_sse: If True, also publish to SSE. Set to False when calling
+                     from progress hook (SSE is handled separately for frequency control).
+    """
     async with async_session_maker() as session:
         repos = {
             "downloads": DownloadRepository(session),
@@ -86,6 +145,61 @@ async def _update_download_status(
             download_speed=download_speed,
             eta=eta,
             **kwargs,
+        )
+
+    # Optionally publish SSE (disabled during progress updates for frequency control)
+    if publish_sse:
+        # Structure to match DownloadStatus schema with nested progress object
+        progress_data = {
+            "status": status,
+            "error_message": error_message,
+            **kwargs,
+        }
+
+        # Add nested progress object (matching _publish_sse_progress structure)
+        # Always include progress for active downloads to prevent frontend state loss
+        if progress is not None or downloaded_bytes is not None:
+            progress_data["progress"] = {
+                "percentage": progress,
+                "status": status,
+                "downloaded_bytes": downloaded_bytes,
+                "total_bytes": total_bytes,
+                "speed": download_speed,
+                "eta": eta,
+            }
+        elif status in ("downloading", "processing"):
+            # For active downloads without new progress data, fetch current progress from DB
+            # to prevent SSE events from wiping out frontend progress state
+            async with async_session_maker() as session:
+                download_repo = DownloadRepository(session)
+                download = await download_repo.get_by_id(download_id)
+                if download and download.progress is not None:
+                    progress_data["progress"] = {
+                        "percentage": download.progress,
+                        "status": status,
+                        "downloaded_bytes": download.downloaded_bytes,
+                        "total_bytes": download.total_bytes,
+                        "speed": download.download_speed,
+                        "eta": download.eta,
+                    }
+
+        # Debug logging to trace SSE events
+        logger.info(
+            "Publishing SSE progress update",
+            download_id=download_id,
+            status=status,
+            has_progress_object="progress" in progress_data,
+            progress_percentage=progress_data.get("progress", {}).get("percentage") if "progress" in progress_data else None,
+        )
+
+        await redis_progress_service.publish_download_progress(
+            download_id=download_id,
+            progress_data=progress_data,
+        )
+
+        # Publish queue update
+        await redis_progress_service.publish_queue_update(
+            action="status_changed", download_id=download_id, data={"status": status}
         )
 
 
@@ -171,6 +285,15 @@ async def _download_video_task(
         duration = video_info.get("duration")
 
         # Update download with title and metadata
+        # Structure metadata as DownloadResult for consistent SSE format
+        result_data = {
+            "url": url,
+            "title": video_title,
+            "thumbnail_url": thumbnail_url,
+            "extractor": extractor,
+            "description": description,
+            "duration": duration,
+        }
         await _update_download_status(
             download_id,
             "downloading",
@@ -179,6 +302,7 @@ async def _download_video_task(
             extractor=extractor,
             description=description,
             duration=duration,
+            result=result_data,  # Include result for SSE
         )
 
         # Generate output path if not provided
@@ -195,12 +319,14 @@ async def _download_video_task(
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
         # Create progress callback to update Redis and database (throttled)
-        # Get the current event loop to schedule updates from the sync callback
-        loop = asyncio.get_event_loop()
+        # Get the running event loop to schedule updates from the sync callback
+        loop = asyncio.get_running_loop()
 
-        # Throttling variables for database writes
+        # Throttling variables for database writes and SSE updates
         last_db_update_time = [0.0]  # Use list for mutable closure variable
         last_db_percentage = [0.0]
+        last_sse_update_time = [0.0]
+        last_sse_percentage = [0.0]
 
         def progress_hook(d: Dict[str, Any]) -> None:
             """Progress callback for yt-dlp downloads."""
@@ -220,30 +346,87 @@ async def _download_video_task(
 
                     # Calculate percentage
                     percentage = 0.0
-                    if total_int and total_int > 0:
-                        percentage = (downloaded_int / total_int) * 100
+                    if total_int and total_int > 0 and downloaded_int is not None:
+                        raw_percentage = (downloaded_int / total_int) * 100
 
-                    # Prepare progress data
+                        # Sanity check: yt-dlp's first callbacks often have wildly incorrect
+                        # total_bytes estimates (too small), causing false 100% readings.
+                        # If we get >= 100% but haven't downloaded much data, it's bogus.
+                        MIN_BYTES_FOR_COMPLETION = 1_000_000  # 1MB minimum
+                        if raw_percentage >= 100.0 and downloaded_int < MIN_BYTES_FOR_COMPLETION:
+                            # Clearly wrong - cap at 5% to show some progress
+                            percentage = 5.0
+                        elif raw_percentage > 100.0:
+                            # Over 100% means bad estimate, cap at 99
+                            percentage = 99.0
+                        else:
+                            percentage = raw_percentage
+
+                    # Prepare progress data matching DownloadStatus schema
                     progress_data = {
+                        "download_id": download_id,
                         "status": "downloading",
-                        "percentage": percentage,
-                        "downloaded_bytes": downloaded_int,
-                        "total_bytes": total_int,
-                        "speed": speed_float,
-                        "eta": eta_float,
+                        "message": f"Downloading: {percentage:.1f}%",
+                        "progress": {
+                            "percentage": percentage,
+                            "status": "downloading",
+                            "downloaded_bytes": downloaded_int,
+                            "total_bytes": total_int,
+                            "speed": speed_float,
+                            "eta": eta_float,
+                        },
+                        "result": result_data,  # Include video metadata
                     }
 
-                    # ALWAYS write to Redis (fast, ephemeral) - use sync method
+                    # ============================================================
+                    # THREE-LAYER PROGRESS UPDATE ARCHITECTURE
+                    # ============================================================
+                    # 1. Redis Cache: ALWAYS (fastest, for GET /download/{id})
+                    # 2. SSE Updates: FREQUENT - 1% or 0.5s (real-time UI, no DB)
+                    # 3. DB Updates: THROTTLED - 5% or 2s (persistent storage)
+                    # ============================================================
+
+                    # Layer 1: Redis cache (always write - fast, ephemeral)
                     redis_progress_service.set_progress_sync(download_id, progress_data)
 
-                    # THROTTLED database writes (every 5% or 2 seconds)
                     current_time = time.time()
-                    percentage_diff = abs(percentage - last_db_percentage[0])
-                    time_diff = current_time - last_db_update_time[0]
+
+                    # Layer 2: SSE updates (frequent - Redis Pub/Sub only, no database)
+                    # Purpose: Smooth real-time progress bars in the UI
+                    percentage_diff_sse = abs(percentage - last_sse_percentage[0])
+                    time_diff_sse = current_time - last_sse_update_time[0]
+
+                    should_send_sse = (
+                        percentage_diff_sse >= 1.0  # 1% change
+                        or time_diff_sse >= 0.5  # 0.5 seconds passed
+                        or percentage >= 99.9  # Near completion
+                    )
+
+                    if should_send_sse:
+                        asyncio.run_coroutine_threadsafe(
+                            _publish_sse_progress(
+                                download_id=download_id,
+                                status="downloading",
+                                progress=percentage,
+                                downloaded_bytes=downloaded_int,
+                                total_bytes=total_int,
+                                download_speed=speed_float,
+                                eta=eta_float,
+                                result=result_data,  # Include video metadata in SSE
+                            ),
+                            loop,
+                        )
+                        last_sse_update_time[0] = current_time
+                        last_sse_percentage[0] = percentage
+
+                    # Layer 3: Database writes (throttled - persistent storage only)
+                    # Purpose: Persistent records without overloading the database
+                    percentage_diff_db = abs(percentage - last_db_percentage[0])
+                    time_diff_db = current_time - last_db_update_time[0]
 
                     should_update_db = (
-                        percentage_diff >= 5.0  # 5% change
-                        or time_diff >= 2.0  # 2 seconds passed
+                        percentage_diff_db >= 5.0  # 5% change
+                        or time_diff_db >= 2.0  # 2 seconds passed
                         or percentage >= 99.9  # Near completion
                     )
 
@@ -257,6 +440,7 @@ async def _download_video_task(
                                 total_bytes=total_int,
                                 download_speed=speed_float,
                                 eta=eta_float,
+                                publish_sse=False,  # SSE already sent above
                             ),
                             loop,
                         )
@@ -308,6 +492,16 @@ async def _download_video_task(
 
             # Update status to completed
             completed_at = datetime.now(timezone.utc)
+            # Structure complete metadata as DownloadResult for SSE
+            complete_result = {
+                "url": url,
+                "title": video_title,
+                "file_size": file_size,
+                "duration": duration,
+                "thumbnail_url": thumbnail_url,
+                "extractor": extractor,
+                "description": description,
+            }
             await _update_download_status(
                 download_id,
                 "completed",
@@ -320,6 +514,7 @@ async def _download_video_task(
                 thumbnail_url=thumbnail_url,
                 extractor=extractor,
                 description=description,
+                result=complete_result,  # Include result for SSE
             )
 
             # Create history record
@@ -416,6 +611,7 @@ async def _download_video_task(
         return {"success": False, "download_id": download_id, "error": error_message}
 
 
+@celery_app.task(name="app.tasks.download_tasks.download_video_task")
 def download_video_task(
     download_id: str,
     url: str,
@@ -509,6 +705,7 @@ async def _batch_download_task(
         return {"batch_id": batch_id, "error": error_message, "results": results}
 
 
+@celery_app.task(name="app.tasks.download_tasks.batch_download_task")
 def batch_download_task(
     download_ids: list[str],
     urls: list[str],

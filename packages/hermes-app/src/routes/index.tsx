@@ -4,10 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Keyboard, X, Download, AlertCircle } from 'lucide-react'
-import { useDownloadProgress } from '@/hooks/useDownloadProgress'
+import { useDownloadProgressSSE } from '@/hooks/useDownloadProgressSSE'
+import { ConnectionStatus } from '@/components/ui/ConnectionStatus'
 import { UrlInput } from '@/components/forms/UrlInput'
 import { KeyboardShortcutsHelp } from '@/components/ui/keyboard-shortcuts-help'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useDownloadFile } from '@/hooks/useDownloadActions'
 import { Blur } from '@/components/animate-ui/primitives/effects/blur'
 import { taskTracker } from '@/lib/taskTracking'
@@ -26,11 +27,38 @@ interface TrackedTaskProps {
 }
 
 function TrackedTask({ downloadId, onRemove, isDismissing }: TrackedTaskProps) {
-  const { downloadStatus, progressPercentage } = useDownloadProgress({
-    downloadId,
-    enabled: true,
-    refetchInterval: 2000
-  })
+  // Use SSE for real-time updates instead of polling
+  const { data: downloadStatus, isConnected, isReconnecting, reconnectAttempts } = useDownloadProgressSSE(downloadId)
+
+  // Track maximum progress to prevent jittery backwards movement
+  const [maxProgress, setMaxProgress] = useState<number>(0)
+
+  // Calculate progress percentage from SSE data, ensuring it never goes backwards
+  const rawProgress = downloadStatus?.progress?.percentage ?? null
+  const status = downloadStatus?.status
+
+  // Only apply monotonic progress for downloading/processing states
+  // Don't use maxProgress for completed/failed states to avoid showing stale progress
+  const progressPercentage =
+    status === 'completed' ? 100
+    : status === 'failed' ? null
+    : status === 'queued' ? 0
+    : rawProgress !== null && rawProgress !== undefined
+      ? Math.max(maxProgress, rawProgress)
+      : null
+
+  // Update max progress when we see a higher value (only for active downloads)
+  useEffect(() => {
+    if (status === 'downloading' || status === 'processing') {
+      if (progressPercentage !== null && progressPercentage > maxProgress) {
+        setMaxProgress(progressPercentage)
+      }
+    }
+    // Reset maxProgress when download starts (transitions from queued)
+    if (status === 'queued') {
+      setMaxProgress(0)
+    }
+  }, [progressPercentage, maxProgress, status])
 
   const downloadFile = useDownloadFile()
 
@@ -127,6 +155,15 @@ function TrackedTask({ downloadId, onRemove, isDismissing }: TrackedTaskProps) {
           <span className={`text-xs font-medium ${statusInfo.textColor}`}>
             {statusInfo.text}
           </span>
+          {/* SSE Connection Indicator (compact) */}
+          {isActive && (
+            <ConnectionStatus
+              isConnected={isConnected}
+              isReconnecting={isReconnecting}
+              reconnectAttempts={reconnectAttempts}
+              className="ml-auto"
+            />
+          )}
           <p className="text-sm font-medium truncate flex-1">
             {(() => {
               if (hasDownloadResult(task.result)) {
@@ -215,7 +252,7 @@ function DashboardPage() {
     }
   }, [])
 
-  const removeTask = (downloadId: string, withAnimation = true) => {
+  const removeTask = useCallback((downloadId: string, withAnimation = true) => {
     if (withAnimation) {
       // Start the animation
       setDismissingTasks(prev => new Set(prev).add(downloadId))
@@ -232,7 +269,7 @@ function DashboardPage() {
     } else {
       taskTracker.removeTask(downloadId)
     }
-  }
+  }, [])
 
   return (
     <div className="space-y-6">

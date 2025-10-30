@@ -90,6 +90,23 @@ class Settings(BaseSettings):
     )
     allow_credentials: bool = Field(default=True)
 
+    # SSE Configuration
+    # Note: SSE is always enabled - it's a core requirement for Hermes
+    @property
+    def enable_sse(self) -> bool:
+        """SSE is always enabled - required for real-time updates."""
+        return True
+
+    sse_heartbeat_interval: int = Field(
+        default=30, description="SSE heartbeat interval in seconds"
+    )
+    sse_max_connections: int = Field(
+        default=1000, description="Maximum concurrent SSE connections"
+    )
+    sse_connection_timeout: int = Field(
+        default=300, description="SSE connection timeout in seconds"
+    )
+
     model_config = SettingsConfigDict(env_prefix="HERMES_", case_sensitive=False)
 
 

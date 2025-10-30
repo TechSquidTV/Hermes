@@ -183,28 +183,12 @@ export function QueueCard({ download, isSelectable = false, isSelected = false, 
         </div>
 
         <DownloadProgress
-          progress={
-            (() => {
-              const progressObj = download.progress as { [key: string]: unknown } | null | undefined
-              if (!progressObj || typeof progressObj !== 'object') return undefined
-
-              const downloaded = getProgressValue(progressObj, 'downloaded_bytes') ||
-                               getProgressValue(progressObj, 'downloaded') ||
-                               getProgressValue(progressObj, 'current') || 0
-              const total = getProgressValue(progressObj, 'total_bytes') ||
-                           getProgressValue(progressObj, 'total') ||
-                           getProgressValue(progressObj, 'size') || 0
-
-              if (downloaded && total && total > 0) {
-                return (downloaded / total) * 100
-              }
-              return undefined
-            })()
-          }
+          progress={getProgressValue(download.progress as { [key: string]: unknown } | null | undefined, 'percentage')}
           status={download.status}
           downloadedBytes={getProgressValue(download.progress as { [key: string]: unknown } | null | undefined, 'downloaded_bytes')}
           totalBytes={getProgressValue(download.progress as { [key: string]: unknown } | null | undefined, 'total_bytes')}
           speed={getProgressValue(download.progress as { [key: string]: unknown } | null | undefined, 'speed')}
+          estimatedTimeRemaining={getProgressValue(download.progress as { [key: string]: unknown } | null | undefined, 'eta')}
           showDetails={true}
         />
 

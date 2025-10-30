@@ -9,6 +9,7 @@ from app.api.v1.endpoints import (
     cleanup,
     config,
     downloads,
+    events,
     files,
     formats,
     health,
@@ -95,4 +96,10 @@ api_router.include_router(
 api_router.include_router(
     config.router,
     tags=["configuration"],
+)
+
+api_router.include_router(
+    events.router,
+    prefix="/events",
+    tags=["events"],
 )

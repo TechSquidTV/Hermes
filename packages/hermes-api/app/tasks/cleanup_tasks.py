@@ -11,6 +11,7 @@ from typing import Any, Dict, List
 from celery import current_task
 
 from app.core.logging import get_logger
+from app.tasks.celery_app import celery_app
 from app.db.base import async_session_maker
 from app.db.repositories import (
     DownloadFileRepository,
@@ -127,6 +128,7 @@ async def _cleanup_temp_files(max_age_hours: int = 24) -> Dict[str, Any]:
     return {"deleted_files": deleted_files, "total_freed_bytes": total_freed}
 
 
+@celery_app.task(name="app.tasks.cleanup_tasks.cleanup_old_downloads")
 def cleanup_old_downloads(days: int = 30, dry_run: bool = False) -> Dict[str, Any]:
     """
     Celery task to clean up old download records and files.
@@ -239,6 +241,7 @@ async def _cleanup_old_downloads_async(
         }
 
 
+@celery_app.task(name="app.tasks.cleanup_tasks.cleanup_temp_files")
 def cleanup_temp_files(
     max_age_hours: int = 24, dry_run: bool = False
 ) -> Dict[str, Any]:
@@ -316,6 +319,7 @@ async def _cleanup_temp_files_async(
         return {"error": str(e), "deleted_files": 0, "total_freed_bytes": 0}
 
 
+@celery_app.task(name="app.tasks.cleanup_tasks.cleanup_expired_tokens")
 def cleanup_expired_tokens(dry_run: bool = False) -> Dict[str, Any]:
     """
     Celery task to clean up expired tokens from the blacklist.
