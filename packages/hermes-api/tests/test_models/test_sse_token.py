@@ -11,7 +11,6 @@ from app.models.sse_token import (
     CreateSSETokenRequest,
     SSETokenData,
     SSETokenPermission,
-    SSETokenScope,
     generate_sse_token,
 )
 
