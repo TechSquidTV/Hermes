@@ -663,6 +663,84 @@ class TestSSEStreamingFunctionality:
             await stream.aclose()
 
 
+class TestSSETokenDownloadVerification:
+    """Test download existence verification for SSE token creation."""
+
+    @pytest.mark.asyncio
+    async def test_token_denied_for_non_existent_download(self, client: AsyncClient):
+        """Test that token creation fails for non-existent downloads."""
+        response = await client.post(
+            "/api/v1/events/token",
+            json={"scope": "download:nonexistent-id-12345", "ttl": 300},
+        )
+
+        assert response.status_code == 404
+        data = response.json()
+        assert "not found" in data["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_token_allowed_for_existing_download(
+        self, client: AsyncClient, db_session
+    ):
+        """Test that users can get tokens for existing downloads."""
+        from app.db.repositories import DownloadRepository
+
+        download_repo = DownloadRepository(db_session)
+
+        # Create a download
+        download = await download_repo.create(
+            url="https://example.com/video",
+            status="pending",
+        )
+        await db_session.commit()
+        await db_session.refresh(download)
+
+        # Get token for existing download
+        response = await client.post(
+            "/api/v1/events/token",
+            json={"scope": f"download:{download.id}", "ttl": 300},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "token" in data
+        assert data["token"].startswith("sse_")
+        assert data["scope"] == f"download:{download.id}"
+
+    @pytest.mark.asyncio
+    async def test_token_denied_for_invalid_download_id_format(self, client: AsyncClient):
+        """Test that invalid download ID format is rejected."""
+        # Empty download ID
+        response = await client.post(
+            "/api/v1/events/token",
+            json={"scope": "download:", "ttl": 300},
+        )
+
+        assert response.status_code == 400
+        data = response.json()
+        error_msg = str(data).lower()
+        assert "invalid" in error_msg or "format" in error_msg
+
+    @pytest.mark.asyncio
+    async def test_queue_and_system_tokens_no_download_check(self, client: AsyncClient):
+        """Test that queue and system scopes don't require download verification."""
+        # Queue scope
+        response = await client.post(
+            "/api/v1/events/token",
+            json={"scope": "queue", "ttl": 300},
+        )
+        assert response.status_code == 200
+        assert response.json()["scope"] == "queue"
+
+        # System scope
+        response = await client.post(
+            "/api/v1/events/token",
+            json={"scope": "system", "ttl": 300},
+        )
+        assert response.status_code == 200
+        assert response.json()["scope"] == "system"
+
+
 class TestSSEHealthEndpoint:
     """Test SSE health check endpoint."""
 

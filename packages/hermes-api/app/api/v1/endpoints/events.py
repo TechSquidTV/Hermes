@@ -6,6 +6,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sse_starlette.sse import EventSourceResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -14,6 +15,8 @@ from app.core.security import (
     get_current_sse_token,
     validate_sse_token,
 )
+from app.db.repositories import DownloadRepository
+from app.db.session import get_database_session
 from app.models import (
     CreateSSETokenRequest,
     SSETokenResponse,
@@ -247,6 +250,7 @@ async def queue_events(
 async def create_sse_token(
     request: CreateSSETokenRequest = Body(...),
     api_key: str = Depends(get_current_api_key),
+    db_session: AsyncSession = Depends(get_database_session),
 ):
     """
     Create ephemeral SSE token for secure, scoped SSE connections.
@@ -320,16 +324,31 @@ async def create_sse_token(
             detail="Invalid scope format. Must be 'download:<id>', 'queue', or 'system'",
         )
 
-    # For download scopes, verify user has access to the resource
+    # For download scopes, verify download exists (security: prevent token creation for invalid IDs)
     if scope.startswith("download:"):
         download_id = scope.split(":", 1)[1]
-        # TODO: Add download ownership verification
-        # For now, we'll allow any authenticated user to subscribe to any download
-        # This should be enhanced to check if user owns the download
+
+        # SECURITY: Verify download exists before creating token
+        # This prevents SSE token creation for non-existent/invalid download IDs
+        download_repo = DownloadRepository(db_session)
+        download = await download_repo.get_by_id(download_id)
+
+        if not download:
+            logger.warning(
+                "SSE token denied - download not found",
+                download_id=download_id,
+                user_id=user_id,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Download {download_id} not found",
+            )
+
         logger.info(
             "Creating SSE token for download",
             download_id=download_id,
             user_id=user_id,
+            download_exists=True,
         )
 
     # Generate SSE token
