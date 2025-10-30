@@ -323,7 +323,10 @@ async def _download_video_task(
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
         # Create progress callback to update Redis and database (throttled)
-        # Get the running event loop to schedule updates from the sync callback
+        # Capture the running event loop to schedule async work from sync callback.
+        # Note: get_running_loop() is correct here - we're inside an async function
+        # and need to capture THIS loop for use in the sync progress_hook callback.
+        # The callback will use run_coroutine_threadsafe() to schedule back to this loop.
         loop = asyncio.get_running_loop()
 
         # Throttling variables for database writes and SSE updates

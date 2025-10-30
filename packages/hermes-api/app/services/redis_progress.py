@@ -35,11 +35,14 @@ class RedisProgressService:
         # Create new connection if:
         # 1. No connection exists yet
         # 2. The connection was created in a different event loop
-        # 3. The connection is closed
+        # 3. The connection pool is None (connection closed)
         if (
             self._async_redis is None
             or self._async_redis_loop != current_loop
-            or self._async_redis.connection_pool is None
+            or (
+                hasattr(self._async_redis, "connection_pool")
+                and self._async_redis.connection_pool is None
+            )
         ):
             self._async_redis = aioredis.from_url(
                 settings.redis_url,
