@@ -117,12 +117,12 @@ async def start_download(
         # Queue the download task in Celery
         download_video_task.apply_async(
             kwargs={
-                'download_id': download.id,
-                'url': download_request.url,
-                'format_spec': download_request.format,
-                'output_path': download_request.output_directory,
+                "download_id": download.id,
+                "url": download_request.url,
+                "format_spec": download_request.format,
+                "output_path": download_request.output_directory,
             },
-            queue='hermes.downloads',
+            queue="hermes.downloads",
         )
 
         logger.info("Download queued successfully", download_id=download.id)

@@ -58,6 +58,9 @@ export default tseslint.config(
       // React Hooks rules (including React compiler rules)
       ...reactHooksPlugin.configs['recommended-latest'].rules,
 
+      // React Hooks overrides - relax set-state-in-effect for SSE synchronization
+      'react-hooks/set-state-in-effect': 'warn',
+
       // React Refresh
       'react-refresh/only-export-components': [
         'warn',

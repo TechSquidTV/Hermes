@@ -59,7 +59,7 @@ async def event_stream(
     if not api_key:
         logger.warning("SSE connection attempted without authentication")
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
         )
 
@@ -116,7 +116,7 @@ async def download_events(
             f"SSE connection attempted without authentication for download {download_id}"
         )
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
         )
 
@@ -154,7 +154,7 @@ async def queue_events(
     if not api_key:
         logger.warning("SSE connection attempted without authentication for queue")
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
         )
 

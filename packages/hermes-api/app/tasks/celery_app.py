@@ -16,7 +16,7 @@ celery_app = Celery(
 )
 
 # Make celery_app available for task decorators before importing tasks
-__all__ = ['celery_app']
+__all__ = ["celery_app"]
 
 # Celery configuration
 celery_app.conf.update(

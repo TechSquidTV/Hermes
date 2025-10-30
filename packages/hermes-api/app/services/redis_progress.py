@@ -26,7 +26,7 @@ class RedisProgressService:
 
     async def get_async_redis(self) -> aioredis.Redis:
         """Get or create async Redis connection for the current event loop."""
-        import asyncio
+
         try:
             current_loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -152,22 +152,34 @@ class RedisProgressService:
     # PUB/SUB METHODS FOR SSE
     # ============================================================
 
-    def _serialize_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def _serialize_data(
+        self, data: Dict[str, Any], depth: int = 0, max_depth: int = 10
+    ) -> Dict[str, Any]:
         """
         Serialize data for JSON encoding, converting datetime objects to ISO strings.
 
         Args:
             data: Data dictionary to serialize
+            depth: Current recursion depth (internal use)
+            max_depth: Maximum recursion depth to prevent stack overflow
 
         Returns:
             Serialized data dictionary
+
+        Raises:
+            ValueError: If max recursion depth is exceeded
         """
+        if depth > max_depth:
+            raise ValueError(
+                f"Max recursion depth ({max_depth}) exceeded in _serialize_data"
+            )
+
         serialized = {}
         for key, value in data.items():
             if isinstance(value, datetime):
                 serialized[key] = value.isoformat()
             elif isinstance(value, dict):
-                serialized[key] = self._serialize_data(value)
+                serialized[key] = self._serialize_data(value, depth + 1, max_depth)
             else:
                 serialized[key] = value
         return serialized

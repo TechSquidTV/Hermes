@@ -11,7 +11,6 @@ from typing import Any, Dict, List
 from celery import current_task
 
 from app.core.logging import get_logger
-from app.tasks.celery_app import celery_app
 from app.db.base import async_session_maker
 from app.db.repositories import (
     DownloadFileRepository,
@@ -19,6 +18,7 @@ from app.db.repositories import (
     DownloadRepository,
     TokenBlacklistRepository,
 )
+from app.tasks.celery_app import celery_app
 
 logger = get_logger(__name__)
 

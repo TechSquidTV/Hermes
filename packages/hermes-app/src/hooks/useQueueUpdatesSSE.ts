@@ -35,11 +35,11 @@ export interface QueueUpdate {
 export function useQueueUpdatesSSE() {
   const queryClient = useQueryClient();
 
-  // Get auth token and memoize it to prevent creating new URLs on every render
-  // TokenStorage.getAccessToken() can be expensive and we only need to call it once
-  const token = useMemo(() => TokenStorage.getAccessToken(), []);
+  // Get auth token - don't memoize to allow reconnection when token refreshes
+  const token = TokenStorage.getAccessToken();
 
   // Memoize URL to prevent recreating connections on every render
+  // Include token in dependencies so connection updates when token changes
   const sseUrl = useMemo(
     () => (token ? `${API_BASE_URL}/api/v1/events/queue?token=${token}` : null),
     [token]

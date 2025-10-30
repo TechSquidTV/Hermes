@@ -14,7 +14,6 @@ from typing import Any, Dict, Optional
 from celery import current_task
 
 from app.core.logging import get_logger
-from app.tasks.celery_app import celery_app
 from app.db.base import async_session_maker
 from app.db.repositories import (
     DownloadHistoryRepository,
@@ -23,6 +22,7 @@ from app.db.repositories import (
 )
 from app.services.redis_progress import redis_progress_service
 from app.services.yt_dlp_service import YTDLPService
+from app.tasks.celery_app import celery_app
 
 logger = get_logger(__name__)
 yt_service = YTDLPService()
@@ -189,7 +189,11 @@ async def _update_download_status(
             download_id=download_id,
             status=status,
             has_progress_object="progress" in progress_data,
-            progress_percentage=progress_data.get("progress", {}).get("percentage") if "progress" in progress_data else None,
+            progress_percentage=(
+                progress_data.get("progress", {}).get("percentage")
+                if "progress" in progress_data
+                else None
+            ),
         )
 
         await redis_progress_service.publish_download_progress(
@@ -353,7 +357,10 @@ async def _download_video_task(
                         # total_bytes estimates (too small), causing false 100% readings.
                         # If we get >= 100% but haven't downloaded much data, it's bogus.
                         MIN_BYTES_FOR_COMPLETION = 1_000_000  # 1MB minimum
-                        if raw_percentage >= 100.0 and downloaded_int < MIN_BYTES_FOR_COMPLETION:
+                        if (
+                            raw_percentage >= 100.0
+                            and downloaded_int < MIN_BYTES_FOR_COMPLETION
+                        ):
                             # Clearly wrong - cap at 5% to show some progress
                             percentage = 5.0
                         elif raw_percentage > 100.0:

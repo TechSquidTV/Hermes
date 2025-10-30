@@ -4,6 +4,7 @@ Event service for managing SSE connections and message distribution.
 
 import asyncio
 import json
+import uuid
 from datetime import datetime, timezone
 from typing import Any, AsyncGenerator, Dict, Optional
 
@@ -42,15 +43,17 @@ class EventService:
             )
             yield {
                 "event": "error",
-                "data": json.dumps({
-                    "error": "Maximum connections reached",
-                    "code": "MAX_CONNECTIONS",
-                }),
+                "data": json.dumps(
+                    {
+                        "error": "Maximum connections reached",
+                        "code": "MAX_CONNECTIONS",
+                    }
+                ),
             }
             return
 
         self.active_connections += 1
-        connection_id = f"conn_{datetime.now().timestamp()}"
+        connection_id = f"conn_{uuid.uuid4()}"
 
         logger.info(
             "New SSE connection",
@@ -63,23 +66,30 @@ class EventService:
             # Send initial connection event
             yield {
                 "event": "connected",
-                "data": json.dumps({
-                    "connection_id": connection_id,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                }),
+                "data": json.dumps(
+                    {
+                        "connection_id": connection_id,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                ),
             }
 
-            # Create heartbeat task
-            async def send_heartbeat():
-                while True:
-                    await asyncio.sleep(settings.sse_heartbeat_interval)
-                    yield {
-                        "event": "heartbeat",
-                        "data": json.dumps({"timestamp": datetime.now(timezone.utc).isoformat()}),
-                    }
+            # Track last heartbeat time
+            last_heartbeat = asyncio.get_event_loop().time()
 
             # Subscribe to Redis channels
             async for event in redis_progress_service.subscribe_to_channels(channels):
+                # Send heartbeat if interval has elapsed
+                current_time = asyncio.get_event_loop().time()
+                if current_time - last_heartbeat >= settings.sse_heartbeat_interval:
+                    yield {
+                        "event": "heartbeat",
+                        "data": json.dumps(
+                            {"timestamp": datetime.now(timezone.utc).isoformat()}
+                        ),
+                    }
+                    last_heartbeat = current_time
+
                 # Apply filters if specified
                 if filters and not self._matches_filters(event, filters):
                     continue
@@ -98,7 +108,9 @@ class EventService:
             )
             yield {
                 "event": "error",
-                "data": json.dumps({"error": "Internal server error", "code": "INTERNAL_ERROR"}),
+                "data": json.dumps(
+                    {"error": "Internal server error", "code": "INTERNAL_ERROR"}
+                ),
             }
         finally:
             self.active_connections -= 1

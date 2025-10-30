@@ -33,32 +33,35 @@ function TrackedTask({ downloadId, onRemove, isDismissing }: TrackedTaskProps) {
   // Track maximum progress to prevent jittery backwards movement
   const [maxProgress, setMaxProgress] = useState<number>(0)
 
-  // Calculate progress percentage from SSE data, ensuring it never goes backwards
+  // Calculate progress percentage from SSE data
   const rawProgress = downloadStatus?.progress?.percentage ?? null
   const status = downloadStatus?.status
 
-  // Only apply monotonic progress for downloading/processing states
-  // Don't use maxProgress for completed/failed states to avoid showing stale progress
-  const progressPercentage =
-    status === 'completed' ? 100
-    : status === 'failed' ? null
-    : status === 'queued' ? 0
-    : rawProgress !== null && rawProgress !== undefined
-      ? Math.max(maxProgress, rawProgress)
-      : null
-
   // Update max progress when we see a higher value (only for active downloads)
+  // This effect synchronizes external SSE state with React state, which is a valid use case
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (status === 'downloading' || status === 'processing') {
-      if (progressPercentage !== null && progressPercentage > maxProgress) {
-        setMaxProgress(progressPercentage)
+      if (rawProgress !== null && rawProgress !== undefined) {
+        setMaxProgress(prev => Math.max(prev, rawProgress))
       }
     }
     // Reset maxProgress when download starts (transitions from queued)
     if (status === 'queued') {
       setMaxProgress(0)
     }
-  }, [progressPercentage, maxProgress, status])
+  }, [rawProgress, status])
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  // Use maxProgress for display, ensuring it never goes backwards
+  // Only apply monotonic progress for downloading/processing states
+  // Don't use maxProgress for completed/failed states to avoid showing stale progress
+  const progressPercentage =
+    status === 'completed' ? 100
+    : status === 'failed' ? null
+    : status === 'queued' ? 0
+    : maxProgress > 0 ? maxProgress
+    : null
 
   const downloadFile = useDownloadFile()
 

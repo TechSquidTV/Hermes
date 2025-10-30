@@ -33,11 +33,11 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 export function useDownloadProgressSSE(downloadId: string) {
   const queryClient = useQueryClient();
 
-  // Get auth token and memoize it to prevent creating new URLs on every render
-  // TokenStorage.getAccessToken() can be expensive and we only need to call it once
-  const token = useMemo(() => TokenStorage.getAccessToken(), []);
+  // Get auth token - don't memoize to allow reconnection when token refreshes
+  const token = TokenStorage.getAccessToken();
 
   // Memoize URL to prevent recreating connections on every render
+  // Include token in dependencies so connection updates when token changes
   const sseUrl = useMemo(
     () => (token ? `${API_BASE_URL}/api/v1/events/downloads/${downloadId}?token=${token}` : null),
     [token, downloadId]

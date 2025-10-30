@@ -2,6 +2,7 @@
 Tests for RedisProgressService
 """
 
+import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -25,7 +26,25 @@ def mock_sync_redis():
 @pytest.fixture
 def mock_async_redis():
     """Mock asynchronous Redis client."""
-    return MagicMock()
+    mock = MagicMock()
+    # Add connection_pool attribute to prevent get_async_redis from recreating connection
+    mock.connection_pool = MagicMock()
+    return mock
+
+
+def setup_async_redis_mock(redis_service, mock_redis):
+    """
+    Helper to properly configure mocked async redis with event loop tracking.
+
+    Args:
+        redis_service: RedisProgressService instance
+        mock_redis: Mock redis client
+    """
+    redis_service._async_redis = mock_redis
+    try:
+        redis_service._async_redis_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        redis_service._async_redis_loop = None
 
 
 class TestRedisProgressServiceSync:
@@ -97,7 +116,7 @@ class TestRedisProgressServiceAsync:
     @pytest.mark.asyncio
     async def test_delete_progress_async_success(self, redis_service, mock_async_redis):
         """Test deleting progress data asynchronously."""
-        redis_service._async_redis = mock_async_redis
+        setup_async_redis_mock(redis_service, mock_async_redis)
         download_id = "test-download-456"
 
         await redis_service.delete_progress(download_id)
@@ -120,8 +139,9 @@ class TestRedisProgressServiceAsync:
 
         # Create async mock
         mock_redis = AsyncMock()
+        mock_redis.connection_pool = MagicMock()
         mock_redis.get.return_value = json.dumps(expected_data)
-        redis_service._async_redis = mock_redis
+        setup_async_redis_mock(redis_service, mock_redis)
 
         result = await redis_service.get_progress(download_id)
 
@@ -131,7 +151,7 @@ class TestRedisProgressServiceAsync:
     @pytest.mark.asyncio
     async def test_get_progress_not_found(self, redis_service, mock_async_redis):
         """Test retrieving progress when key doesn't exist."""
-        redis_service._async_redis = mock_async_redis
+        setup_async_redis_mock(redis_service, mock_async_redis)
         mock_async_redis.get.return_value = None
         download_id = "nonexistent-download"
 
@@ -142,7 +162,7 @@ class TestRedisProgressServiceAsync:
     @pytest.mark.asyncio
     async def test_get_progress_invalid_json(self, redis_service, mock_async_redis):
         """Test handling invalid JSON from Redis."""
-        redis_service._async_redis = mock_async_redis
+        setup_async_redis_mock(redis_service, mock_async_redis)
         mock_async_redis.get.return_value = "invalid-json-data"
         download_id = "test-download-bad"
 
@@ -154,7 +174,7 @@ class TestRedisProgressServiceAsync:
     @pytest.mark.asyncio
     async def test_get_progress_redis_error(self, redis_service, mock_async_redis):
         """Test error handling when Redis get fails."""
-        redis_service._async_redis = mock_async_redis
+        setup_async_redis_mock(redis_service, mock_async_redis)
         mock_async_redis.get.side_effect = Exception("Redis connection lost")
         download_id = "test-download-error"
 
@@ -166,7 +186,7 @@ class TestRedisProgressServiceAsync:
     @pytest.mark.asyncio
     async def test_delete_progress_success(self, redis_service, mock_async_redis):
         """Test deleting progress data."""
-        redis_service._async_redis = mock_async_redis
+        setup_async_redis_mock(redis_service, mock_async_redis)
         download_id = "test-download-delete"
 
         await redis_service.delete_progress(download_id)
@@ -178,7 +198,7 @@ class TestRedisProgressServiceAsync:
     @pytest.mark.asyncio
     async def test_delete_progress_error(self, redis_service, mock_async_redis):
         """Test error handling when Redis delete fails."""
-        redis_service._async_redis = mock_async_redis
+        setup_async_redis_mock(redis_service, mock_async_redis)
         mock_async_redis.delete.side_effect = Exception("Redis error")
         download_id = "test-download-delete-error"
 
@@ -209,7 +229,7 @@ class TestRedisProgressServiceKeys:
     @pytest.mark.asyncio
     async def test_progress_key_format(self, redis_service, mock_async_redis):
         """Test that progress keys use correct format."""
-        redis_service._async_redis = mock_async_redis
+        setup_async_redis_mock(redis_service, mock_async_redis)
         download_id = "abc-123-def-456"
 
         await redis_service.get_progress(download_id)
