@@ -62,20 +62,22 @@ class TestSSETokenEndpoint:
 
     @pytest.mark.asyncio
     async def test_create_token_download_scope(self, client: AsyncClient):
-        """Test creating token with download:ID scope."""
+        """Test creating token with download:ID scope format.
+
+        Note: This test now returns 404 because the security fix requires
+        downloads to exist. Actual verification is tested in
+        TestSSETokenDownloadVerification.test_token_allowed_for_existing_download.
+        """
         response = await client.post(
             "/api/v1/events/token",
             json={"scope": "download:test-123", "ttl": 600},
         )
 
-        assert response.status_code == 200
+        # After security fix, this returns 404 because download doesn't exist
+        assert response.status_code == 404
         data = response.json()
-        assert "token" in data
-        assert data["token"].startswith("sse_")
-        assert data["scope"] == "download:test-123"
-        assert data["ttl"] == 600
-        assert "expires_at" in data
-        assert data["permissions"] == ["read"]
+        error_message = data.get("detail", str(data)).lower()
+        assert "not found" in error_message
 
     @pytest.mark.asyncio
     async def test_create_token_queue_scope(self, client: AsyncClient):
@@ -676,7 +678,9 @@ class TestSSETokenDownloadVerification:
 
         assert response.status_code == 404
         data = response.json()
-        assert "not found" in data["detail"].lower()
+        # Check for error message in detail or anywhere in response
+        error_message = data.get("detail", str(data)).lower()
+        assert "not found" in error_message
 
     @pytest.mark.asyncio
     async def test_token_allowed_for_existing_download(

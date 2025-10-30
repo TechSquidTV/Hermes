@@ -1,5 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 
+// Stable default to prevent unnecessary re-renders
+const DEFAULT_EVENTS: string[] = [];
+
 export interface SSEOptions {
   /**
    * Enable automatic reconnection on disconnect
@@ -109,7 +112,7 @@ export function useSSE<T = unknown>(
     maxReconnectAttempts = 5,
     reconnectDelay = 1000,
     maxReconnectDelay = 30000,
-    events = [],
+    events = DEFAULT_EVENTS,
     onOpen,
     onClose,
     onError,
