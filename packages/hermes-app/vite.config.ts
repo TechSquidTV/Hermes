@@ -1,12 +1,12 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
+import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import { codecovVitePlugin } from '@codecov/vite-plugin'
 import path from 'path'
 
 export default defineConfig({
   plugins: [
-    TanStackRouterVite({
+    tanstackRouter({
       // Disable auto-generation in Docker due to cross-device link issues
       // Routes should be generated locally before building
       autoCodeSplitting: true,
