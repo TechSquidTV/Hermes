@@ -42,14 +42,15 @@ function TrackedTask({ downloadId, onRemove, isDismissing }: TrackedTaskProps) {
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (status === 'downloading' || status === 'processing') {
+      // Actively downloading/processing - track maximum progress to prevent backward movement
       if (rawProgress !== null && rawProgress !== undefined) {
         setMaxProgress(prev => Math.max(prev, rawProgress))
       }
-    }
-    // Reset maxProgress when download starts (transitions from queued)
-    if (status === 'queued') {
+    } else if (status === 'queued') {
+      // Reset maxProgress when download is queued (before it starts)
       setMaxProgress(0)
     }
+    // For 'completed' or 'failed' status, do nothing - keep last known maxProgress
   }, [rawProgress, status])
   /* eslint-enable react-hooks/set-state-in-effect */
 
