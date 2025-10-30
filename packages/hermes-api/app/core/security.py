@@ -16,7 +16,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.db.repositories import ApiKeyRepository
-from app.db.session import get_database_session
 
 logger = get_logger(__name__)
 

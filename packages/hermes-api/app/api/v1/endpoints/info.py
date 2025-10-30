@@ -2,11 +2,8 @@
 Video information extraction endpoints.
 """
 
-import asyncio
-from typing import Optional
-
 from fastapi import APIRouter, HTTPException, Query
-from yt_dlp.utils import DownloadError, ExtractorError
+from yt_dlp.utils import ExtractorError
 
 from app.core.logging import get_logger
 from app.models.pydantic.response import (

@@ -2,8 +2,6 @@
 Celery configuration for background task processing.
 """
 
-import os
-
 from celery import Celery
 
 from app.core.config import settings

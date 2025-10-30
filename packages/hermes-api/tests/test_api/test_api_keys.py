@@ -2,7 +2,6 @@
 Tests for API key repository operations.
 """
 
-import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_api_key, hash_api_key

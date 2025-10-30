@@ -5,7 +5,7 @@ Provides historical download information and statistics.
 """
 
 from datetime import date as date_type
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query

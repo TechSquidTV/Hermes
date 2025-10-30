@@ -4,7 +4,6 @@ YoutubeDL service wrapper for async operations.
 
 import asyncio
 import os
-import tempfile
 from typing import Any, Callable, Dict, Optional
 
 import yt_dlp
@@ -206,7 +205,7 @@ class YTDLPService:
         """
         try:
             # Try to find a suitable extractor
-            from yt_dlp.extractor import gen_extractor_classes, get_info_extractor
+            from yt_dlp.extractor import gen_extractor_classes
 
             for ie_class in gen_extractor_classes():
                 ie = ie_class()

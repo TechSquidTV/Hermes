@@ -5,13 +5,9 @@ Celery tasks for video downloading operations.
 import asyncio
 import os
 import re
-import tempfile
 import time
-import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
-
-from celery import current_task
+from typing import Any, Dict
 
 from app.core.logging import get_logger
 from app.db.base import async_session_maker

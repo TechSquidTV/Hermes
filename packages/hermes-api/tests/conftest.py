@@ -30,7 +30,6 @@ def event_loop():
 async def setup_test_database():
     """Set up test database before each test."""
     # Import all models to ensure they're registered with Base
-    from app.db import models
     from app.db.base import create_tables, drop_tables, engine
 
     # Create all tables before test

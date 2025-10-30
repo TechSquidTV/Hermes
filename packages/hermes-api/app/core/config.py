@@ -1,8 +1,7 @@
 import importlib.metadata
 import re
-from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 

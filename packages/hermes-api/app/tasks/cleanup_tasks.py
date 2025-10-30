@@ -4,11 +4,8 @@ Celery tasks for cleanup and maintenance operations.
 
 import asyncio
 import os
-import shutil
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
-
-from celery import current_task
 
 from app.core.logging import get_logger
 from app.db.base import async_session_maker

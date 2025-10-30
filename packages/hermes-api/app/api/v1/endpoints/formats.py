@@ -5,9 +5,8 @@ Provides information about supported video/audio formats,
 quality options, and format selection guidelines.
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 
-from app.core.security import get_current_api_key
 from app.models.pydantic.format import FormatInfo
 
 router = APIRouter(tags=["formats"])
