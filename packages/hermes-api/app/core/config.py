@@ -92,12 +92,6 @@ class Settings(BaseSettings):
     # =============================================================================
     # SERVER-SENT EVENTS (SSE) CONFIGURATION
     # =============================================================================
-    # Note: SSE is ALWAYS ENABLED and NOT OPTIONAL
-    # It is a core requirement for Hermes' real-time updates.
-    # There is no way to disable SSE - it must be enabled for the application to function.
-    #
-    # The configuration options below tune SSE behavior but cannot disable it.
-    # =============================================================================
 
     sse_heartbeat_interval: int = Field(
         default=30, description="SSE heartbeat interval in seconds"
