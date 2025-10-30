@@ -463,7 +463,7 @@ async def get_current_sse_token(
 
     # Check if it's an SSE token (starts with "sse_")
     if not token.startswith("sse_"):
-        logger.warning("Invalid SSE token format", token_prefix=token[:12])
+        logger.warning("Invalid SSE token format", token_prefix=token[:6])
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid SSE token format",
@@ -474,7 +474,7 @@ async def get_current_sse_token(
 
     token_data = await redis_progress_service.get_sse_token(token)
     if not token_data:
-        logger.warning("Invalid or expired SSE token", token_prefix=token[:12])
+        logger.warning("Invalid or expired SSE token", token_prefix=token[:6])
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired SSE token",
