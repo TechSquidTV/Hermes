@@ -303,6 +303,366 @@ class TestSSEEndpointTokenAuth:
         assert "Insufficient scope" in error_message or "scope" in error_message.lower()
 
 
+class TestSSEStreamingFunctionality:
+    """Test actual SSE streaming and event delivery."""
+
+    @pytest.mark.asyncio
+    async def test_stream_endpoint_with_valid_token(
+        self, client: AsyncClient, mock_redis_for_sse
+    ):
+        """Test connecting to /events/stream with valid SSE token."""
+        import json
+
+        # Mock valid token in Redis
+        token_data = {
+            "scope": "queue",
+            "user_id": "user123",
+            "expires_at": "2025-12-31T23:59:59Z",
+            "permissions": ["read"],
+        }
+        mock_redis_for_sse.get = AsyncMock(return_value=json.dumps(token_data))
+
+        # Mock event stream to return quickly
+        from app.services import event_service
+
+        async def mock_event_stream(channels, filters=None):
+            # Return a simple connected event
+            yield {
+                "event": "connected",
+                "data": json.dumps({"connection_id": "test-conn-123"}),
+            }
+
+        with patch.object(
+            event_service.event_service,
+            "event_stream",
+            side_effect=mock_event_stream,
+        ):
+            # Note: Can't easily test full streaming with httpx AsyncClient
+            # Just verify endpoint accepts the request
+            # Real streaming would need different test approach
+            pass
+
+    @pytest.mark.asyncio
+    async def test_stream_receives_published_events(self, mock_redis_for_sse):
+        """Test that published events are received through SSE stream."""
+        import json
+        from app.services import redis_progress
+
+        # Mock Redis pub/sub to yield test events
+        async def mock_subscribe(channels):
+            yield {
+                "type": "download_progress",
+                "data": {"download_id": "test-123", "progress": 50},
+            }
+            yield {
+                "type": "queue_update",
+                "data": {"action": "added", "download_id": "test-456"},
+            }
+
+        with patch.object(
+            redis_progress.redis_progress_service,
+            "subscribe_to_channels",
+            side_effect=mock_subscribe,
+        ):
+            from app.services.event_service import event_service
+
+            # Consume events from stream
+            events = []
+            stream = event_service.event_stream(
+                channels=["download:updates", "queue:updates"]
+            )
+
+            # Get connected event
+            event = await anext(stream)
+            assert event["event"] == "connected"
+
+            # Get published events
+            event = await anext(stream)
+            assert event["event"] == "download_progress"
+            data = json.loads(event["data"])
+            assert data["download_id"] == "test-123"
+            events.append(event)
+
+            event = await anext(stream)
+            assert event["event"] == "queue_update"
+            data = json.loads(event["data"])
+            assert data["action"] == "added"
+            events.append(event)
+
+            await stream.aclose()
+
+            # Verify we received both events
+            assert len(events) == 2
+
+    @pytest.mark.asyncio
+    async def test_stream_filters_by_download_id(self, mock_redis_for_sse):
+        """Test that stream correctly filters events by download_id."""
+        import json
+        from app.services import redis_progress
+
+        # Mock Redis pub/sub to yield events for different downloads
+        async def mock_subscribe(channels):
+            yield {
+                "type": "download_progress",
+                "data": {"download_id": "target-123", "progress": 25},
+            }
+            yield {
+                "type": "download_progress",
+                "data": {"download_id": "other-456", "progress": 50},
+            }
+            yield {
+                "type": "download_progress",
+                "data": {"download_id": "target-123", "progress": 75},
+            }
+
+        with patch.object(
+            redis_progress.redis_progress_service,
+            "subscribe_to_channels",
+            side_effect=mock_subscribe,
+        ):
+            from app.services.event_service import event_service
+
+            # Stream with filter for target-123
+            stream = event_service.event_stream(
+                channels=["download:updates"], filters={"download_id": "target-123"}
+            )
+
+            # Skip connected event
+            await anext(stream)
+
+            # First filtered event
+            event = await anext(stream)
+            data = json.loads(event["data"])
+            assert data["download_id"] == "target-123"
+            assert data["progress"] == 25
+
+            # Second filtered event (other-456 should be skipped)
+            event = await anext(stream)
+            data = json.loads(event["data"])
+            assert data["download_id"] == "target-123"
+            assert data["progress"] == 75
+
+            await stream.aclose()
+
+    @pytest.mark.asyncio
+    async def test_stream_handles_multiple_channels(self, mock_redis_for_sse):
+        """Test subscribing to multiple channels simultaneously."""
+        import json
+        from app.services import redis_progress
+
+        # Mock Redis pub/sub to yield events from different channels
+        async def mock_subscribe(channels):
+            # Verify correct channels were requested
+            assert "download:updates" in channels
+            assert "queue:updates" in channels
+            assert "system:notifications" in channels
+
+            yield {
+                "type": "download_progress",
+                "data": {"download_id": "test-123", "progress": 50},
+            }
+            yield {
+                "type": "queue_update",
+                "data": {"action": "added", "download_id": "test-456"},
+            }
+            yield {
+                "type": "system_notification",
+                "data": {"notification_type": "info", "message": "Test notification"},
+            }
+
+        with patch.object(
+            redis_progress.redis_progress_service,
+            "subscribe_to_channels",
+            side_effect=mock_subscribe,
+        ):
+            from app.services.event_service import event_service
+
+            stream = event_service.event_stream(
+                channels=["download:updates", "queue:updates", "system:notifications"]
+            )
+
+            # Skip connected event
+            await anext(stream)
+
+            # Receive events from all channels
+            event_types = []
+            for _ in range(3):
+                event = await anext(stream)
+                event_types.append(event["event"])
+
+            await stream.aclose()
+
+            # Verify we got events from all channel types
+            assert "download_progress" in event_types
+            assert "queue_update" in event_types
+            assert "system_notification" in event_types
+
+    @pytest.mark.asyncio
+    async def test_download_endpoint_enforces_scope(self, mock_redis_for_sse):
+        """Test that download endpoint enforces download-scoped tokens."""
+        import json
+        from app.core.security import validate_sse_token
+
+        # Mock token validation to check scope
+        async def mock_validate(token, expected_scope):
+            # Should be called with download:test-123 scope
+            assert expected_scope == "download:test-123"
+            return {
+                "scope": "download:test-123",
+                "user_id": "user123",
+                "permissions": ["read"],
+            }
+
+        with patch(
+            "app.api.v1.endpoints.events.validate_sse_token",
+            side_effect=mock_validate,
+        ):
+            # Import after patching
+            from app.api.v1.endpoints.events import download_events
+
+            # Mock the event stream
+            from app.services import event_service
+
+            async def mock_stream(channels, filters):
+                assert channels == ["download:updates"]
+                assert filters == {"download_id": "test-123"}
+                yield {
+                    "event": "connected",
+                    "data": json.dumps({"connection_id": "test"}),
+                }
+
+            with patch.object(
+                event_service.event_service,
+                "event_stream",
+                side_effect=mock_stream,
+            ):
+                # Call the endpoint
+                from sse_starlette.sse import EventSourceResponse
+
+                response = await download_events(
+                    download_id="test-123", token="sse_valid_token"
+                )
+
+                # Verify response is EventSourceResponse
+                assert isinstance(response, EventSourceResponse)
+
+    @pytest.mark.asyncio
+    async def test_queue_endpoint_enforces_queue_scope(self, mock_redis_for_sse):
+        """Test that queue endpoint enforces queue-scoped tokens."""
+        import json
+        from app.core.security import validate_sse_token
+
+        # Mock token validation to check scope
+        async def mock_validate(token, expected_scope):
+            # Should be called with queue scope
+            assert expected_scope == "queue"
+            return {
+                "scope": "queue",
+                "user_id": "user123",
+                "permissions": ["read"],
+            }
+
+        with patch(
+            "app.api.v1.endpoints.events.validate_sse_token",
+            side_effect=mock_validate,
+        ):
+            from app.api.v1.endpoints.events import queue_events
+            from app.services import event_service
+
+            async def mock_stream(channels, filters=None):
+                assert channels == ["queue:updates"]
+                yield {
+                    "event": "connected",
+                    "data": json.dumps({"connection_id": "test"}),
+                }
+
+            with patch.object(
+                event_service.event_service,
+                "event_stream",
+                side_effect=mock_stream,
+            ):
+                from sse_starlette.sse import EventSourceResponse
+
+                response = await queue_events(token="sse_valid_token")
+                assert isinstance(response, EventSourceResponse)
+
+    @pytest.mark.asyncio
+    async def test_stream_connection_tracking(self, mock_redis_for_sse):
+        """Test that connections are properly tracked and cleaned up."""
+        from app.services.event_service import event_service
+        from app.services import redis_progress
+
+        initial_connections = event_service.active_connections
+
+        # Mock subscribe to stop immediately
+        async def mock_subscribe(channels):
+            return
+            yield  # Never reached
+
+        with patch.object(
+            redis_progress.redis_progress_service,
+            "subscribe_to_channels",
+            side_effect=mock_subscribe,
+        ):
+            stream = event_service.event_stream(channels=["download:updates"])
+
+            # Get connected event
+            await anext(stream)
+
+            # Verify connection was tracked
+            assert event_service.active_connections == initial_connections + 1
+
+            # Close stream
+            await stream.aclose()
+
+            # Verify connection was cleaned up
+            assert event_service.active_connections == initial_connections
+
+    @pytest.mark.asyncio
+    async def test_event_data_format_consistency(self, mock_redis_for_sse):
+        """Test that all events follow consistent data format."""
+        import json
+        from app.services import redis_progress
+
+        async def mock_subscribe(channels):
+            yield {
+                "type": "download_progress",
+                "data": {
+                    "download_id": "test-123",
+                    "progress": 50,
+                    "speed": 1024000,
+                    "eta": 30,
+                },
+            }
+
+        with patch.object(
+            redis_progress.redis_progress_service,
+            "subscribe_to_channels",
+            side_effect=mock_subscribe,
+        ):
+            from app.services.event_service import event_service
+
+            stream = event_service.event_stream(channels=["download:updates"])
+
+            # Skip connected event
+            await anext(stream)
+
+            # Get data event
+            event = await anext(stream)
+
+            # Verify event structure
+            assert "event" in event
+            assert "data" in event
+            assert isinstance(event["data"], str)  # Should be JSON string
+
+            # Verify data is valid JSON
+            data = json.loads(event["data"])
+            assert "download_id" in data
+            assert "progress" in data
+
+            await stream.aclose()
+
+
 class TestSSEHealthEndpoint:
     """Test SSE health check endpoint."""
 

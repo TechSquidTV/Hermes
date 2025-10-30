@@ -518,3 +518,326 @@ class TestRedisSSETokenStorage:
 
         # Should return None on JSON decode error
         assert result is None
+
+
+class TestRedisProgressServicePubSub:
+    """Test Redis pub/sub functionality for SSE."""
+
+    @pytest.mark.asyncio
+    async def test_serialize_data_with_datetime(self, redis_service):
+        """Verify datetime objects are converted to ISO strings."""
+        from datetime import datetime, timezone
+
+        data = {
+            "download_id": "test-123",
+            "created_at": datetime(2025, 1, 15, 10, 30, 0, tzinfo=timezone.utc),
+            "updated_at": datetime(2025, 1, 15, 10, 35, 0, tzinfo=timezone.utc),
+            "progress": 50.5,
+        }
+
+        serialized = redis_service._serialize_data(data)
+
+        # Datetime should be converted to ISO strings
+        assert serialized["created_at"] == "2025-01-15T10:30:00+00:00"
+        assert serialized["updated_at"] == "2025-01-15T10:35:00+00:00"
+        # Other types should remain unchanged
+        assert serialized["download_id"] == "test-123"
+        assert serialized["progress"] == 50.5
+
+    @pytest.mark.asyncio
+    async def test_serialize_data_with_nested_datetime(self, redis_service):
+        """Verify nested datetime objects are serialized."""
+        from datetime import datetime, timezone
+
+        data = {
+            "download_id": "test-123",
+            "metadata": {
+                "started_at": datetime(2025, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
+                "nested": {
+                    "completed_at": datetime(2025, 1, 15, 11, 0, 0, tzinfo=timezone.utc),
+                },
+            },
+        }
+
+        serialized = redis_service._serialize_data(data)
+
+        # Check nested datetime serialization
+        assert (
+            serialized["metadata"]["started_at"] == "2025-01-15T10:00:00+00:00"
+        )
+        assert (
+            serialized["metadata"]["nested"]["completed_at"]
+            == "2025-01-15T11:00:00+00:00"
+        )
+
+    @pytest.mark.asyncio
+    async def test_serialize_data_max_depth_protection(self, redis_service):
+        """Verify max recursion depth protection."""
+        # Create deeply nested dict
+        data = {"level": 1}
+        current = data
+        for i in range(2, 15):
+            current["nested"] = {"level": i}
+            current = current["nested"]
+
+        # Should raise ValueError when exceeding max depth
+        with pytest.raises(ValueError, match="Max recursion depth"):
+            redis_service._serialize_data(data, max_depth=10)
+
+    @pytest.mark.asyncio
+    async def test_publish_event_success(self, redis_service, mock_async_redis):
+        """Test successful event publishing to Redis channel."""
+        setup_async_redis_mock(redis_service, mock_async_redis)
+        mock_async_redis.publish = AsyncMock()
+
+        channel = "download:updates"
+        event_type = "download_progress"
+        data = {"download_id": "test-123", "progress": 50}
+
+        await redis_service.publish_event(channel, event_type, data)
+
+        # Verify Redis publish was called
+        mock_async_redis.publish.assert_called_once()
+        call_args = mock_async_redis.publish.call_args
+        assert call_args[0][0] == channel
+
+        # Verify message format
+        message = json.loads(call_args[0][1])
+        assert message["type"] == event_type
+        assert message["data"]["download_id"] == "test-123"
+        assert message["data"]["progress"] == 50
+        assert "timestamp" in message
+
+    @pytest.mark.asyncio
+    async def test_publish_event_with_datetime(self, redis_service, mock_async_redis):
+        """Test event publishing with datetime fields."""
+        from datetime import datetime, timezone
+
+        setup_async_redis_mock(redis_service, mock_async_redis)
+        mock_async_redis.publish = AsyncMock()
+
+        data = {
+            "download_id": "test-123",
+            "started_at": datetime(2025, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
+        }
+
+        await redis_service.publish_event("download:updates", "download_started", data)
+
+        # Verify datetime was serialized before publishing
+        call_args = mock_async_redis.publish.call_args
+        message = json.loads(call_args[0][1])
+        assert message["data"]["started_at"] == "2025-01-15T10:00:00+00:00"
+
+    @pytest.mark.asyncio
+    async def test_publish_event_handles_redis_error(
+        self, redis_service, mock_async_redis
+    ):
+        """Test that Redis publish errors are handled gracefully."""
+        setup_async_redis_mock(redis_service, mock_async_redis)
+        mock_async_redis.publish = AsyncMock(
+            side_effect=Exception("Redis connection lost")
+        )
+
+        # Should not raise exception, just log error
+        await redis_service.publish_event(
+            "download:updates", "test_event", {"test": "data"}
+        )
+
+        # Verify publish was attempted
+        mock_async_redis.publish.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_subscribe_to_channels(self, redis_service, mock_async_redis):
+        """Test subscribing to multiple channels."""
+        setup_async_redis_mock(redis_service, mock_async_redis)
+
+        # Mock pubsub
+        mock_pubsub = MagicMock()
+        mock_pubsub.subscribe = AsyncMock()
+        mock_pubsub.unsubscribe = AsyncMock()
+        mock_pubsub.close = AsyncMock()
+        mock_async_redis.pubsub = MagicMock(return_value=mock_pubsub)
+
+        # Mock pubsub.listen() to yield test messages
+        async def mock_listen():
+            # First message: subscription confirmation (skip)
+            yield {"type": "subscribe", "channel": "download:updates"}
+            # Second message: actual message
+            yield {
+                "type": "message",
+                "channel": "download:updates",
+                "data": json.dumps(
+                    {
+                        "type": "download_progress",
+                        "data": {"download_id": "test-123", "progress": 50},
+                        "timestamp": "2025-01-15T10:00:00Z",
+                    }
+                ),
+            }
+
+        mock_pubsub.listen = mock_listen
+
+        # Subscribe and consume messages
+        channels = ["download:updates", "queue:updates"]
+        messages = []
+        async for message in redis_service.subscribe_to_channels(channels):
+            messages.append(message)
+            break  # Just get first message
+
+        # Verify subscription was called
+        mock_pubsub.subscribe.assert_called_once_with(*channels)
+
+        # Verify message was parsed correctly
+        assert len(messages) == 1
+        assert messages[0]["type"] == "download_progress"
+        assert messages[0]["data"]["download_id"] == "test-123"
+        assert messages[0]["data"]["progress"] == 50
+
+    @pytest.mark.asyncio
+    async def test_subscribe_handles_json_decode_error(
+        self, redis_service, mock_async_redis
+    ):
+        """Test that invalid JSON messages are skipped gracefully."""
+        setup_async_redis_mock(redis_service, mock_async_redis)
+
+        # Mock pubsub
+        mock_pubsub = MagicMock()
+        mock_pubsub.subscribe = AsyncMock()
+        mock_pubsub.unsubscribe = AsyncMock()
+        mock_pubsub.close = AsyncMock()
+        mock_async_redis.pubsub = MagicMock(return_value=mock_pubsub)
+
+        # Mock pubsub.listen() to yield invalid JSON
+        async def mock_listen():
+            yield {"type": "message", "channel": "test", "data": "not valid json{"}
+            # Stop after invalid message
+            return
+
+        mock_pubsub.listen = mock_listen
+
+        # Should not raise exception
+        messages = []
+        async for message in redis_service.subscribe_to_channels(["test"]):
+            messages.append(message)
+
+        # No messages should be yielded (invalid JSON was skipped)
+        assert len(messages) == 0
+
+    @pytest.mark.asyncio
+    async def test_publish_download_progress(self, redis_service, mock_async_redis):
+        """Test download progress event publishing."""
+        setup_async_redis_mock(redis_service, mock_async_redis)
+        mock_async_redis.publish = AsyncMock()
+
+        download_id = "test-download-123"
+        progress_data = {
+            "progress": 75.5,
+            "speed": 512000,
+            "eta": 120,
+        }
+
+        await redis_service.publish_download_progress(download_id, progress_data)
+
+        # Verify publish was called
+        mock_async_redis.publish.assert_called_once()
+        call_args = mock_async_redis.publish.call_args
+
+        # Verify correct channel
+        assert call_args[0][0] == "download:updates"
+
+        # Verify message format
+        message = json.loads(call_args[0][1])
+        assert message["type"] == "download_progress"
+        assert message["data"]["download_id"] == download_id
+        assert message["data"]["progress"] == 75.5
+        assert message["data"]["speed"] == 512000
+        assert message["data"]["eta"] == 120
+
+    @pytest.mark.asyncio
+    async def test_publish_queue_update(self, redis_service, mock_async_redis):
+        """Test queue update event publishing."""
+        setup_async_redis_mock(redis_service, mock_async_redis)
+        mock_async_redis.publish = AsyncMock()
+
+        action = "added"
+        download_id = "test-download-456"
+        data = {"position": 3, "total": 5}
+
+        await redis_service.publish_queue_update(action, download_id, data)
+
+        # Verify publish was called
+        mock_async_redis.publish.assert_called_once()
+        call_args = mock_async_redis.publish.call_args
+
+        # Verify correct channel
+        assert call_args[0][0] == "queue:updates"
+
+        # Verify message format
+        message = json.loads(call_args[0][1])
+        assert message["type"] == "queue_update"
+        assert message["data"]["action"] == "added"
+        assert message["data"]["download_id"] == download_id
+        assert message["data"]["position"] == 3
+        assert message["data"]["total"] == 5
+
+    @pytest.mark.asyncio
+    async def test_publish_queue_update_without_data(
+        self, redis_service, mock_async_redis
+    ):
+        """Test queue update with no additional data."""
+        setup_async_redis_mock(redis_service, mock_async_redis)
+        mock_async_redis.publish = AsyncMock()
+
+        await redis_service.publish_queue_update("removed", "test-123")
+
+        # Should still work with data=None
+        mock_async_redis.publish.assert_called_once()
+        call_args = mock_async_redis.publish.call_args
+        message = json.loads(call_args[0][1])
+        assert message["data"]["action"] == "removed"
+        assert message["data"]["download_id"] == "test-123"
+
+    @pytest.mark.asyncio
+    async def test_publish_system_notification(self, redis_service, mock_async_redis):
+        """Test system notification publishing."""
+        setup_async_redis_mock(redis_service, mock_async_redis)
+        mock_async_redis.publish = AsyncMock()
+
+        notification_type = "warning"
+        message_text = "Storage is running low"
+        data = {"available_space_gb": 5.2}
+
+        await redis_service.publish_system_notification(
+            notification_type, message_text, data
+        )
+
+        # Verify publish was called
+        mock_async_redis.publish.assert_called_once()
+        call_args = mock_async_redis.publish.call_args
+
+        # Verify correct channel
+        assert call_args[0][0] == "system:notifications"
+
+        # Verify message format
+        message = json.loads(call_args[0][1])
+        assert message["type"] == "system_notification"
+        assert message["data"]["notification_type"] == "warning"
+        assert message["data"]["message"] == "Storage is running low"
+        assert message["data"]["available_space_gb"] == 5.2
+
+    @pytest.mark.asyncio
+    async def test_publish_system_notification_without_data(
+        self, redis_service, mock_async_redis
+    ):
+        """Test system notification without additional data."""
+        setup_async_redis_mock(redis_service, mock_async_redis)
+        mock_async_redis.publish = AsyncMock()
+
+        await redis_service.publish_system_notification("info", "System is healthy")
+
+        # Should work with data=None
+        mock_async_redis.publish.assert_called_once()
+        call_args = mock_async_redis.publish.call_args
+        message = json.loads(call_args[0][1])
+        assert message["data"]["notification_type"] == "info"
+        assert message["data"]["message"] == "System is healthy"
