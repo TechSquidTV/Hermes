@@ -90,12 +90,15 @@ class Settings(BaseSettings):
     )
     allow_credentials: bool = Field(default=True)
 
-    # SSE Configuration
-    # Note: SSE is always enabled - it's a core requirement for Hermes
-    @property
-    def enable_sse(self) -> bool:
-        """SSE is always enabled - required for real-time updates."""
-        return True
+    # =============================================================================
+    # SERVER-SENT EVENTS (SSE) CONFIGURATION
+    # =============================================================================
+    # Note: SSE is ALWAYS ENABLED and NOT OPTIONAL
+    # It is a core requirement for Hermes' real-time updates.
+    # There is no way to disable SSE - it must be enabled for the application to function.
+    #
+    # The configuration options below tune SSE behavior but cannot disable it.
+    # =============================================================================
 
     sse_heartbeat_interval: int = Field(
         default=30, description="SSE heartbeat interval in seconds"

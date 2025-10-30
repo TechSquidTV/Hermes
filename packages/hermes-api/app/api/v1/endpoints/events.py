@@ -166,10 +166,12 @@ async def sse_health():
     """
     Health check endpoint for SSE service.
 
-    Returns current SSE service status and connection count.
+    Returns current SSE connection metrics.
+
+    Note: If this endpoint responds, SSE is operational.
+    SSE is a core requirement and cannot be disabled.
     """
     return {
-        "enabled": settings.enable_sse,
         "active_connections": event_service.active_connections,
         "max_connections": event_service.max_connections,
         "heartbeat_interval": settings.sse_heartbeat_interval,
