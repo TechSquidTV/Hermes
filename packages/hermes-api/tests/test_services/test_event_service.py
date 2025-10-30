@@ -109,8 +109,8 @@ class TestEventServiceConnectionManagement:
     @pytest.mark.asyncio
     async def test_decrements_connection_on_error(self, mock_redis_pubsub):
         """Test that connection count decrements when stream encounters error."""
-        from app.services.event_service import event_service
         from app.services import redis_progress
+        from app.services.event_service import event_service
 
         initial_count = event_service.active_connections
 
@@ -151,8 +151,8 @@ class TestEventServiceStreaming:
     @pytest.mark.asyncio
     async def test_sends_connected_event_on_start(self, mock_redis_pubsub):
         """Test that 'connected' event is sent when stream starts."""
-        from app.services.event_service import event_service
         from app.services import redis_progress
+        from app.services.event_service import event_service
 
         # Mock subscribe to stop immediately
         async def mock_subscribe(channels):
@@ -179,8 +179,8 @@ class TestEventServiceStreaming:
     @pytest.mark.asyncio
     async def test_streams_redis_events(self, mock_redis_pubsub):
         """Test that events from Redis are streamed to client."""
-        from app.services.event_service import event_service
         from app.services import redis_progress
+        from app.services.event_service import event_service
 
         # Mock subscribe_to_channels to yield test events
         async def mock_subscribe(channels):
@@ -225,8 +225,8 @@ class TestEventServiceStreaming:
     @pytest.mark.asyncio
     async def test_handles_stream_cancellation(self, mock_redis_pubsub):
         """Test that stream handles cancellation gracefully."""
-        from app.services.event_service import event_service
         from app.services import redis_progress
+        from app.services.event_service import event_service
 
         # Mock subscribe that never stops
         async def mock_subscribe_infinite(channels):
@@ -260,8 +260,8 @@ class TestEventServiceFiltering:
     @pytest.mark.asyncio
     async def test_filters_events_by_download_id(self, mock_redis_pubsub):
         """Test that events are filtered by download_id."""
-        from app.services.event_service import event_service
         from app.services import redis_progress
+        from app.services.event_service import event_service
 
         # Mock subscribe to yield events with different download_ids
         async def mock_subscribe(channels):
@@ -308,8 +308,8 @@ class TestEventServiceFiltering:
     @pytest.mark.asyncio
     async def test_filters_with_multiple_criteria(self, mock_redis_pubsub):
         """Test filtering with multiple filter criteria."""
-        from app.services.event_service import event_service
         from app.services import redis_progress
+        from app.services.event_service import event_service
 
         # Mock subscribe to yield events with various attributes
         async def mock_subscribe(channels):
@@ -367,8 +367,8 @@ class TestEventServiceFiltering:
     @pytest.mark.asyncio
     async def test_no_filters_passes_all_events(self, mock_redis_pubsub):
         """Test that no filters allows all events through."""
-        from app.services.event_service import event_service
         from app.services import redis_progress
+        from app.services.event_service import event_service
 
         # Mock subscribe to yield various events
         async def mock_subscribe(channels):
@@ -409,8 +409,8 @@ class TestEventServiceHeartbeat:
     async def test_sends_heartbeat_after_interval(self, mock_redis_pubsub):
         """Test that heartbeats are sent at configured intervals."""
         from app.core import config
-        from app.services.event_service import event_service
         from app.services import redis_progress
+        from app.services.event_service import event_service
 
         # Mock subscribe that yields events quickly to allow heartbeat checks
         async def mock_subscribe_with_events(channels):
@@ -459,8 +459,8 @@ class TestEventServiceErrorHandling:
     @pytest.mark.asyncio
     async def test_handles_redis_exception(self, mock_redis_pubsub):
         """Test that Redis exceptions are handled gracefully."""
-        from app.services.event_service import event_service
         from app.services import redis_progress
+        from app.services.event_service import event_service
 
         # Mock subscribe to raise exception
         async def mock_subscribe_error(channels):
@@ -489,8 +489,8 @@ class TestEventServiceErrorHandling:
     @pytest.mark.asyncio
     async def test_generates_unique_connection_ids(self, mock_redis_pubsub):
         """Test that each connection gets a unique connection_id."""
-        from app.services.event_service import event_service
         from app.services import redis_progress
+        from app.services.event_service import event_service
 
         # Mock subscribe to stop immediately
         async def mock_subscribe(channels):
@@ -524,8 +524,8 @@ class TestEventServiceDataIntegrity:
     @pytest.mark.asyncio
     async def test_data_is_json_serialized(self, mock_redis_pubsub):
         """Test that event data is properly JSON serialized."""
-        from app.services.event_service import event_service
         from app.services import redis_progress
+        from app.services.event_service import event_service
 
         test_data = {
             "download_id": "test-123",

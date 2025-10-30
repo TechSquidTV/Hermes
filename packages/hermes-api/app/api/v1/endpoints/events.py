@@ -5,8 +5,8 @@ Server-Sent Events (SSE) endpoints for real-time updates.
 from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
-from sse_starlette.sse import EventSourceResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from sse_starlette.sse import EventSourceResponse
 
 from app.core.config import settings
 from app.core.logging import get_logger

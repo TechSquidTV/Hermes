@@ -346,6 +346,7 @@ class TestSSEStreamingFunctionality:
     async def test_stream_receives_published_events(self, mock_redis_for_sse):
         """Test that published events are received through SSE stream."""
         import json
+
         from app.services import redis_progress
 
         # Mock Redis pub/sub to yield test events
@@ -398,6 +399,7 @@ class TestSSEStreamingFunctionality:
     async def test_stream_filters_by_download_id(self, mock_redis_for_sse):
         """Test that stream correctly filters events by download_id."""
         import json
+
         from app.services import redis_progress
 
         # Mock Redis pub/sub to yield events for different downloads
@@ -447,7 +449,6 @@ class TestSSEStreamingFunctionality:
     @pytest.mark.asyncio
     async def test_stream_handles_multiple_channels(self, mock_redis_for_sse):
         """Test subscribing to multiple channels simultaneously."""
-        import json
         from app.services import redis_progress
 
         # Mock Redis pub/sub to yield events from different channels
@@ -501,7 +502,6 @@ class TestSSEStreamingFunctionality:
     async def test_download_endpoint_enforces_scope(self, mock_redis_for_sse):
         """Test that download endpoint enforces download-scoped tokens."""
         import json
-        from app.core.security import validate_sse_token
 
         # Mock token validation to check scope
         async def mock_validate(token, expected_scope):
@@ -550,7 +550,6 @@ class TestSSEStreamingFunctionality:
     async def test_queue_endpoint_enforces_queue_scope(self, mock_redis_for_sse):
         """Test that queue endpoint enforces queue-scoped tokens."""
         import json
-        from app.core.security import validate_sse_token
 
         # Mock token validation to check scope
         async def mock_validate(token, expected_scope):
@@ -589,8 +588,8 @@ class TestSSEStreamingFunctionality:
     @pytest.mark.asyncio
     async def test_stream_connection_tracking(self, mock_redis_for_sse):
         """Test that connections are properly tracked and cleaned up."""
-        from app.services.event_service import event_service
         from app.services import redis_progress
+        from app.services.event_service import event_service
 
         initial_connections = event_service.active_connections
 
@@ -622,6 +621,7 @@ class TestSSEStreamingFunctionality:
     async def test_event_data_format_consistency(self, mock_redis_for_sse):
         """Test that all events follow consistent data format."""
         import json
+
         from app.services import redis_progress
 
         async def mock_subscribe(channels):
@@ -708,7 +708,9 @@ class TestSSETokenDownloadVerification:
         assert data["scope"] == f"download:{download.id}"
 
     @pytest.mark.asyncio
-    async def test_token_denied_for_invalid_download_id_format(self, client: AsyncClient):
+    async def test_token_denied_for_invalid_download_id_format(
+        self, client: AsyncClient
+    ):
         """Test that invalid download ID format is rejected."""
         # Empty download ID
         response = await client.post(

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Keyboard, X, Download, AlertCircle } from 'lucide-react'
 import { useDownloadProgressSSE } from '@/hooks/useDownloadProgressSSE'
+import { useMonotonicProgress } from '@/hooks/useMonotonicProgress'
 import { ConnectionStatus } from '@/components/ui/ConnectionStatus'
 import { UrlInput } from '@/components/forms/UrlInput'
 import { KeyboardShortcutsHelp } from '@/components/ui/keyboard-shortcuts-help'
@@ -30,29 +31,12 @@ function TrackedTask({ downloadId, onRemove, isDismissing }: TrackedTaskProps) {
   // Use SSE for real-time updates instead of polling
   const { data: downloadStatus, isConnected, isReconnecting, reconnectAttempts } = useDownloadProgressSSE(downloadId)
 
-  // Track maximum progress to prevent jittery backwards movement
-  const [maxProgress, setMaxProgress] = useState<number>(0)
-
   // Calculate progress percentage from SSE data
   const rawProgress = downloadStatus?.progress?.percentage ?? null
   const status = downloadStatus?.status
 
-  // Update max progress when we see a higher value (only for active downloads)
-  // This effect synchronizes external SSE state with React state, which is a valid use case
-  /* eslint-disable react-hooks/set-state-in-effect */
-  useEffect(() => {
-    if (status === 'downloading' || status === 'processing') {
-      // Actively downloading/processing - track maximum progress to prevent backward movement
-      if (rawProgress !== null && rawProgress !== undefined) {
-        setMaxProgress(prev => Math.max(prev, rawProgress))
-      }
-    } else if (status === 'queued') {
-      // Reset maxProgress when download is queued (before it starts)
-      setMaxProgress(0)
-    }
-    // For 'completed' or 'failed' status, do nothing - keep last known maxProgress
-  }, [rawProgress, status])
-  /* eslint-enable react-hooks/set-state-in-effect */
+  // Track maximum progress to prevent jittery backwards movement
+  const maxProgress = useMonotonicProgress(rawProgress, status)
 
   // Use maxProgress for display, ensuring it never goes backwards
   // Only apply monotonic progress for downloading/processing states

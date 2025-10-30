@@ -554,7 +554,9 @@ class TestRedisProgressServicePubSub:
             "metadata": {
                 "started_at": datetime(2025, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
                 "nested": {
-                    "completed_at": datetime(2025, 1, 15, 11, 0, 0, tzinfo=timezone.utc),
+                    "completed_at": datetime(
+                        2025, 1, 15, 11, 0, 0, tzinfo=timezone.utc
+                    ),
                 },
             },
         }
@@ -562,9 +564,7 @@ class TestRedisProgressServicePubSub:
         serialized = redis_service._serialize_data(data)
 
         # Check nested datetime serialization
-        assert (
-            serialized["metadata"]["started_at"] == "2025-01-15T10:00:00+00:00"
-        )
+        assert serialized["metadata"]["started_at"] == "2025-01-15T10:00:00+00:00"
         assert (
             serialized["metadata"]["nested"]["completed_at"]
             == "2025-01-15T11:00:00+00:00"
