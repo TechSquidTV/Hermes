@@ -547,6 +547,26 @@ async def _download_video_task(
             # Clean up Redis progress data (download complete)
             await redis_progress_service.delete_progress(download_id)
 
+            # Revoke SSE tokens for this download (security cleanup)
+            try:
+                revoked = await redis_progress_service.revoke_user_sse_tokens(
+                    user_id="*",  # Revoke for all users since we don't track user per download yet
+                    scope_prefix=f"download:{download_id}",
+                )
+                if revoked > 0:
+                    logger.info(
+                        "Revoked SSE tokens for completed download",
+                        download_id=download_id,
+                        tokens_revoked=revoked,
+                    )
+            except Exception as e:
+                # Don't fail the download if token revocation fails
+                logger.error(
+                    "Failed to revoke SSE tokens for completed download",
+                    download_id=download_id,
+                    error=str(e),
+                )
+
             return {
                 "success": True,
                 "download_id": download_id,
@@ -580,6 +600,25 @@ async def _download_video_task(
 
             # Clean up Redis progress data (download failed)
             await redis_progress_service.delete_progress(download_id)
+
+            # Revoke SSE tokens for this download (security cleanup)
+            try:
+                revoked = await redis_progress_service.revoke_user_sse_tokens(
+                    user_id="*",
+                    scope_prefix=f"download:{download_id}",
+                )
+                if revoked > 0:
+                    logger.info(
+                        "Revoked SSE tokens for failed download",
+                        download_id=download_id,
+                        tokens_revoked=revoked,
+                    )
+            except Exception as e:
+                logger.error(
+                    "Failed to revoke SSE tokens for failed download",
+                    download_id=download_id,
+                    error=str(e),
+                )
 
             return {
                 "success": False,
@@ -617,6 +656,25 @@ async def _download_video_task(
 
         # Clean up Redis progress data (download exception)
         await redis_progress_service.delete_progress(download_id)
+
+        # Revoke SSE tokens for this download (security cleanup)
+        try:
+            revoked = await redis_progress_service.revoke_user_sse_tokens(
+                user_id="*",
+                scope_prefix=f"download:{download_id}",
+            )
+            if revoked > 0:
+                logger.info(
+                    "Revoked SSE tokens for failed download (exception)",
+                    download_id=download_id,
+                    tokens_revoked=revoked,
+                )
+        except Exception as revoke_error:
+            logger.error(
+                "Failed to revoke SSE tokens for failed download (exception)",
+                download_id=download_id,
+                error=str(revoke_error),
+            )
 
         return {"success": False, "download_id": download_id, "error": error_message}
 

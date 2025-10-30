@@ -323,6 +323,143 @@ class RedisProgressService:
             },
         )
 
+    # ============================================================
+    # SSE TOKEN STORAGE METHODS
+    # ============================================================
+
+    async def store_sse_token(
+        self, token: str, data: Dict[str, Any], ttl: int = 300
+    ) -> None:
+        """
+        Store SSE token in Redis with TTL.
+
+        Args:
+            token: SSE token string
+            data: Token data (scope, user_id, expires_at, permissions)
+            ttl: Time to live in seconds (default 5 minutes)
+        """
+        try:
+            r = await self.get_async_redis()
+            key = f"sse:token:{token}"
+            # Serialize datetime objects
+            serialized_data = self._serialize_data(data)
+            await r.setex(key, ttl, json.dumps(serialized_data))
+            logger.info(
+                "Stored SSE token",
+                token_prefix=token[:12],
+                scope=data.get("scope"),
+                ttl=ttl,
+            )
+        except Exception as e:
+            logger.error(
+                "Failed to store SSE token in Redis",
+                token_prefix=token[:12],
+                error=str(e),
+            )
+            raise
+
+    async def get_sse_token(self, token: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve SSE token data from Redis.
+
+        Args:
+            token: SSE token string
+
+        Returns:
+            Token data dictionary or None if not found/expired
+        """
+        try:
+            r = await self.get_async_redis()
+            key = f"sse:token:{token}"
+            data = await r.get(key)
+            if data:
+                return json.loads(data)
+            return None
+        except Exception as e:
+            logger.error(
+                "Failed to get SSE token from Redis",
+                token_prefix=token[:12],
+                error=str(e),
+            )
+            return None
+
+    async def delete_sse_token(self, token: str) -> None:
+        """
+        Delete SSE token from Redis (for revocation).
+
+        Args:
+            token: SSE token string
+        """
+        try:
+            r = await self.get_async_redis()
+            key = f"sse:token:{token}"
+            await r.delete(key)
+            logger.info("Deleted SSE token", token_prefix=token[:12])
+        except Exception as e:
+            logger.error(
+                "Failed to delete SSE token from Redis",
+                token_prefix=token[:12],
+                error=str(e),
+            )
+
+    async def revoke_user_sse_tokens(
+        self, user_id: str, scope_prefix: Optional[str] = None
+    ) -> int:
+        """
+        Revoke all SSE tokens for a user, optionally filtered by scope prefix.
+
+        Args:
+            user_id: User ID
+            scope_prefix: Optional scope prefix to filter (e.g., "download:abc-123")
+
+        Returns:
+            Number of tokens revoked
+        """
+        try:
+            r = await self.get_async_redis()
+
+            # Scan for all SSE tokens
+            pattern = "sse:token:*"
+            revoked = 0
+
+            async for key in r.scan_iter(match=pattern):
+                # Get token data
+                data = await r.get(key)
+                if not data:
+                    continue
+
+                token_data = json.loads(data)
+
+                # Check if token belongs to user
+                if token_data.get("user_id") != user_id:
+                    continue
+
+                # Check scope prefix if specified
+                if scope_prefix and not token_data.get("scope", "").startswith(
+                    scope_prefix
+                ):
+                    continue
+
+                # Delete token
+                await r.delete(key)
+                revoked += 1
+
+            logger.info(
+                "Revoked SSE tokens",
+                user_id=user_id,
+                scope_prefix=scope_prefix,
+                count=revoked,
+            )
+            return revoked
+
+        except Exception as e:
+            logger.error(
+                "Failed to revoke user SSE tokens",
+                user_id=user_id,
+                error=str(e),
+            )
+            return 0
+
     async def close(self) -> None:
         """Close Redis connections."""
         if self._async_redis:

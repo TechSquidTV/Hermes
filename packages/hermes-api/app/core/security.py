@@ -334,3 +334,151 @@ class PermissionChecker:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Permission denied: {required_permission} required",
             )
+
+
+# =============================================================================
+# SSE TOKEN VALIDATION
+# =============================================================================
+
+
+async def validate_sse_token(token: str, required_scope: str) -> dict:
+    """
+    Validate ephemeral SSE token.
+
+    This validates short-lived, scoped tokens used for SSE connections.
+    Tokens are stored in Redis and automatically expire via TTL.
+
+    Args:
+        token: SSE token string (format: sse_<base64>)
+        required_scope: Required scope (e.g., 'download:abc-123', 'download:*', 'queue')
+
+    Returns:
+        Token data dictionary with scope, user_id, permissions
+
+    Raises:
+        HTTPException: If token is invalid, expired, or has insufficient scope
+    """
+    from app.services.redis_progress import redis_progress_service
+
+    # Get token from Redis
+    token_data = await redis_progress_service.get_sse_token(token)
+    if not token_data:
+        logger.warning("Invalid or expired SSE token", token_prefix=token[:12])
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired SSE token",
+        )
+
+    # Check expiry (Redis TTL should handle this, but double-check)
+    expires_at_str = token_data.get("expires_at")
+    if expires_at_str:
+        try:
+            expires_at = datetime.fromisoformat(expires_at_str)
+            if datetime.now(timezone.utc) > expires_at:
+                logger.warning("Expired SSE token", token_prefix=token[:12])
+                await redis_progress_service.delete_sse_token(token)
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="SSE token expired",
+                )
+        except (ValueError, TypeError) as e:
+            logger.error("Invalid expires_at format", error=str(e))
+
+    # Check scope
+    token_scope = token_data.get("scope", "")
+    if not _scope_matches(token_scope, required_scope):
+        logger.warning(
+            "Insufficient SSE token scope",
+            token_scope=token_scope,
+            required_scope=required_scope,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Insufficient scope: {required_scope} required",
+        )
+
+    logger.info(
+        "Valid SSE token",
+        token_prefix=token[:12],
+        scope=token_scope,
+        user_id=token_data.get("user_id"),
+    )
+    return token_data
+
+
+def _scope_matches(token_scope: str, required_scope: str) -> bool:
+    """
+    Check if token scope matches required scope.
+
+    Args:
+        token_scope: Token's actual scope (e.g., 'download:abc-123')
+        required_scope: Required scope (e.g., 'download:abc-123', 'download:*')
+
+    Returns:
+        True if scope matches
+
+    Examples:
+        >>> _scope_matches('download:abc-123', 'download:abc-123')
+        True
+        >>> _scope_matches('download:abc-123', 'download:*')
+        True
+        >>> _scope_matches('download:abc-123', 'queue')
+        False
+    """
+    # Exact match
+    if token_scope == required_scope:
+        return True
+
+    # Wildcard match (e.g., download:* matches any download:xxx)
+    if required_scope.endswith(":*"):
+        scope_prefix = required_scope[:-2]  # Remove :*
+        return token_scope.startswith(scope_prefix + ":")
+
+    return False
+
+
+async def get_current_sse_token(
+    token: Optional[str] = Query(None, description="SSE token from query parameter"),
+) -> dict:
+    """
+    Dependency to extract and validate SSE token from query parameter.
+
+    For SSE endpoints that require scoped token authentication.
+    The scope validation is handled by the endpoint itself.
+
+    Args:
+        token: SSE token from query parameter
+
+    Returns:
+        Token data dictionary
+
+    Raises:
+        HTTPException: If token is missing or invalid
+    """
+    if not token:
+        logger.warning("SSE connection attempted without token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="SSE token required",
+        )
+
+    # Check if it's an SSE token (starts with "sse_")
+    if not token.startswith("sse_"):
+        logger.warning("Invalid SSE token format", token_prefix=token[:12])
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid SSE token format",
+        )
+
+    # Basic validation - specific scope validation done by endpoint
+    from app.services.redis_progress import redis_progress_service
+
+    token_data = await redis_progress_service.get_sse_token(token)
+    if not token_data:
+        logger.warning("Invalid or expired SSE token", token_prefix=token[:12])
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired SSE token",
+        )
+
+    return token_data

@@ -299,3 +299,222 @@ class TestRedisProgressServiceDataIntegrity:
 
         # Verify data integrity
         assert retrieved_data == original_data
+
+
+class TestRedisSSETokenStorage:
+    """Test Redis SSE token storage operations."""
+
+    @pytest.mark.asyncio
+    async def test_store_sse_token(self, redis_service, mock_async_redis):
+        """Test storing SSE token with TTL in Redis."""
+        setup_async_redis_mock(redis_service, mock_async_redis)
+        mock_async_redis.setex = AsyncMock()
+
+        token = "sse_test123abc"
+        token_data = {
+            "scope": "download:abc-123",
+            "user_id": "user123",
+            "expires_at": "2025-01-15T10:00:00Z",
+            "permissions": ["read"],
+        }
+        ttl = 600
+
+        await redis_service.store_sse_token(token, token_data, ttl)
+
+        # Verify Redis setex was called
+        mock_async_redis.setex.assert_called_once()
+        call_args = mock_async_redis.setex.call_args
+        assert call_args[0][0] == f"sse:token:{token}"
+        assert call_args[0][1] == ttl
+        stored_data = json.loads(call_args[0][2])
+        assert stored_data["scope"] == token_data["scope"]
+        assert stored_data["user_id"] == token_data["user_id"]
+
+    @pytest.mark.asyncio
+    async def test_store_sse_token_with_datetime(self, redis_service, mock_async_redis):
+        """Test storing SSE token with datetime fields serializes correctly."""
+        from datetime import datetime, timedelta, timezone
+
+        setup_async_redis_mock(redis_service, mock_async_redis)
+        mock_async_redis.setex = AsyncMock()
+
+        token = "sse_test456def"
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+        created_at = datetime.now(timezone.utc)
+        token_data = {
+            "scope": "queue",
+            "user_id": "user456",
+            "expires_at": expires_at,  # Datetime object
+            "created_at": created_at,  # Datetime object
+            "permissions": ["read"],
+        }
+
+        await redis_service.store_sse_token(token, token_data, 600)
+
+        # Verify datetime was serialized to ISO string
+        call_args = mock_async_redis.setex.call_args
+        stored_json = call_args[0][2]
+        stored_data = json.loads(stored_json)
+        assert isinstance(stored_data["expires_at"], str)
+        assert isinstance(stored_data["created_at"], str)
+        # Verify it's valid ISO format
+        assert "T" in stored_data["expires_at"]
+        assert "Z" in stored_data["expires_at"] or "+" in stored_data["expires_at"]
+
+    @pytest.mark.asyncio
+    async def test_get_sse_token(self, redis_service, mock_async_redis):
+        """Test retrieving stored SSE token from Redis."""
+        setup_async_redis_mock(redis_service, mock_async_redis)
+
+        token = "sse_test789ghi"
+        token_data = {
+            "scope": "download:test-123",
+            "user_id": "user789",
+            "expires_at": "2025-01-15T10:00:00Z",
+            "permissions": ["read"],
+        }
+
+        mock_async_redis.get = AsyncMock(return_value=json.dumps(token_data))
+
+        result = await redis_service.get_sse_token(token)
+
+        # Verify Redis get was called with correct key
+        mock_async_redis.get.assert_called_once_with(f"sse:token:{token}")
+        assert result == token_data
+        assert result["scope"] == "download:test-123"
+        assert result["user_id"] == "user789"
+
+    @pytest.mark.asyncio
+    async def test_get_nonexistent_sse_token(self, redis_service, mock_async_redis):
+        """Test retrieving non-existent token returns None."""
+        setup_async_redis_mock(redis_service, mock_async_redis)
+        mock_async_redis.get = AsyncMock(return_value=None)
+
+        token = "sse_nonexistent"
+        result = await redis_service.get_sse_token(token)
+
+        assert result is None
+        mock_async_redis.get.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_delete_sse_token(self, redis_service, mock_async_redis):
+        """Test deleting SSE token from Redis."""
+        setup_async_redis_mock(redis_service, mock_async_redis)
+        mock_async_redis.delete = AsyncMock()
+
+        token = "sse_delete_me"
+
+        await redis_service.delete_sse_token(token)
+
+        # Verify Redis delete was called with correct key
+        mock_async_redis.delete.assert_called_once_with(f"sse:token:{token}")
+
+    @pytest.mark.asyncio
+    async def test_revoke_user_sse_tokens_by_scope(
+        self, redis_service, mock_async_redis
+    ):
+        """Test revoking SSE tokens filtered by scope prefix."""
+        setup_async_redis_mock(redis_service, mock_async_redis)
+
+        # Mock scan_iter to return token keys
+        token_keys = [
+            "sse:token:sse_abc123",
+            "sse:token:sse_def456",
+            "sse:token:sse_ghi789",
+        ]
+
+        async def mock_scan_iter(match):
+            for key in token_keys:
+                yield key
+
+        mock_async_redis.scan_iter = mock_scan_iter
+
+        # Mock get to return token data
+        token_data = [
+            json.dumps({"user_id": "user123", "scope": "download:test-123"}),  # Match
+            json.dumps({"user_id": "user123", "scope": "download:test-456"}),  # Match
+            json.dumps({"user_id": "user123", "scope": "queue"}),  # No match
+        ]
+
+        mock_async_redis.get = AsyncMock(side_effect=token_data)
+        mock_async_redis.delete = AsyncMock()
+
+        # Revoke tokens with scope prefix "download:test-"
+        revoked = await redis_service.revoke_user_sse_tokens(
+            user_id="user123", scope_prefix="download:test-"
+        )
+
+        # Should revoke 2 tokens (those starting with "download:test-")
+        assert revoked == 2
+        # Verify delete was called twice
+        assert mock_async_redis.delete.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_revoke_all_user_tokens_no_scope_filter(
+        self, redis_service, mock_async_redis
+    ):
+        """Test revoking all SSE tokens for a user (no scope filter)."""
+        setup_async_redis_mock(redis_service, mock_async_redis)
+
+        # Mock scan_iter to return token keys
+        token_keys = [
+            "sse:token:sse_aaa111",
+            "sse:token:sse_bbb222",
+            "sse:token:sse_ccc333",
+        ]
+
+        async def mock_scan_iter(match):
+            for key in token_keys:
+                yield key
+
+        mock_async_redis.scan_iter = mock_scan_iter
+
+        # Mock get to return token data (different users)
+        token_data = [
+            json.dumps({"user_id": "user123", "scope": "download:abc"}),  # Match
+            json.dumps({"user_id": "user456", "scope": "queue"}),  # Different user
+            json.dumps({"user_id": "user123", "scope": "system"}),  # Match
+        ]
+
+        mock_async_redis.get = AsyncMock(side_effect=token_data)
+        mock_async_redis.delete = AsyncMock()
+
+        # Revoke all tokens for user123
+        revoked = await redis_service.revoke_user_sse_tokens(
+            user_id="user123", scope_prefix=None
+        )
+
+        # Should revoke 2 tokens (both belonging to user123)
+        assert revoked == 2
+        assert mock_async_redis.delete.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_store_sse_token_raises_on_redis_error(
+        self, redis_service, mock_async_redis
+    ):
+        """Test that store_sse_token raises exception on Redis error."""
+        setup_async_redis_mock(redis_service, mock_async_redis)
+        mock_async_redis.setex = AsyncMock(
+            side_effect=Exception("Redis connection failed")
+        )
+
+        token = "sse_error_test"
+        token_data = {"scope": "queue", "user_id": "user123"}
+
+        with pytest.raises(Exception, match="Redis connection failed"):
+            await redis_service.store_sse_token(token, token_data, 300)
+
+    @pytest.mark.asyncio
+    async def test_get_sse_token_handles_json_decode_error(
+        self, redis_service, mock_async_redis
+    ):
+        """Test that get_sse_token handles invalid JSON gracefully."""
+        setup_async_redis_mock(redis_service, mock_async_redis)
+        # Return invalid JSON
+        mock_async_redis.get = AsyncMock(return_value="not valid json{")
+
+        token = "sse_bad_json"
+        result = await redis_service.get_sse_token(token)
+
+        # Should return None on JSON decode error
+        assert result is None

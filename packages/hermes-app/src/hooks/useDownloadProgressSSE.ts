@@ -1,7 +1,7 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSSE } from './useSSE';
-import { TokenStorage } from '@/utils/tokenStorage';
+import { apiClient } from '@/services/api/client';
 import type { components } from '@/types/api.generated';
 
 type DownloadStatus = components["schemas"]["DownloadStatus"];
@@ -11,8 +11,9 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 /**
  * Hook for real-time download progress updates via SSE
  *
- * Automatically updates React Query cache with real-time progress.
- * SSE must be enabled in environment configuration.
+ * Automatically fetches ephemeral SSE token and updates React Query cache
+ * with real-time progress. Uses secure, scoped SSE tokens instead of JWT
+ * in query parameters.
  *
  * @param downloadId - Download ID to track
  *
@@ -32,15 +33,43 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
  */
 export function useDownloadProgressSSE(downloadId: string) {
   const queryClient = useQueryClient();
+  const [sseToken, setSSEToken] = useState<string | null>(null);
+  const [tokenError, setTokenError] = useState<Error | null>(null);
 
-  // Get auth token - don't memoize to allow reconnection when token refreshes
-  const token = TokenStorage.getAccessToken();
+  // Fetch SSE token on mount
+  useEffect(() => {
+    let mounted = true;
 
-  // Memoize URL to prevent recreating connections on every render
-  // Include token in dependencies so connection updates when token changes
+    async function fetchSSEToken() {
+      try {
+        const response = await apiClient.createSSEToken({
+          scope: `download:${downloadId}`,
+          ttl: 600, // 10 minutes - enough for most downloads
+        });
+
+        if (mounted) {
+          setSSEToken(response.token);
+          setTokenError(null);
+        }
+      } catch (err) {
+        console.error('Failed to fetch SSE token:', err);
+        if (mounted) {
+          setTokenError(err instanceof Error ? err : new Error('Failed to fetch SSE token'));
+        }
+      }
+    }
+
+    fetchSSEToken();
+
+    return () => {
+      mounted = false;
+    };
+  }, [downloadId]);
+
+  // Build SSE URL with ephemeral token
   const sseUrl = useMemo(
-    () => (token ? `${API_BASE_URL}/api/v1/events/downloads/${downloadId}?token=${token}` : null),
-    [token, downloadId]
+    () => (sseToken ? `${API_BASE_URL}/api/v1/events/downloads/${downloadId}?token=${sseToken}` : null),
+    [sseToken, downloadId]
   );
 
   // Memoize options to prevent recreating connections on every render
@@ -76,7 +105,7 @@ export function useDownloadProgressSSE(downloadId: string) {
   return {
     data,
     isConnected,
-    error,
+    error: tokenError || error, // Return token error if token fetch failed
     isReconnecting,
     reconnectAttempts,
   };
