@@ -18,6 +18,7 @@
     "test:hermes-app": "pnpm --filter hermes-app test",
     "test:api": "cd packages/hermes-api && uv run pytest",
     "test:all": "pnpm test && pnpm test:api",
+    "test:coverage": "pnpm --filter hermes-app test:coverage && cd packages/hermes-api && uv run pytest --cov=app --cov-report=html --cov-report=term",
     "clean": "pnpm --recursive clean",
     "clean:all": "pnpm clean && docker compose down -v && rm -rf packages/hermes-api/data/* packages/hermes-api/downloads/* packages/hermes-api/temp/*",
     "setup": "pnpm install && echo 'Create .env file from .env.example and update values'",
