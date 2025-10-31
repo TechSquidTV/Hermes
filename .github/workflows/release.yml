@@ -1,0 +1,242 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: 'Version bump type'
+        required: false
+        type: choice
+        default: 'patch'
+        options:
+          - patch
+          - minor
+          - major
+      version:
+        description: 'Specific version (overrides bump_type if provided)'
+        required: false
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          cd packages/hermes-api && uv sync --frozen --all-groups
+
+      - name: Read current version
+        id: current_version
+        run: |
+          CURRENT_VERSION=$(jq -r '.version' package.json)
+          echo "current=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $CURRENT_VERSION"
+
+      - name: Calculate new version
+        id: new_version
+        run: |
+          CURRENT="${{ steps.current_version.outputs.current }}"
+
+          # If specific version provided, use it
+          if [ -n "${{ inputs.version }}" ]; then
+            NEW_VERSION="${{ inputs.version }}"
+            echo "Using specific version: $NEW_VERSION"
+          else
+            # Parse current version
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+
+            # Bump based on type
+            case "${{ inputs.bump_type }}" in
+              major)
+                MAJOR=$((MAJOR + 1))
+                MINOR=0
+                PATCH=0
+                ;;
+              minor)
+                MINOR=$((MINOR + 1))
+                PATCH=0
+                ;;
+              patch)
+                PATCH=$((PATCH + 1))
+                ;;
+            esac
+
+            NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+            echo "Bumped ${{ inputs.bump_type }}: $CURRENT -> $NEW_VERSION"
+          fi
+
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update version files
+        run: |
+          NEW_VERSION="${{ steps.new_version.outputs.version }}"
+
+          # Update root package.json (source of truth)
+          jq ".version = \"$NEW_VERSION\"" package.json > package.json.tmp
+          mv package.json.tmp package.json
+
+          # Update hermes-app package.json
+          cd packages/hermes-app
+          jq ".version = \"$NEW_VERSION\"" package.json > package.json.tmp
+          mv package.json.tmp package.json
+          cd ../..
+
+          # Update hermes-api pyproject.toml
+          sed -i "s/^version = \"[^\"]*\"/version = \"$NEW_VERSION\"/" packages/hermes-api/pyproject.toml
+
+          echo "Updated all version files to $NEW_VERSION"
+
+      - name: Run pre-checks
+        run: |
+          echo "Running comprehensive pre-release checks..."
+          pnpm pre-check:full
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit version bump
+        run: |
+          NEW_VERSION="${{ steps.new_version.outputs.version }}"
+
+          git add package.json packages/hermes-app/package.json packages/hermes-api/pyproject.toml
+          git commit -m "chore(release): bump version to $NEW_VERSION"
+
+          echo "Committed version bump"
+
+      - name: Create tags
+        run: |
+          NEW_VERSION="${{ steps.new_version.outputs.version }}"
+
+          git tag "hermes-app-v$NEW_VERSION"
+          git tag "hermes-api-v$NEW_VERSION"
+          git tag "v$NEW_VERSION"
+
+          echo "Created tags: hermes-app-v$NEW_VERSION, hermes-api-v$NEW_VERSION, v$NEW_VERSION"
+
+      - name: Push changes and tags
+        run: |
+          git push origin main
+          git push origin --tags
+
+          echo "Pushed commit and tags to main"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for hermes-app
+        id: meta-app
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/hermes-app
+          tags: |
+            type=semver,pattern={{version}},value=${{ steps.new_version.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.new_version.outputs.version }}
+            type=semver,pattern={{major}},value=${{ steps.new_version.outputs.version }}
+            type=raw,value=latest
+
+      - name: Build and push hermes-app Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./packages/hermes-app/Dockerfile
+          push: true
+          tags: ${{ steps.meta-app.outputs.tags }}
+          labels: ${{ steps.meta-app.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+      - name: Extract metadata for hermes-api
+        id: meta-api
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/hermes-api
+          tags: |
+            type=semver,pattern={{version}},value=${{ steps.new_version.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.new_version.outputs.version }}
+            type=semver,pattern={{major}},value=${{ steps.new_version.outputs.version }}
+            type=raw,value=latest
+
+      - name: Build and push hermes-api Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./packages/hermes-api
+          file: ./packages/hermes-api/Dockerfile
+          push: true
+          tags: ${{ steps.meta-api.outputs.tags }}
+          labels: ${{ steps.meta-api.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+      - name: Generate release summary
+        run: |
+          NEW_VERSION="${{ steps.new_version.outputs.version }}"
+          CURRENT_VERSION="${{ steps.current_version.outputs.current }}"
+
+          echo "## 🎉 Release $NEW_VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Version bumped from **$CURRENT_VERSION** to **$NEW_VERSION**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Tags Created" >> $GITHUB_STEP_SUMMARY
+          echo "- \`hermes-app-v$NEW_VERSION\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`hermes-api-v$NEW_VERSION\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`v$NEW_VERSION\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Docker Images Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**hermes-app:**" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta-app.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**hermes-api:**" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta-api.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Pull Images" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ghcr.io/${{ github.repository_owner }}/hermes-app:$NEW_VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ghcr.io/${{ github.repository_owner }}/hermes-api:$NEW_VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
