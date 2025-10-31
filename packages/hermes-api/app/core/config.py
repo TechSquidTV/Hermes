@@ -1,8 +1,7 @@
 import importlib.metadata
 import re
-from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -89,6 +88,20 @@ class Settings(BaseSettings):
         ]
     )
     allow_credentials: bool = Field(default=True)
+
+    # =============================================================================
+    # SERVER-SENT EVENTS (SSE) CONFIGURATION
+    # =============================================================================
+
+    sse_heartbeat_interval: int = Field(
+        default=30, description="SSE heartbeat interval in seconds"
+    )
+    sse_max_connections: int = Field(
+        default=1000, description="Maximum concurrent SSE connections"
+    )
+    sse_connection_timeout: int = Field(
+        default=300, description="SSE connection timeout in seconds"
+    )
 
     model_config = SettingsConfigDict(env_prefix="HERMES_", case_sensitive=False)
 

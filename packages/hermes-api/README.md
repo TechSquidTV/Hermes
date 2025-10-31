@@ -150,7 +150,7 @@ uv run isort app/ tests/
 uv run mypy app/
 
 # Linting
-uv run flake8 app/ tests/
+uv run ruff check app/ tests/
 ```
 
 ## 🏗️ Architecture

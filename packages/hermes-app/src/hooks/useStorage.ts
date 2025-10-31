@@ -10,7 +10,6 @@ export function useStorageInfo() {
   return useQuery({
     queryKey: ['storage', 'info'],
     queryFn: () => apiClient.getStorageInfo(),
-    refetchInterval: 60000, // Refresh every minute
   })
 }
 

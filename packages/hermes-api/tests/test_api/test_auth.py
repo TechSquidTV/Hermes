@@ -5,7 +5,7 @@ Tests for authentication endpoints and token validation.
 import pytest
 from httpx import AsyncClient
 
-from app.core.security import create_access_token, create_refresh_token
+from app.core.security import create_refresh_token
 
 
 class TestAuthentication:

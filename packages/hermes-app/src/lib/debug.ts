@@ -41,15 +41,6 @@ export const debug = {
   },
 
   /**
-   * Log polling-specific debug messages
-   */
-  polling: (message: string, ...args: unknown[]) => {
-    if (isDev) {
-      console.log(`[PollingManager] ${message}`, ...args)
-    }
-  },
-
-  /**
    * Log task tracking debug messages
    */
   taskTracking: (message: string, ...args: unknown[]) => {

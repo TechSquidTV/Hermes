@@ -5,7 +5,7 @@ Pydantic models for download-related API requests and responses.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class DownloadRequest(BaseModel):

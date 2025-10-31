@@ -1,7 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { useTimelinePolling, useTimelineSummaryPolling, useAnalyticsPolling } from '@/hooks/useAnalyticsPolling'
+import { useStatsSSE } from '@/hooks/useStatsSSE'
+import { useQuery } from '@tanstack/react-query'
+import { apiClient } from '@/services/api/client'
 import { useState } from 'react'
 import {
   LineChart,
@@ -24,10 +26,24 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'
 export function QueueCharts() {
   const [selectedPeriod, setSelectedPeriod] = useState<'day' | 'week' | 'month' | 'year'>('week')
 
-  // Use unified polling hooks for all data fetching
-  const { data: timelineData, isLoading: isLoadingTimeline } = useTimelinePolling(selectedPeriod)
-  const { data: timelineSummary, isLoading: isLoadingSummary } = useTimelineSummaryPolling(selectedPeriod)
-  const { stats: { data: statsData, isLoading: isLoadingStats } } = useAnalyticsPolling({ period: selectedPeriod })
+  // Connect to stats SSE for real-time updates
+  useStatsSSE()
+
+  // Use React Query for data fetching (will be invalidated by SSE updates)
+  const { data: timelineData, isLoading: isLoadingTimeline } = useQuery({
+    queryKey: ['timeline', selectedPeriod],
+    queryFn: () => apiClient.getTimelineStats(selectedPeriod),
+  })
+
+  const { data: timelineSummary, isLoading: isLoadingSummary } = useQuery({
+    queryKey: ['timeline', 'summary', selectedPeriod],
+    queryFn: () => apiClient.getTimelineSummary(selectedPeriod),
+  })
+
+  const { data: statsData, isLoading: isLoadingStats } = useQuery({
+    queryKey: ['analytics', 'stats', selectedPeriod],
+    queryFn: () => apiClient.getApiStats(selectedPeriod),
+  })
 
   const isLoading = isLoadingTimeline || isLoadingSummary || isLoadingStats
 

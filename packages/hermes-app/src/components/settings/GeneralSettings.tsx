@@ -14,7 +14,6 @@ export function GeneralSettings() {
   const { data: healthData } = useQuery({
     queryKey: ['health'],
     queryFn: () => apiClient.getHealth(),
-    refetchInterval: 30000, // Refresh every 30 seconds
   })
 
   return (

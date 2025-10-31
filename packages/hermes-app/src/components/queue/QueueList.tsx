@@ -1,8 +1,11 @@
-import { useQueuePolling } from '@/hooks/useQueuePolling'
+import { useQuery } from '@tanstack/react-query'
+import { apiClient } from '@/services/api/client'
+import { useQueueUpdatesSSE } from '@/hooks/useQueueUpdatesSSE'
 import { QueueCard } from './QueueCard'
 import { QueueSkeleton } from './QueueSkeleton'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ErrorDisplay } from '@/components/ui/error-display'
+import { ConnectionStatus } from '@/components/ui/ConnectionStatus'
 import { FileVideo, Clock, CheckCircle } from 'lucide-react'
 import { useMemo } from 'react'
 import { useFilteredDownloads } from '@/hooks/useFilters'
@@ -38,11 +41,21 @@ export function QueueList({
   onDeselectAll,
 }: QueueListProps) {
 
-  // Use unified polling hook with smart adaptive intervals
-  const { data: queueData, isLoading, error, refetch } = useQueuePolling({
-    status: viewMode === 'active' ? (statusFilter === 'all' ? undefined : statusFilter) :
-            viewMode === 'history' ? 'completed' : undefined,
-    viewMode,
+  // SSE for real-time updates (invalidates query cache when updates arrive)
+  const { isConnected, isReconnecting, reconnectAttempts } = useQueueUpdatesSSE();
+
+  // Initial data load
+  const { data: queueData, isLoading, error, refetch } = useQuery({
+    queryKey: ['queue', statusFilter, viewMode],
+    queryFn: () => {
+      const status = viewMode === 'active'
+        ? (statusFilter === 'all' ? undefined : statusFilter)
+        : viewMode === 'history'
+        ? 'completed'
+        : undefined;
+      return apiClient.getDownloadQueue(status, 20, 0);
+    },
+    staleTime: Infinity, // Data stays fresh via SSE invalidation
   })
 
   // Use the useFilteredDownloads hook for filtering and sorting
@@ -148,6 +161,14 @@ export function QueueList({
 
   return (
     <div className="space-y-3">
+      {/* SSE Connection Status */}
+      <ConnectionStatus
+        isConnected={isConnected}
+        isReconnecting={isReconnecting}
+        reconnectAttempts={reconnectAttempts}
+        className="mb-2"
+      />
+
       {/* Select All Controls */}
       {isSelectable && filteredItems.length > 0 && (
         <div className="flex items-center justify-between p-2 bg-muted/50 rounded-md">

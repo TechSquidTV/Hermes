@@ -51,6 +51,21 @@ type ApiKeyCreate = components["schemas"]["ApiKeyCreate"]
 type ApiKeyResponse = components["schemas"]["ApiKeyResponse"]
 type ApiKeyListResponse = components["schemas"]["ApiKeyListResponse"]
 type TokenResponse = components["schemas"]["TokenResponse"]
+
+// SSE Token types
+interface CreateSSETokenRequest {
+  scope: string
+  ttl?: number
+}
+
+interface SSETokenResponse {
+  token: string
+  expires_at: string
+  scope: string
+  permissions: string[]
+  ttl: number
+}
+
 import { TokenStorage } from '@/utils/tokenStorage'
 
 class ApiClient {
@@ -355,10 +370,40 @@ class ApiClient {
   async deleteFiles(filePaths: string[]): Promise<DeleteFilesResponse> {
     return this.request<DeleteFilesResponse>('/files', {
       method: 'DELETE',
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         files: filePaths,
-        confirm: true 
+        confirm: true
       }),
+    })
+  }
+
+  /**
+   * Create ephemeral SSE token for secure, scoped SSE connections.
+   *
+   * SSE tokens solve the security issue of passing JWT tokens in query parameters
+   * by providing short-lived, scoped, read-only tokens specifically for SSE.
+   *
+   * @param request - Token request with scope and optional TTL
+   * @returns SSE token response with token, expiry, and permissions
+   *
+   * @example
+   * ```typescript
+   * // Get token for download progress
+   * const { token } = await apiClient.createSSEToken({
+   *   scope: `download:${downloadId}`,
+   *   ttl: 600  // 10 minutes
+   * });
+   *
+   * // Use token to connect to SSE
+   * const eventSource = new EventSource(
+   *   `/api/v1/events/downloads/${downloadId}?token=${token}`
+   * );
+   * ```
+   */
+  async createSSEToken(request: CreateSSETokenRequest): Promise<SSETokenResponse> {
+    return this.request<SSETokenResponse>('/events/token', {
+      method: 'POST',
+      body: JSON.stringify(request),
     })
   }
 

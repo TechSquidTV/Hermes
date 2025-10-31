@@ -5,7 +5,7 @@ Pydantic models for file-related API requests and responses.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field
 
 
 class DownloadedFile(BaseModel):

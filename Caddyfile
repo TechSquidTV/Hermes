@@ -15,6 +15,27 @@
         respond "healthy" 200
     }
 
+    # SSE Events endpoint - MUST come before general API handler
+    # Critical: flush_interval -1 prevents buffering of SSE events
+    handle /api/v1/events/* {
+        reverse_proxy api:8000 {
+            # Forward client information headers
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Forwarded-Host {host}
+
+            # CRITICAL for SSE: Disable buffering
+            flush_interval -1
+
+            # Keep connection alive for SSE
+            transport http {
+                keepalive 90s
+                keepalive_idle_conns 10
+            }
+        }
+    }
+
     # API routes - proxy to backend service
     handle /api/* {
         reverse_proxy api:8000 {

@@ -6,7 +6,7 @@ import time
 from datetime import datetime, timezone
 
 import redis.asyncio as redis
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from sqlalchemy import text
 
 from app.core.config import settings

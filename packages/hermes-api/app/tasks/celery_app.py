@@ -2,19 +2,19 @@
 Celery configuration for background task processing.
 """
 
-import os
-
 from celery import Celery
 
 from app.core.config import settings
 
-# Create Celery app
+# Create Celery app instance
 celery_app = Celery(
     "hermes",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.tasks.download_tasks", "app.tasks.cleanup_tasks"],
 )
+
+# Make celery_app available for task decorators before importing tasks
+__all__ = ["celery_app"]
 
 # Celery configuration
 celery_app.conf.update(
@@ -54,6 +54,8 @@ celery_app.conf.update(
 # Configure Redis connection for Celery
 celery_app.conf.broker_url = settings.redis_url
 celery_app.conf.result_backend = settings.redis_url
+
+# Tasks are imported by __init__.py to avoid circular imports
 
 if __name__ == "__main__":
     celery_app.start()

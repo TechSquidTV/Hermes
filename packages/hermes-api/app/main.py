@@ -47,6 +47,16 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down Hermes API server...")
 
+    # Close Redis connections
+    try:
+        from app.services.redis_progress import redis_progress_service
+
+        logger.info("Closing Redis connections...")
+        await redis_progress_service.close()
+        logger.info("Redis connections closed successfully")
+    except Exception as e:
+        logger.error(f"Failed to close Redis connections: {e}")
+
 
 def create_application() -> FastAPI:
     """Create and configure the FastAPI application."""

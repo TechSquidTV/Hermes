@@ -14,7 +14,7 @@ from app.core.logging import get_logger
 from app.core.security import get_current_api_key
 from app.db.models import DownloadHistory as DownloadHistoryModel
 from app.db.session import get_database_session
-from app.models.pydantic.history import DailyStats, PopularExtractor
+from app.models.pydantic.history import DailyStats
 
 router = APIRouter(prefix="/timeline", tags=["timeline"])
 logger = get_logger(__name__)

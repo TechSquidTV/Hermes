@@ -2,12 +2,13 @@ import { createFileRoute } from '@tanstack/react-router'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Progress } from '@/components/ui/progress'
 import { Keyboard, X, Download, AlertCircle } from 'lucide-react'
-import { useDownloadProgress } from '@/hooks/useDownloadProgress'
+import { useDownloadProgressSSE } from '@/hooks/useDownloadProgressSSE'
+import { DownloadProgressTracker } from '@/components/download/DownloadProgressTracker'
+import { ConnectionStatus } from '@/components/ui/ConnectionStatus'
 import { UrlInput } from '@/components/forms/UrlInput'
 import { KeyboardShortcutsHelp } from '@/components/ui/keyboard-shortcuts-help'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useDownloadFile } from '@/hooks/useDownloadActions'
 import { Blur } from '@/components/animate-ui/primitives/effects/blur'
 import { taskTracker } from '@/lib/taskTracking'
@@ -26,11 +27,8 @@ interface TrackedTaskProps {
 }
 
 function TrackedTask({ downloadId, onRemove, isDismissing }: TrackedTaskProps) {
-  const { downloadStatus, progressPercentage } = useDownloadProgress({
-    downloadId,
-    enabled: true,
-    refetchInterval: 2000
-  })
+  
+  const { data: downloadStatus, isConnected, isReconnecting, reconnectAttempts } = useDownloadProgressSSE(downloadId)
 
   const downloadFile = useDownloadFile()
 
@@ -127,6 +125,15 @@ function TrackedTask({ downloadId, onRemove, isDismissing }: TrackedTaskProps) {
           <span className={`text-xs font-medium ${statusInfo.textColor}`}>
             {statusInfo.text}
           </span>
+          {/* SSE Connection Indicator (compact) */}
+          {isActive && (
+            <ConnectionStatus
+              isConnected={isConnected}
+              isReconnecting={isReconnecting}
+              reconnectAttempts={reconnectAttempts}
+              className="ml-auto"
+            />
+          )}
           <p className="text-sm font-medium truncate flex-1">
             {(() => {
               if (hasDownloadResult(task.result)) {
@@ -137,24 +144,16 @@ function TrackedTask({ downloadId, onRemove, isDismissing }: TrackedTaskProps) {
           </p>
         </div>
 
-        {/* Progress Bar for Active Downloads */}
-        {isActive && progressPercentage !== null && progressPercentage !== undefined && (
-          <div className="space-y-1 mt-2">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{Math.round(progressPercentage)}%</span>
-              {task.progress?.speed && (
-                <span>{(task.progress.speed / 1024 / 1024).toFixed(2)} MB/s</span>
-              )}
-            </div>
-            <Progress value={progressPercentage} className="h-2" />
-          </div>
-        )}
-
-        {/* Status Info for Non-Active or No Progress */}
-        {(isActive && (progressPercentage === null || progressPercentage === undefined)) && (
-          <div className="text-xs text-muted-foreground mt-1">
-            <span>Processing...</span>
-          </div>
+        {/* Real-time Progress Display using shared component */}
+        {isActive && (
+          <DownloadProgressTracker
+            downloadId={downloadId}
+            isActive={true}
+            showConnectionStatus={false}
+            size="default"
+            showDetails={true}
+            className="mt-2"
+          />
         )}
 
         {isCompleted && hasDownloadResult(task.result) && task.result.file_size && (
@@ -204,7 +203,6 @@ function DashboardPage() {
   const [trackedTaskIds, setTrackedTaskIds] = useState<string[]>(() => taskTracker.getTasks())
   const [dismissingTasks, setDismissingTasks] = useState<Set<string>>(new Set())
 
-  // Subscribe to task changes using event-driven system (no polling!)
   useEffect(() => {
     const unsubscribe = taskTracker.subscribe((taskIds) => {
       setTrackedTaskIds(taskIds)
@@ -215,7 +213,7 @@ function DashboardPage() {
     }
   }, [])
 
-  const removeTask = (downloadId: string, withAnimation = true) => {
+  const removeTask = useCallback((downloadId: string, withAnimation = true) => {
     if (withAnimation) {
       // Start the animation
       setDismissingTasks(prev => new Set(prev).add(downloadId))
@@ -232,7 +230,7 @@ function DashboardPage() {
     } else {
       taskTracker.removeTask(downloadId)
     }
-  }
+  }, [])
 
   return (
     <div className="space-y-6">

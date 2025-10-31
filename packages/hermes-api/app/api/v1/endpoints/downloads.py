@@ -2,8 +2,6 @@
 Download management endpoints.
 """
 
-from typing import Any
-
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -38,7 +36,6 @@ def get_repositories_from_session(db_session: AsyncSession):
 @router.post("/")
 async def start_download(
     download_request: DownloadRequest,  # Renamed from 'request' to avoid conflicts
-    background_tasks: BackgroundTasks,
     db_session: AsyncSession = Depends(get_database_session),
     api_key: str = Depends(get_current_api_key),
 ) -> DownloadResponse:
@@ -115,13 +112,15 @@ async def start_download(
             status="pending",
         )
 
-        # Queue the download task
-        background_tasks.add_task(
-            download_video_task,
-            download_id=download.id,
-            url=download_request.url,
-            format_spec=download_request.format,
-            output_path=download_request.output_directory,
+        # Queue the download task in Celery
+        download_video_task.apply_async(
+            kwargs={
+                "download_id": download.id,
+                "url": download_request.url,
+                "format_spec": download_request.format,
+                "output_path": download_request.output_directory,
+            },
+            queue="hermes.downloads",
         )
 
         logger.info("Download queued successfully", download_id=download.id)
