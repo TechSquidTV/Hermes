@@ -137,6 +137,7 @@ class DownloadStatus(BaseModel):
     result: Optional[DownloadResult] = Field(
         None, description="Final video information when completed"
     )
+    created_at: datetime = Field(..., description="Timestamp when download was created")
 
 
 class CancelResponse(BaseModel):

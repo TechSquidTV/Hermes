@@ -209,6 +209,7 @@ async def get_download_status(
             message=f"Download {download.status}",
             error=download.error_message,
             result=result_info,
+            created_at=download.created_at,
         )
 
         return response

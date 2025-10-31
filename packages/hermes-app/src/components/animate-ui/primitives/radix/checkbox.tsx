@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Checkbox as CheckboxPrimitive } from 'radix-ui';
-import { motion, SVGMotionProps, type HTMLMotionProps } from 'framer-motion';
+import { motion, type SVGMotionProps, type HTMLMotionProps } from 'framer-motion';
 
 import { getStrictContext } from '@/lib/get-strict-context';
 import { useControlledState } from '@/hooks/use-controlled-state';

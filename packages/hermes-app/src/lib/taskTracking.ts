@@ -53,7 +53,8 @@ class TaskTracker {
       return // Already tracked
     }
 
-    const updated = [...current, taskId]
+    // Prepend new tasks to show them at the top (newest first)
+    const updated = [taskId, ...current]
     localStorage.setItem(TASK_TRACKING_KEY, JSON.stringify(updated))
 
     // Emit event for cross-tab sync

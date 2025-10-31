@@ -123,13 +123,18 @@ vi.mock('@/components/animate-ui/primitives/effects/blur', () => ({
 }))
 
 vi.mock('@/components/animate-ui/primitives/radix/checkbox', () => ({
-  Checkbox: ({ checked, onCheckedChange, className }: any) => (
-    <input
-      type="checkbox"
-      checked={checked}
-      onChange={() => onCheckedChange(!checked)}
-      className={className}
-    />
+  Checkbox: ({ checked, onCheckedChange, className, children }: any) => (
+    <div className={className}>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={() => onCheckedChange(!checked)}
+      />
+      {children}
+    </div>
+  ),
+  CheckboxIndicator: ({ className }: any) => (
+    <span className={className} data-testid="checkbox-indicator" />
   ),
 }))
 
@@ -181,6 +186,7 @@ describe('QueueCard', () => {
       speed: 0,
       eta: 0,
     },
+    created_at: '2025-01-01T10:00:00Z',
   }
 
   beforeEach(() => {
@@ -197,6 +203,7 @@ describe('QueueCard', () => {
         download_id: 'test-123',
         status: 'queued',
         message: '',
+        created_at: '2025-01-01T10:00:00Z',
       }
 
       render(<QueueCard download={minimalDownload} />, { wrapper: createWrapper() })

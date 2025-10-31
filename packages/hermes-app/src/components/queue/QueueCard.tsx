@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/animate-ui/primitives/radix/checkbox'
+import { Checkbox } from '@/components/animate-ui/components/radix/checkbox'
 import {
   Download,
   Trash2,
@@ -121,13 +121,6 @@ export function QueueCard({ download, isSelectable = false, isSelected = false, 
     return 'Unknown'
   }
 
-  // Helper function to safely extract progress values
-  const getProgressValue = (progressObj: { [key: string]: unknown } | null | undefined, key: string): number | undefined => {
-    if (!progressObj || typeof progressObj !== 'object') return undefined
-    const value = progressObj[key]
-    return typeof value === 'number' ? value : undefined
-  }
-
   return (
     <Blur
       initialBlur={isDismissing ? 0 : 10}
@@ -139,7 +132,8 @@ export function QueueCard({ download, isSelectable = false, isSelected = false, 
           <Checkbox
             checked={isSelected}
             onCheckedChange={() => onToggleSelect?.(download.download_id)}
-            className="mr-2"
+            variant="default"
+            size="default"
           />
         </div>
       )}
@@ -194,12 +188,12 @@ export function QueueCard({ download, isSelectable = false, isSelected = false, 
           />
         ) : (
           <DownloadProgress
-            progress={getProgressValue(download.progress as { [key: string]: unknown } | null | undefined, 'percentage')}
+            progress={download.progress?.percentage ?? undefined}
             status={download.status}
-            downloadedBytes={getProgressValue(download.progress as { [key: string]: unknown } | null | undefined, 'downloaded_bytes')}
-            totalBytes={getProgressValue(download.progress as { [key: string]: unknown } | null | undefined, 'total_bytes')}
-            speed={getProgressValue(download.progress as { [key: string]: unknown } | null | undefined, 'speed')}
-            estimatedTimeRemaining={getProgressValue(download.progress as { [key: string]: unknown } | null | undefined, 'eta')}
+            downloadedBytes={download.progress?.downloaded_bytes ?? undefined}
+            totalBytes={download.progress?.total_bytes ?? undefined}
+            speed={download.progress?.speed ?? undefined}
+            estimatedTimeRemaining={download.progress?.eta ?? undefined}
             showDetails={true}
           />
         )}

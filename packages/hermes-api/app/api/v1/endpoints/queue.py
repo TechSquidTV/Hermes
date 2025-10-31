@@ -142,6 +142,7 @@ async def get_download_queue(
                         else {"url": download.url}
                     ),
                     "completed_at": download.completed_at,
+                    "created_at": download.created_at,
                 }
             )
 

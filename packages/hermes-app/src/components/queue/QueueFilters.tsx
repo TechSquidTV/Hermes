@@ -62,13 +62,24 @@ export function QueueFilters({
     { value: 'status', label: 'Status' },
   ]
 
-  const sortOrderOptions = [
-    { value: 'desc', label: 'Newest First' },
-    { value: 'asc', label: 'Oldest First' },
-  ]
+  // Get contextually appropriate sort order labels based on sort type
+  const getSortOrderLabel = (sortType: string, order: 'asc' | 'desc'): string => {
+    switch (sortType) {
+      case 'date':
+        return order === 'desc' ? 'Newest First' : 'Oldest First'
+      case 'size':
+        return order === 'desc' ? 'Largest First' : 'Smallest First'
+      case 'title':
+        return order === 'asc' ? 'A-Z' : 'Z-A'
+      case 'status':
+        return order === 'asc' ? 'A-Z' : 'Z-A'
+      default:
+        return order === 'desc' ? 'Descending' : 'Ascending'
+    }
+  }
 
   const currentSortLabel = sortOptions.find(opt => opt.value === sortBy)?.label || 'Date'
-  const currentOrderLabel = sortOrderOptions.find(opt => opt.value === sortOrder)?.label || 'Newest First'
+  const currentOrderLabel = getSortOrderLabel(sortBy, sortOrder)
 
   return (
     <div className="flex flex-col gap-4">
@@ -99,13 +110,13 @@ export function QueueFilters({
                     onClick={() => onSortChange(option.value, 'desc')}
                     className={sortBy === option.value && sortOrder === 'desc' ? 'bg-accent' : ''}
                   >
-                    {option.label} (Newest First)
+                    {option.label} ({getSortOrderLabel(option.value, 'desc')})
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={() => onSortChange(option.value, 'asc')}
                     className={sortBy === option.value && sortOrder === 'asc' ? 'bg-accent' : ''}
                   >
-                    {option.label} (Oldest First)
+                    {option.label} ({getSortOrderLabel(option.value, 'asc')})
                   </DropdownMenuItem>
                 </div>
               ))}
