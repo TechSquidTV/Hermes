@@ -4,12 +4,12 @@ This document describes the release process for Hermes, including semantic versi
 
 ## 📦 Package Versioning
 
-Hermes is a monorepo containing two independently versioned packages:
+Hermes uses **unified versioning** - both packages share the same version number and are released together:
 
 - **hermes-app**: The React/TypeScript frontend application
 - **hermes-api**: The FastAPI/Python backend service
 
-Each package follows [Semantic Versioning 2.0.0](https://semver.org/) independently, allowing you to release frontend and backend changes separately.
+Both packages follow [Semantic Versioning 2.0.0](https://semver.org/) and are always kept in sync. The version is managed in the root `package.json` and automatically synchronized across all package files.
 
 ## 🔢 Semantic Versioning
 
@@ -45,99 +45,80 @@ We use semantic versioning (MAJOR.MINOR.PATCH) for all releases:
 
 ## 🏷️ Creating a Release
 
-### Option 1: Interactive Release Script (Recommended)
+Releases are created using the GitHub Actions workflow, which ensures consistency and runs in a clean CI environment.
 
-Use the interactive release script for a guided experience:
+### Using GitHub UI
 
-```bash
-# From the project root
-pnpm release
-# or
-./scripts/release.sh
-```
+1. Go to the [Actions tab](../../actions)
+2. Select the **Release** workflow in the left sidebar
+3. Click **Run workflow** button (top right)
+4. Choose your release type:
+   - **bump_type**: Select `patch`, `minor`, or `major` (follows semver)
+   - **version**: Or enter a specific version like `1.2.3` (overrides bump_type)
+5. Click **Run workflow**
 
-**The script will:**
-- ✅ Show current version numbers
-- ✅ Prompt for new versions (enter to keep unchanged)
-- ✅ Run comprehensive pre-checks automatically
-- ✅ Create commits and tags only if checks pass
-- ✅ Use conventional commit messages
-- ✅ Handle both packages separately
-
-**Skip to [Verify Release](#-verifying-releases) after running the script.**
-
-### Option 2: Manual Release Process
-
-#### Step 1: Prepare the Release
-
-Before creating a release, ensure:
-
-1. **All tests and checks pass**
-   ```bash
-   # Use the automated pre-check (recommended)
-   pnpm pre-check:full
-
-   # Or run individual checks
-   pnpm pre-check:app    # Frontend checks
-   pnpm pre-check:api    # Backend checks
-   ```
-
-2. **Working directory is clean**
-   ```bash
-   git status  # Ensure no uncommitted changes
-   ```
-
-3. **Changelog is updated** (if you maintain one)
-   - Document new features, bug fixes, and breaking changes
-
-### Step 2: Choose the Version Number
-
-Determine the appropriate version number based on the changes:
-
-- Breaking changes? → Bump MAJOR version
-- New features? → Bump MINOR version  
-- Bug fixes only? → Bump PATCH version
-
-#### Step 3: Update Version Numbers
-
-For the manual process, update version numbers in:
-
-- **Frontend**: `packages/hermes-app/package.json` (version field)
-- **Backend**: `packages/hermes-api/pyproject.toml` (version field)
-
-#### Step 4: Create and Push Tags
-
-**Using the interactive script (recommended):**
-The script handles commit messages, tagging, and pushing automatically.
-
-**Manual tagging:**
+### Using GitHub CLI
 
 ```bash
-# For hermes-app (Frontend)
-git tag hermes-app-v1.0.0
-git push origin hermes-app-v1.0.0
+# Bump patch version (0.1.1 → 0.1.2)
+gh workflow run release.yml -f bump_type=patch
 
-# For hermes-api (Backend)
-git tag hermes-api-v1.0.0
-git push origin hermes-api-v1.0.0
+# Bump minor version (0.1.1 → 0.2.0)
+gh workflow run release.yml -f bump_type=minor
 
-# For both packages together
-git tag hermes-app-v1.0.0 hermes-api-v1.0.0
-git push origin hermes-app-v1.0.0 hermes-api-v1.0.0
+# Bump major version (0.1.1 → 1.0.0)
+gh workflow run release.yml -f bump_type=major
+
+# Set specific version
+gh workflow run release.yml -f version=1.2.3
 ```
 
-## 🤖 What Happens Next?
+### What the Workflow Does
 
-When you push a release tag, GitHub Actions automatically:
+The release workflow automatically handles everything in one go:
 
-1. **Detects the tag** matching the pattern `hermes-app-v*` or `hermes-api-v*`
-2. **Extracts the version** (e.g., `hermes-app-v1.0.0` → `1.0.0`)
-3. **Builds the Docker image** using the appropriate Dockerfile
-4. **Publishes to GitHub Container Registry** with multiple tags:
-   - Semantic version: `1.0.0`
-   - Minor version: `1.0`
-   - Major version: `1`
-   - Latest: `latest`
+1. ✅ Reads current version from root `package.json` (source of truth)
+2. ✅ Calculates new version based on bump type (or uses specified version)
+3. ✅ Updates all package files:
+   - `package.json` (root)
+   - `packages/hermes-app/package.json`
+   - `packages/hermes-api/pyproject.toml`
+4. ✅ Runs comprehensive pre-checks:
+   - Linting (frontend & backend)
+   - Type checking
+   - Tests (all packages)
+   - Build verification
+5. ✅ Commits version bump with conventional commit message: `chore(release): bump version to X.X.X`
+6. ✅ Creates three tags:
+   - `hermes-app-vX.X.X`
+   - `hermes-api-vX.X.X`
+   - `vX.X.X` (general project version)
+7. ✅ Pushes commit and tags to main
+8. ✅ Builds and pushes Docker images to GitHub Container Registry:
+   - `ghcr.io/[org]/hermes-app:X.X.X`, `X.X`, `X`, `latest`
+   - `ghcr.io/[org]/hermes-api:X.X.X`, `X.X`, `X`, `latest`
+
+**If pre-checks fail, nothing is committed, tagged, or published - your main branch stays clean.**
+
+**Why one workflow?** This approach is more secure for organization repositories - no need for Personal Access Tokens with broad permissions. Everything runs with the built-in `GITHUB_TOKEN`.
+
+## 📦 What Gets Published
+
+When the release workflow completes successfully, the following are available:
+
+1. **Git Tags** on the main branch:
+   - `hermes-app-vX.X.X`
+   - `hermes-api-vX.X.X`
+   - `vX.X.X`
+
+2. **Docker Images** in GitHub Container Registry:
+   - **hermes-app**: `ghcr.io/[org]/hermes-app:X.X.X`, `X.X`, `X`, `latest`
+   - **hermes-api**: `ghcr.io/[org]/hermes-api:X.X.X`, `X.X`, `X`, `latest`
+
+3. **Updated Version Files** in the repository:
+   - `package.json` (root)
+   - `packages/hermes-app/package.json`
+   - `packages/hermes-api/pyproject.toml`
 
 ### 📊 Version Status Integration
 
@@ -170,17 +151,6 @@ The version status feature automatically detects updates by:
 - **Filtering by tag patterns** (`hermes-app-v*`, `hermes-api-v*`)
 - **Semantic version comparison** (MAJOR.MINOR.PATCH)
 - **Real-time updates** without requiring application restart
-
-### Example Output
-
-After pushing `hermes-app-v1.2.3`, the following images are published:
-
-```
-ghcr.io/<your-org>/hermes-app:1.2.3
-ghcr.io/<your-org>/hermes-app:1.2
-ghcr.io/<your-org>/hermes-app:1
-ghcr.io/<your-org>/hermes-app:latest
-```
 
 ## 📥 Using Released Images
 
@@ -306,22 +276,24 @@ These will build and publish Docker images but won't update the `latest` tag.
 
 ## 📋 Release Checklist
 
-### Using the Interactive Script (Recommended)
-The script handles most of these automatically:
+Before triggering a release:
 
-- [ ] Run `pnpm pre-check:full` to verify all checks pass
-- [ ] Run `pnpm release` for guided release process
-- [ ] Script handles version updates, commits, and tags automatically
+- [ ] Ensure all feature PRs are merged to `main`
+- [ ] Verify tests pass locally: `pnpm test:all` (optional but recommended)
+- [ ] Optional: Run `pnpm pre-check:full` locally to catch issues early
+- [ ] Update changelog (if maintained)
+- [ ] Document breaking changes (if any)
 
-### Manual Process Checklist
+To release:
 
-- [ ] All tests and checks pass (`pnpm pre-check:full`)
-- [ ] Working directory is clean (`git status`)
-- [ ] Version numbers updated in package files
-- [ ] Code committed with conventional commit messages
-- [ ] Tags created and pushed (`hermes-app-v*`, `hermes-api-v*`)
-- [ ] Changelog updated (if maintained)
-- [ ] Breaking changes documented
+- [ ] Trigger release workflow via GitHub UI or CLI (choose patch/minor/major)
+- [ ] Monitor workflow run in Actions tab
+- [ ] Verify workflow completes all steps:
+  - Version bump and commit
+  - Tag creation
+  - Docker image builds (both app and api)
+- [ ] Verify Docker images are published in [GitHub Packages](https://github.com/TechSquidTV?tab=packages)
+- [ ] Test pulling and running the new images (optional)
 
 ### Version Status Integration
 
@@ -334,19 +306,43 @@ The version status feature will automatically:
 
 ## 🆘 Troubleshooting
 
-### GitHub Actions Workflow Fails
+### Pre-checks Fail
 
-1. Check the Actions tab for error details
-2. Common issues:
-   - Docker build fails: Check Dockerfile syntax
-   - Tests fail: Ensure tests pass locally first
-   - Permission denied: Check repository secrets and permissions
+**Symptom**: The workflow fails at the "Run pre-checks" step.
 
-### Docker Image Not Published
+**Cause**: Tests, linting, type-checking, or build failed.
 
-1. Verify the tag format matches `hermes-app-v*` or `hermes-api-v*`
-2. Check GitHub Actions workflow logs
-3. Ensure `packages: write` permission is granted
+**Solution**:
+1. Run `pnpm pre-check:full` locally to identify the issue
+2. Fix the failing checks
+3. Commit and push fixes
+4. Re-run the release workflow
+
+### Docker Build Fails
+
+**Symptom**: The workflow fails during "Build and push Docker image" steps.
+
+**Cause**: Dockerfile syntax error, missing dependencies, or build context issues.
+
+**Solution**:
+1. Check the workflow logs for specific error messages
+2. Test Docker builds locally:
+   ```bash
+   docker build -f packages/hermes-app/Dockerfile .
+   docker build -f packages/hermes-api/Dockerfile packages/hermes-api
+   ```
+3. Fix any issues and re-run the release workflow
+
+### Permission Denied When Pushing Images
+
+**Symptom**: The workflow fails with permission denied error when pushing to ghcr.io.
+
+**Cause**: Repository permissions issue.
+
+**Solution**:
+1. Verify the workflow has `packages: write` permission (should be automatic)
+2. Check repository settings → Actions → General → Workflow permissions
+3. Ensure "Read and write permissions" is enabled
 
 ### Can't Pull Docker Image
 
