@@ -1,6 +1,6 @@
 # Hermes Real-Time Updates Documentation
 
-This directory contains comprehensive documentation for migrating Hermes from polling-based updates to Server-Sent Events (SSE) for real-time functionality.
+This directory contains comprehensive documentation about the Server-Sent Events (SSE) implementation in Hermes and the completed migration from polling-based updates.
 
 ---
 
