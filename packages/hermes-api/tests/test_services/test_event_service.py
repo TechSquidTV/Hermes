@@ -45,7 +45,6 @@ class TestEventServiceConnectionManagement:
         from app.services.event_service import event_service
 
         initial_count = event_service.active_connections
-        mock_pubsub, mock_redis = mock_redis_pubsub
 
         # Mock subscribe_to_channels to yield nothing and then stop
         async def mock_subscribe(channels):
