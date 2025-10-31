@@ -6,12 +6,3 @@ contact_links:
   - name: 📖 Documentation
     url: https://github.com/techsquidtv/hermes/tree/main/docs
     about: Check our documentation first - many questions are already answered
-  - name: 🐛 Bug Reports
-    url: https://github.com/techsquidtv/hermes/issues/new?template=bug_report.yml
-    about: Report bugs and unexpected behavior
-  - name: ✨ Feature Requests
-    url: https://github.com/techsquidtv/hermes/issues/new?template=feature_request.yml
-    about: Suggest new features and enhancements
-  - name: 📚 Documentation Issues
-    url: https://github.com/techsquidtv/hermes/issues/new?template=documentation.yml
-    about: Report documentation problems or suggest improvements
