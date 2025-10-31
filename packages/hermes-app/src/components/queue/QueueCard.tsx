@@ -13,6 +13,7 @@ import { toast } from 'sonner'
 import { useDownloadFile } from '@/hooks/useDownloadActions'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { DownloadProgress } from '@/components/ui/download-progress'
+import { DownloadProgressTracker } from '@/components/download/DownloadProgressTracker'
 import { formatFileSize } from '@/lib/utils'
 import { useConfirmation } from '@/hooks/useConfirmation'
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
@@ -182,15 +183,26 @@ export function QueueCard({ download, isSelectable = false, isSelected = false, 
           })()}
         </div>
 
-        <DownloadProgress
-          progress={getProgressValue(download.progress as { [key: string]: unknown } | null | undefined, 'percentage')}
-          status={download.status}
-          downloadedBytes={getProgressValue(download.progress as { [key: string]: unknown } | null | undefined, 'downloaded_bytes')}
-          totalBytes={getProgressValue(download.progress as { [key: string]: unknown } | null | undefined, 'total_bytes')}
-          speed={getProgressValue(download.progress as { [key: string]: unknown } | null | undefined, 'speed')}
-          estimatedTimeRemaining={getProgressValue(download.progress as { [key: string]: unknown } | null | undefined, 'eta')}
-          showDetails={true}
-        />
+        {/* Use real-time SSE progress for active downloads, static display for completed/failed */}
+        {(download.status === 'downloading' || download.status === 'processing' || download.status === 'queued') ? (
+          <DownloadProgressTracker
+            downloadId={download.download_id}
+            isActive={true}
+            showConnectionStatus={false}
+            size="default"
+            showDetails={true}
+          />
+        ) : (
+          <DownloadProgress
+            progress={getProgressValue(download.progress as { [key: string]: unknown } | null | undefined, 'percentage')}
+            status={download.status}
+            downloadedBytes={getProgressValue(download.progress as { [key: string]: unknown } | null | undefined, 'downloaded_bytes')}
+            totalBytes={getProgressValue(download.progress as { [key: string]: unknown } | null | undefined, 'total_bytes')}
+            speed={getProgressValue(download.progress as { [key: string]: unknown } | null | undefined, 'speed')}
+            estimatedTimeRemaining={getProgressValue(download.progress as { [key: string]: unknown } | null | undefined, 'eta')}
+            showDetails={true}
+          />
+        )}
 
         {download.error && (
           <p className="text-xs text-destructive wrap-break-word">

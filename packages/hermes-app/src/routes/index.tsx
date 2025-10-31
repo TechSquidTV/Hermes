@@ -2,10 +2,9 @@ import { createFileRoute } from '@tanstack/react-router'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Progress } from '@/components/ui/progress'
 import { Keyboard, X, Download, AlertCircle } from 'lucide-react'
 import { useDownloadProgressSSE } from '@/hooks/useDownloadProgressSSE'
-import { useMonotonicProgress } from '@/hooks/useMonotonicProgress'
+import { DownloadProgressTracker } from '@/components/download/DownloadProgressTracker'
 import { ConnectionStatus } from '@/components/ui/ConnectionStatus'
 import { UrlInput } from '@/components/forms/UrlInput'
 import { KeyboardShortcutsHelp } from '@/components/ui/keyboard-shortcuts-help'
@@ -30,23 +29,6 @@ interface TrackedTaskProps {
 function TrackedTask({ downloadId, onRemove, isDismissing }: TrackedTaskProps) {
   // Use SSE for real-time updates instead of polling
   const { data: downloadStatus, isConnected, isReconnecting, reconnectAttempts } = useDownloadProgressSSE(downloadId)
-
-  // Calculate progress percentage from SSE data
-  const rawProgress = downloadStatus?.progress?.percentage ?? null
-  const status = downloadStatus?.status
-
-  // Track maximum progress to prevent jittery backwards movement
-  const maxProgress = useMonotonicProgress(rawProgress, status)
-
-  // Use maxProgress for display, ensuring it never goes backwards
-  // Only apply monotonic progress for downloading/processing states
-  // Don't use maxProgress for completed/failed states to avoid showing stale progress
-  const progressPercentage =
-    status === 'completed' ? 100
-    : status === 'failed' ? null
-    : status === 'queued' ? 0
-    : maxProgress > 0 ? maxProgress
-    : null
 
   const downloadFile = useDownloadFile()
 
@@ -162,24 +144,16 @@ function TrackedTask({ downloadId, onRemove, isDismissing }: TrackedTaskProps) {
           </p>
         </div>
 
-        {/* Progress Bar for Active Downloads */}
-        {isActive && progressPercentage !== null && progressPercentage !== undefined && (
-          <div className="space-y-1 mt-2">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{Math.round(progressPercentage)}%</span>
-              {task.progress?.speed && (
-                <span>{(task.progress.speed / 1024 / 1024).toFixed(2)} MB/s</span>
-              )}
-            </div>
-            <Progress value={progressPercentage} className="h-2" />
-          </div>
-        )}
-
-        {/* Status Info for Non-Active or No Progress */}
-        {(isActive && (progressPercentage === null || progressPercentage === undefined)) && (
-          <div className="text-xs text-muted-foreground mt-1">
-            <span>Processing...</span>
-          </div>
+        {/* Real-time Progress Display using shared component */}
+        {isActive && (
+          <DownloadProgressTracker
+            downloadId={downloadId}
+            isActive={true}
+            showConnectionStatus={false}
+            size="default"
+            showDetails={true}
+            className="mt-2"
+          />
         )}
 
         {isCompleted && hasDownloadResult(task.result) && task.result.file_size && (
