@@ -120,11 +120,12 @@ export function useFilteredDownloads<T extends DownloadStatus>(
       let aValue: string | number, bValue: string | number
 
       switch (filters.sortBy) {
-        case 'date':
-          // Use download_id as a fallback since there's no created_at
-          aValue = a.download_id
-          bValue = b.download_id
+        case 'date': {
+          // Use created_at timestamp for proper chronological sorting
+          aValue = new Date(a.created_at).getTime()
+          bValue = new Date(b.created_at).getTime()
           break
+        }
         case 'size': {
           const aResult = isDownloadResult(a.result) ? a.result : undefined
           const bResult = isDownloadResult(b.result) ? b.result : undefined

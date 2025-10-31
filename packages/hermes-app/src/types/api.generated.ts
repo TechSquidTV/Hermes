@@ -795,6 +795,295 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/events/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Event Stream
+         * @description SSE endpoint for real-time updates.
+         *
+         *     Streams events from Redis pub/sub channels to connected clients.
+         *     Automatically reconnects on disconnect with Last-Event-ID support.
+         *
+         *     **Authentication:**
+         *     Requires ephemeral SSE token from POST /api/v1/events/token.
+         *     Pass token as query param: `/api/v1/events/stream?token=SSE_TOKEN`
+         *
+         *     **Security:**
+         *     - SSE token is ephemeral (5-60 minutes TTL)
+         *     - Scoped to specific resources
+         *     - Read-only permissions
+         *     - Automatically expires
+         *
+         *     **Channels:**
+         *     - `download:updates` - Download progress updates
+         *     - `queue:updates` - Queue status changes
+         *     - `system:notifications` - System-wide notifications
+         *
+         *     **Example:**
+         *     ```javascript
+         *     // Step 1: Get SSE token (secure - uses main JWT in header)
+         *     const { token } = await fetch('/api/v1/events/token', {
+         *       method: 'POST',
+         *       headers: { 'Authorization': `Bearer ${mainJWT}` },
+         *       body: JSON.stringify({ scope: 'queue', ttl: 600 })
+         *     }).then(r => r.json());
+         *
+         *     // Step 2: Connect with SSE token
+         *     const eventSource = new EventSource(
+         *       `/api/v1/events/stream?token=${token}&channels=download:updates,queue:updates`
+         *     );
+         *
+         *     eventSource.addEventListener('download_progress', (event) => {
+         *       const data = JSON.parse(event.data);
+         *       console.log('Download progress:', data);
+         *     });
+         *     ```
+         */
+        get: operations["event_stream_api_v1_events_stream_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events/downloads/{download_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Events
+         * @description SSE endpoint for a specific download's events.
+         *
+         *     Streams only events related to the specified download ID.
+         *
+         *     **Authentication:**
+         *     Requires ephemeral SSE token scoped to this download.
+         *     Get token from POST /api/v1/events/token with scope `download:{download_id}`
+         *
+         *     **Example:**
+         *     ```javascript
+         *     // Step 1: Get SSE token for this specific download
+         *     const { token } = await fetch('/api/v1/events/token', {
+         *       method: 'POST',
+         *       headers: { 'Authorization': `Bearer ${mainJWT}` },
+         *       body: JSON.stringify({
+         *         scope: `download:${downloadId}`,
+         *         ttl: 600  // 10 minutes
+         *       })
+         *     }).then(r => r.json());
+         *
+         *     // Step 2: Connect to SSE with scoped token
+         *     const eventSource = new EventSource(
+         *       `/api/v1/events/downloads/${downloadId}?token=${token}`
+         *     );
+         *
+         *     eventSource.addEventListener('download_progress', (event) => {
+         *       const data = JSON.parse(event.data);
+         *       updateProgressBar(data.progress);
+         *     });
+         *     ```
+         */
+        get: operations["download_events_api_v1_events_downloads__download_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Queue Events
+         * @description SSE endpoint for queue updates.
+         *
+         *     Streams queue-related events (additions, removals, status changes).
+         *
+         *     **Authentication:**
+         *     Requires ephemeral SSE token scoped to 'queue'.
+         *     Get token from POST /api/v1/events/token with scope `queue`
+         *
+         *     **Example:**
+         *     ```javascript
+         *     // Step 1: Get SSE token for queue updates
+         *     const { token } = await fetch('/api/v1/events/token', {
+         *       method: 'POST',
+         *       headers: { 'Authorization': `Bearer ${mainJWT}` },
+         *       body: JSON.stringify({
+         *         scope: 'queue',
+         *         ttl: 600  // 10 minutes
+         *       })
+         *     }).then(r => r.json());
+         *
+         *     // Step 2: Connect to SSE with queue token
+         *     const eventSource = new EventSource(`/api/v1/events/queue?token=${token}`);
+         *
+         *     eventSource.addEventListener('queue_update', (event) => {
+         *       const data = JSON.parse(event.data);
+         *       refreshQueue();
+         *     });
+         *     ```
+         */
+        get: operations["queue_events_api_v1_events_queue_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stats Events
+         * @description SSE endpoint for statistics updates.
+         *
+         *     Streams real-time statistics updates including API stats, download metrics, and analytics data.
+         *
+         *     **Authentication:**
+         *     Requires ephemeral SSE token scoped to 'stats'.
+         *     Get token from POST /api/v1/events/token with scope `stats`
+         *
+         *     **Example:**
+         *     ```javascript
+         *     // Step 1: Get SSE token for stats updates
+         *     const { token } = await fetch('/api/v1/events/token', {
+         *       method: 'POST',
+         *       headers: { 'Authorization': `Bearer ${mainJWT}` },
+         *       body: JSON.stringify({
+         *         scope: 'stats',
+         *         ttl: 600  // 10 minutes
+         *       })
+         *     }).then(r => r.json());
+         *
+         *     // Step 2: Connect to SSE with stats token
+         *     const eventSource = new EventSource(`/api/v1/events/stats?token=${token}`);
+         *
+         *     eventSource.addEventListener('stats_update', (event) => {
+         *       const data = JSON.parse(event.data);
+         *       updateStats(data);
+         *     });
+         *     ```
+         */
+        get: operations["stats_events_api_v1_events_stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Sse Token
+         * @description Create ephemeral SSE token for secure, scoped SSE connections.
+         *
+         *     This endpoint solves the security issue of passing JWT tokens in query parameters
+         *     by generating short-lived, scoped, read-only tokens specifically for SSE connections.
+         *
+         *     **Authentication:**
+         *     Requires main JWT token in Authorization header (secure).
+         *
+         *     **Token Properties:**
+         *     - **Scoped**: Limited to specific resource (e.g., `download:abc-123`, `queue`)
+         *     - **Short-lived**: TTL 60s - 3600s (default 5 minutes)
+         *     - **Read-only**: Cannot trigger downloads or modify data
+         *     - **Revocable**: Automatically expires via Redis TTL
+         *
+         *     **Usage:**
+         *     1. Call this endpoint with main JWT to get SSE token
+         *     2. Use SSE token to connect to SSE endpoints
+         *     3. Token authenticates the connection, updates flow continuously
+         *     4. Token auto-expires or is revoked when task completes
+         *
+         *     **Example:**
+         *     ```javascript
+         *     // Step 1: Get SSE token (uses main JWT in header - secure!)
+         *     const response = await fetch('/api/v1/events/token', {
+         *       method: 'POST',
+         *       headers: {
+         *         'Authorization': `Bearer ${mainJWT}`,
+         *         'Content-Type': 'application/json'
+         *       },
+         *       body: JSON.stringify({
+         *         scope: 'download:abc-123',
+         *         ttl: 600  // 10 minutes
+         *       })
+         *     });
+         *     const { token } = await response.json();
+         *
+         *     // Step 2: Connect to SSE with ephemeral token (in query - acceptable)
+         *     const eventSource = new EventSource(
+         *       `/api/v1/events/downloads/abc-123?token=${token}`
+         *     );
+         *     ```
+         *
+         *     **Scopes:**
+         *     - `download:<download_id>` - Single download progress
+         *     - `queue` - Queue updates
+         *     - `system` - System notifications
+         */
+        post: operations["create_sse_token_api_v1_events_token_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sse Health
+         * @description Health check endpoint for SSE service.
+         *
+         *     Returns current SSE connection metrics including active connections,
+         *     maximum allowed connections, and heartbeat interval.
+         */
+        get: operations["sse_health_api_v1_events_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -1311,6 +1600,26 @@ export interface components {
             rate_limit_per_minute?: number | null;
         };
         /**
+         * CreateSSETokenRequest
+         * @description Request to create a new SSE token.
+         */
+        CreateSSETokenRequest: {
+            /**
+             * Scope
+             * @description Token scope (e.g., 'download:abc-123', 'queue', 'system')
+             * @example download:abc-123
+             * @example queue
+             * @example system
+             */
+            scope: string;
+            /**
+             * Ttl
+             * @description Token TTL in seconds (min 60s, max 3600s/1 hour)
+             * @default 300
+             */
+            ttl: number;
+        };
+        /**
          * DailyStats
          * @description Daily statistics.
          */
@@ -1684,6 +1993,12 @@ export interface components {
             error?: string | null;
             /** @description Final video information when completed */
             result?: components["schemas"]["DownloadResult"] | null;
+            /**
+             * Created At
+             * Format: date-time
+             * @description Timestamp when download was created
+             */
+            created_at: string;
         };
         /**
          * DownloadedFile
@@ -2068,6 +2383,44 @@ export interface components {
              * @description Percentage of total downloads
              */
             percentage: number;
+        };
+        /**
+         * SSETokenPermission
+         * @description Permissions for SSE tokens (currently only read).
+         * @enum {string}
+         */
+        SSETokenPermission: "read";
+        /**
+         * SSETokenResponse
+         * @description Response containing created SSE token.
+         */
+        SSETokenResponse: {
+            /**
+             * Token
+             * @description The ephemeral SSE token
+             */
+            token: string;
+            /**
+             * Expires At
+             * Format: date-time
+             * @description Token expiration timestamp
+             */
+            expires_at: string;
+            /**
+             * Scope
+             * @description Token scope
+             */
+            scope: string;
+            /**
+             * Permissions
+             * @description Token permissions
+             */
+            permissions: components["schemas"]["SSETokenPermission"][];
+            /**
+             * Ttl
+             * @description Time to live in seconds
+             */
+            ttl: number;
         };
         /**
          * StorageInfo
@@ -3304,6 +3657,193 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    event_stream_api_v1_events_stream_get: {
+        parameters: {
+            query?: {
+                /** @description Comma-separated list of channels (download:updates,queue:updates,system:notifications) */
+                channels?: string | null;
+                /** @description Filter to specific download ID */
+                download_id?: string | null;
+                /** @description SSE token from query parameter */
+                token?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_events_api_v1_events_downloads__download_id__get: {
+        parameters: {
+            query?: {
+                /** @description SSE token */
+                token?: string | null;
+            };
+            header?: never;
+            path: {
+                download_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    queue_events_api_v1_events_queue_get: {
+        parameters: {
+            query?: {
+                /** @description SSE token */
+                token?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stats_events_api_v1_events_stats_get: {
+        parameters: {
+            query?: {
+                /** @description SSE token */
+                token?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_sse_token_api_v1_events_token_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSSETokenRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSETokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sse_health_api_v1_events_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
