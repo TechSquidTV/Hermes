@@ -122,11 +122,8 @@ export function useFilteredDownloads<T extends DownloadStatus>(
       switch (filters.sortBy) {
         case 'date': {
           // Use created_at timestamp for proper chronological sorting
-          // Type assertion needed as created_at may not be in DownloadStatus yet
-          const aCreatedAt = 'created_at' in a ? (a as DownloadStatus & { created_at?: string }).created_at : undefined
-          const bCreatedAt = 'created_at' in b ? (b as DownloadStatus & { created_at?: string }).created_at : undefined
-          aValue = aCreatedAt ? new Date(aCreatedAt).getTime() : 0
-          bValue = bCreatedAt ? new Date(bCreatedAt).getTime() : 0
+          aValue = new Date(a.created_at).getTime()
+          bValue = new Date(b.created_at).getTime()
           break
         }
         case 'size': {
