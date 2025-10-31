@@ -5,27 +5,6 @@ labels: ["documentation", "needs-triage"]
 assignees: []
 body:
   - type: dropdown
-    id: doc_type
-    attributes:
-      label: 📖 Which documentation?
-      description: Where is the documentation issue?
-      options:
-        - README.md (main readme)
-        - docs/CONFIGURATION.md
-        - docs/DEPLOYMENT.md
-        - docs/CONTRIBUTING.md
-        - docs/REVERSE_PROXY_GUIDE.md
-        - docs/RELEASE_PROCESS.md
-        - packages/hermes-api/README.md
-        - packages/hermes-app/README.md
-        - packages/hermes-app/SDK_GUIDE.md
-        - API documentation (Swagger/OpenAPI)
-        - Code comments
-        - Other
-    validations:
-      required: true
-
-  - type: dropdown
     id: issue_type
     attributes:
       label: 🔍 What's wrong?
@@ -53,9 +32,6 @@ body:
 
         **The fix:**
         [What should it say instead?]
-
-        **Location:**
-        [Which file and section? e.g., "README.md setup section" or "API docs for /download endpoint"]
     validations:
       required: true
 
