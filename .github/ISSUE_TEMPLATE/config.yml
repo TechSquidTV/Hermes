@@ -15,12 +15,3 @@ contact_links:
   - name: 📚 Documentation Issues
     url: https://github.com/techsquidtv/hermes/issues/new?template=documentation.yml
     about: Report documentation problems or suggest improvements
-  - name: 🔧 API Issues (hermes-api)
-    url: https://github.com/techsquidtv/hermes/issues/new?template=hermes-api-issue.yml
-    about: Issues specific to the backend API and server-side functionality
-  - name: 🎨 Frontend Issues (hermes-app)
-    url: https://github.com/techsquidtv/hermes/issues/new?template=hermes-app-issue.yml
-    about: Issues specific to the React frontend and UI/UX
-  - name: 🐳 DevOps/Deployment Issues
-    url: https://github.com/techsquidtv/hermes/issues/new?template=devops-issue.yml
-    about: Issues related to Docker, deployment, and infrastructure
