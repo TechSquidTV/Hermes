@@ -540,6 +540,23 @@ async def _download_video_task(
                 {"url": url, "file_path": result_path, "file_size": file_size},
             )
 
+            # Emit stats update event via SSE
+            try:
+                await redis_progress_service.publish_stats_update(
+                    {
+                        "event": "download_completed",
+                        "download_id": download_id,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
+            except Exception as e:
+                # Don't fail the download if stats event publish fails
+                logger.error(
+                    "Failed to publish stats update event",
+                    download_id=download_id,
+                    error=str(e),
+                )
+
             # Clean up Redis progress data (download complete)
             await redis_progress_service.delete_progress(download_id)
 

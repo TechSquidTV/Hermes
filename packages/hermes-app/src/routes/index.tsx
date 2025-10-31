@@ -27,7 +27,7 @@ interface TrackedTaskProps {
 }
 
 function TrackedTask({ downloadId, onRemove, isDismissing }: TrackedTaskProps) {
-  // Use SSE for real-time updates instead of polling
+  
   const { data: downloadStatus, isConnected, isReconnecting, reconnectAttempts } = useDownloadProgressSSE(downloadId)
 
   const downloadFile = useDownloadFile()
@@ -203,7 +203,6 @@ function DashboardPage() {
   const [trackedTaskIds, setTrackedTaskIds] = useState<string[]>(() => taskTracker.getTasks())
   const [dismissingTasks, setDismissingTasks] = useState<Set<string>>(new Set())
 
-  // Subscribe to task changes using event-driven system (no polling!)
   useEffect(() => {
     const unsubscribe = taskTracker.subscribe((taskIds) => {
       setTrackedTaskIds(taskIds)

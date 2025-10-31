@@ -43,8 +43,6 @@ export function QueueTabContent({
         : undefined;
       return apiClient.getDownloadQueue(status, 20, 0);
     },
-    // No polling - SSE from QueueList invalidates this query
-    refetchInterval: false,
     staleTime: Infinity, // Data stays fresh via SSE invalidation
   })
 

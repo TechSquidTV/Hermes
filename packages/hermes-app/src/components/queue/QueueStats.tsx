@@ -1,10 +1,19 @@
-import { useDownloadStatsPolling } from '@/hooks/useQueuePolling'
+import { useStatsSSE } from '@/hooks/useStatsSSE'
+import { useQuery } from '@tanstack/react-query'
+import { apiClient } from '@/services/api/client'
 import { StatsCard } from '@/components/ui/stats-card'
 import { formatFileSize } from '@/lib/utils'
 import { Download, CheckCircle, TrendingUp, HardDrive } from 'lucide-react'
 
 export function QueueStats() {
-  const { data: stats, isLoading } = useDownloadStatsPolling()
+  // Connect to stats SSE for real-time updates
+  useStatsSSE()
+
+  // Query stats data (will be invalidated by SSE updates)
+  const { data: stats, isLoading } = useQuery({
+    queryKey: ['queue', 'stats'],
+    queryFn: () => apiClient.getApiStats(),
+  })
 
   if (isLoading) {
     return (

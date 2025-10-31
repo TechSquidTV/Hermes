@@ -44,7 +44,7 @@ export function QueueList({
   // SSE for real-time updates (invalidates query cache when updates arrive)
   const { isConnected, isReconnecting, reconnectAttempts } = useQueueUpdatesSSE();
 
-  // Initial data load (no polling - SSE handles updates)
+  // Initial data load
   const { data: queueData, isLoading, error, refetch } = useQuery({
     queryKey: ['queue', statusFilter, viewMode],
     queryFn: () => {
@@ -55,8 +55,6 @@ export function QueueList({
         : undefined;
       return apiClient.getDownloadQueue(status, 20, 0);
     },
-    // No polling - SSE provides real-time updates
-    refetchInterval: false,
     staleTime: Infinity, // Data stays fresh via SSE invalidation
   })
 

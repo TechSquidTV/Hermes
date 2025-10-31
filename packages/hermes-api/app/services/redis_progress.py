@@ -323,6 +323,19 @@ class RedisProgressService:
             },
         )
 
+    async def publish_stats_update(self, stats_data: Dict[str, Any]) -> None:
+        """
+        Publish stats update to Redis pub/sub.
+
+        Args:
+            stats_data: Statistics data to publish
+        """
+        await self.publish_event(
+            channel="stats:updates",
+            event_type="stats_update",
+            data=stats_data,
+        )
+
     # ============================================================
     # SSE TOKEN STORAGE METHODS
     # ============================================================

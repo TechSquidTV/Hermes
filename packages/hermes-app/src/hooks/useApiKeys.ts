@@ -14,7 +14,6 @@ export function useApiKeys() {
     queryFn: async () => {
       return await apiClient.getApiKeys()
     },
-    refetchInterval: 60000, // Refresh every minute
   })
 
   const createKey = useMutation({

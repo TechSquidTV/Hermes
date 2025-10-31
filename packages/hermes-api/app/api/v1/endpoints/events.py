@@ -114,6 +114,13 @@ async def event_stream(
             "SSE stream scoped to queue",
             user_id=token_data.get("user_id"),
         )
+    elif token_scope == "stats":
+        # Stats-scoped token can only access stats updates
+        channel_list = ["stats:updates"]
+        logger.info(
+            "SSE stream scoped to stats",
+            user_id=token_data.get("user_id"),
+        )
     elif token_scope == "system":
         # System-scoped token can access system notifications
         channel_list = ["system:notifications"]
@@ -246,6 +253,59 @@ async def queue_events(
     return EventSourceResponse(event_service.event_stream(channels=["queue:updates"]))
 
 
+@router.get("/stats")
+async def stats_events(
+    token: Optional[str] = Query(None, description="SSE token"),
+):
+    """
+    SSE endpoint for statistics updates.
+
+    Streams real-time statistics updates including API stats, download metrics, and analytics data.
+
+    **Authentication:**
+    Requires ephemeral SSE token scoped to 'stats'.
+    Get token from POST /api/v1/events/token with scope `stats`
+
+    **Example:**
+    ```javascript
+    // Step 1: Get SSE token for stats updates
+    const { token } = await fetch('/api/v1/events/token', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${mainJWT}` },
+      body: JSON.stringify({
+        scope: 'stats',
+        ttl: 600  // 10 minutes
+      })
+    }).then(r => r.json());
+
+    // Step 2: Connect to SSE with stats token
+    const eventSource = new EventSource(`/api/v1/events/stats?token=${token}`);
+
+    eventSource.addEventListener('stats_update', (event) => {
+      const data = JSON.parse(event.data);
+      updateStats(data);
+    });
+    ```
+    """
+    # Validate SSE token with stats scope
+    if not token:
+        logger.warning("SSE connection attempted without token for stats")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="SSE token required",
+        )
+
+    # Validate token and scope
+    token_data = await validate_sse_token(token, "stats")
+
+    logger.info(
+        "Stats SSE connection established",
+        user_id=token_data.get("user_id"),
+    )
+
+    return EventSourceResponse(event_service.event_stream(channels=["stats:updates"]))
+
+
 @router.post("/token", response_model=SSETokenResponse)
 async def create_sse_token(
     request: CreateSSETokenRequest = Body(...),
@@ -317,11 +377,12 @@ async def create_sse_token(
     if not (
         scope == "queue"
         or scope == "system"
+        or scope == "stats"
         or (scope.startswith("download:") and len(scope.split(":", 1)[1]) > 0)
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid scope format. Must be 'download:<id>', 'queue', or 'system'",
+            detail="Invalid scope format. Must be 'download:<id>', 'queue', 'stats', or 'system'",
         )
 
     # For download scopes, verify download exists (security: prevent token creation for invalid IDs)
