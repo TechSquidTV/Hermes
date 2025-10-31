@@ -186,7 +186,10 @@ describe('UrlInput Component', () => {
     it('debounces API calls for rapid typing', async () => {
       const user = userEvent.setup({ delay: null }) // Remove delay for faster test
       vi.mocked(apiClient.apiClient.getVideoInfo).mockResolvedValue({
+        id: 'test-video-id',
         title: 'Test Video',
+        webpage_url: 'https://youtube.com/watch?v=test',
+        extractor: 'youtube',
         formats: [],
       })
 
@@ -363,7 +366,13 @@ describe('UrlInput Component', () => {
 
       // Mock a delayed response
       vi.mocked(apiClient.apiClient.getVideoInfo).mockImplementation(
-        () => new Promise(resolve => setTimeout(() => resolve({ title: 'Test', formats: [] }), 100))
+        () => new Promise(resolve => setTimeout(() => resolve({
+          id: 'test-id',
+          title: 'Test',
+          webpage_url: 'https://example.com',
+          extractor: 'generic',
+          formats: []
+        }), 100))
       )
 
       render(<UrlInput />, { wrapper: createWrapper() })
@@ -382,7 +391,13 @@ describe('UrlInput Component', () => {
       const user = userEvent.setup()
 
       vi.mocked(apiClient.apiClient.getVideoInfo).mockImplementation(
-        () => new Promise(resolve => setTimeout(() => resolve({ title: 'Test', formats: [] }), 100))
+        () => new Promise(resolve => setTimeout(() => resolve({
+          id: 'test-id',
+          title: 'Test',
+          webpage_url: 'https://example.com',
+          extractor: 'generic',
+          formats: []
+        }), 100))
       )
 
       render(<UrlInput />, { wrapper: createWrapper() })

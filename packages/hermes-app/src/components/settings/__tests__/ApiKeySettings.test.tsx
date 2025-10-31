@@ -2,12 +2,13 @@
  * Tests for ApiKeySettings component
  */
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactNode } from 'react'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { ApiKeySettings } from '../ApiKeySettings'
+import { useApiKeys } from '@/hooks/useApiKeys'
 
 // Mock the useApiKeys hook
 vi.mock('@/hooks/useApiKeys', () => ({
@@ -38,7 +39,6 @@ const createWrapper = () => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
-        data: [],
         retry: false,
       },
     },
@@ -48,8 +48,6 @@ const createWrapper = () => {
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   )
 }
-
-const mockUseApiKeys = await import('@/hooks/useApiKeys').then(m => m.useApiKeys)
 
 describe('ApiKeySettings', () => {
   const mockApiKeys = [
@@ -81,23 +79,23 @@ describe('ApiKeySettings', () => {
   })
 
   it('should render API keys list correctly', () => {
-    mockUseApiKeys.mockReturnValue({
+    vi.mocked(useApiKeys).mockReturnValue({
       keys: {
         data: mockApiKeys,
         isLoading: false,
         isSuccess: true,
         isError: false,
-      },
+      } as any,
       createKey: {
         mutateAsync: vi.fn(),
         isPending: false,
-      },
+      } as any,
       revokeKey: {
         mutateAsync: vi.fn(),
         isPending: false,
-      },
+      } as any,
       isLoading: false,
-    })
+    } as any)
 
     render(<ApiKeySettings />, { wrapper: createWrapper() })
 
@@ -113,21 +111,21 @@ describe('ApiKeySettings', () => {
   })
 
   it('should show loading state when fetching API keys', () => {
-    mockUseApiKeys.mockReturnValue({
+    vi.mocked(useApiKeys).mockReturnValue({
       keys: {
         data: undefined,
         isLoading: true,
         isSuccess: false,
         isError: false,
-      },
+      } as any,
       createKey: {
         mutateAsync: vi.fn(),
         isPending: false,
-      },
+      } as any,
       revokeKey: {
         mutateAsync: vi.fn(),
         isPending: false,
-      },
+      } as any,
       isLoading: true,
     })
 
@@ -137,23 +135,23 @@ describe('ApiKeySettings', () => {
   })
 
   it('should show empty state when no API keys', () => {
-    mockUseApiKeys.mockReturnValue({
+    vi.mocked(useApiKeys).mockReturnValue({
       keys: {
         data: [],
         isLoading: false,
         isSuccess: true,
         isError: false,
-      },
+      } as any,
       createKey: {
         mutateAsync: vi.fn(),
         isPending: false,
-      },
+      } as any,
       revokeKey: {
         mutateAsync: vi.fn(),
         isPending: false,
-      },
+      } as any,
       isLoading: false,
-    })
+    } as any)
 
     render(<ApiKeySettings />, { wrapper: createWrapper() })
 
@@ -164,23 +162,23 @@ describe('ApiKeySettings', () => {
   it('should show create form when Generate New Key is clicked', async () => {
     const user = userEvent.setup()
 
-    mockUseApiKeys.mockReturnValue({
+    vi.mocked(useApiKeys).mockReturnValue({
       keys: {
         data: [],
         isLoading: false,
         isSuccess: true,
         isError: false,
-      },
+      } as any,
       createKey: {
         mutateAsync: vi.fn(),
         isPending: false,
-      },
+      } as any,
       revokeKey: {
         mutateAsync: vi.fn(),
         isPending: false,
-      },
+      } as any,
       isLoading: false,
-    })
+    } as any)
 
     render(<ApiKeySettings />, { wrapper: createWrapper() })
 
@@ -210,23 +208,23 @@ describe('ApiKeySettings', () => {
       expires_at: null,
     })
 
-    mockUseApiKeys.mockReturnValue({
+    vi.mocked(useApiKeys).mockReturnValue({
       keys: {
         data: [],
         isLoading: false,
         isSuccess: true,
         isError: false,
-      },
+      } as any,
       createKey: {
         mutateAsync: mockCreateKey,
         isPending: false,
-      },
+      } as any,
       revokeKey: {
         mutateAsync: vi.fn(),
         isPending: false,
       },
       isLoading: false,
-    })
+    } as any)
 
     render(<ApiKeySettings />, { wrapper: createWrapper() })
 
@@ -250,23 +248,23 @@ describe('ApiKeySettings', () => {
     const user = userEvent.setup()
     const mockClipboard = navigator.clipboard.writeText as any
 
-    mockUseApiKeys.mockReturnValue({
+    vi.mocked(useApiKeys).mockReturnValue({
       keys: {
         data: mockApiKeys,
         isLoading: false,
         isSuccess: true,
         isError: false,
-      },
+      } as any,
       createKey: {
         mutateAsync: vi.fn(),
         isPending: false,
-      },
+      } as any,
       revokeKey: {
         mutateAsync: vi.fn(),
         isPending: false,
-      },
+      } as any,
       isLoading: false,
-    })
+    } as any)
 
     render(<ApiKeySettings />, { wrapper: createWrapper() })
 
@@ -283,7 +281,7 @@ describe('ApiKeySettings', () => {
       message: 'API key revoked successfully!',
     })
 
-    mockUseApiKeys.mockReturnValue({
+    vi.mocked(useApiKeys).mockReturnValue({
       keys: {
         data: mockApiKeys,
         isLoading: false,
@@ -299,7 +297,7 @@ describe('ApiKeySettings', () => {
         isPending: false,
       },
       isLoading: false,
-    })
+    } as any)
 
     render(<ApiKeySettings />, { wrapper: createWrapper() })
 
@@ -323,7 +321,7 @@ describe('ApiKeySettings', () => {
     // Mock confirm to return false (cancelled)
     ;(global.confirm as any).mockReturnValue(false)
 
-    mockUseApiKeys.mockReturnValue({
+    vi.mocked(useApiKeys).mockReturnValue({
       keys: {
         data: mockApiKeys,
         isLoading: false,
@@ -339,7 +337,7 @@ describe('ApiKeySettings', () => {
         isPending: false,
       },
       isLoading: false,
-    })
+    } as any)
 
     render(<ApiKeySettings />, { wrapper: createWrapper() })
 
@@ -353,23 +351,23 @@ describe('ApiKeySettings', () => {
   it.skip('should toggle permissions in create form', async () => {
     const user = userEvent.setup()
 
-    mockUseApiKeys.mockReturnValue({
+    vi.mocked(useApiKeys).mockReturnValue({
       keys: {
         data: [],
         isLoading: false,
         isSuccess: true,
         isError: false,
-      },
+      } as any,
       createKey: {
         mutateAsync: vi.fn(),
         isPending: false,
-      },
+      } as any,
       revokeKey: {
         mutateAsync: vi.fn(),
         isPending: false,
-      },
+      } as any,
       isLoading: false,
-    })
+    } as any)
 
     render(<ApiKeySettings />, { wrapper: createWrapper() })
 
@@ -388,7 +386,7 @@ describe('ApiKeySettings', () => {
     await user.click(screen.getByText('Create Key'))
 
     // Should include selected permissions
-    expect((mockUseApiKeys as any)().createKey.mutateAsync).toHaveBeenCalledWith({
+    expect((useApiKeys as any)().createKey.mutateAsync).toHaveBeenCalledWith({
       name: '',
       permissions: ['read', 'download'],
     })
