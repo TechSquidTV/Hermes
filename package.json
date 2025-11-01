@@ -25,14 +25,14 @@
     "setup": "pnpm install && echo 'Create .env file from .env.example and update values'",
     "security:generate-key": "uv run python3 -c \"import secrets; print('HERMES_SECRET_KEY=' + secrets.token_urlsafe(32))\"",
     "security:check": "echo 'Checking for potential security issues...' && echo '✓ .env file should not be committed' && echo '✓ Database files are gitignored' && echo '✓ Consider using .dockerignore for production'",
-    "pre-check": "pnpm --filter hermes-app lint && cd packages/hermes-api && uv run ruff check app/ tests/ && pnpm --filter hermes-app type-check && pnpm test:all && pnpm --filter hermes-app build && docker compose build",
+    "pre-check": "pnpm pre-check:api && pnpm pre-check:app && docker compose build",
     "format:check": "cd packages/hermes-api && uv run black --check --diff app/ tests/ && uv run isort --check-only --diff app/ tests/",
     "pre-check:api": "cd packages/hermes-api && uv run black --check app/ tests/ && uv run isort --check-only app/ tests/ && uv run ruff check app/ tests/ && uv run python -m mypy --explicit-package-bases app/ tests/ && uv run pytest",
-    "pre-check:app": "pnpm --filter hermes-app lint && pnpm --filter hermes-app type-check && pnpm --filter hermes-app test",
-    "pre-check:full": "pnpm pre-check:api && pnpm pre-check:app"
+    "pre-check:app": "pnpm --filter hermes-app lint &&pnpm --filter hermes-app build && pnpm --filter hermes-app type-check && pnpm --filter hermes-app test",
+    "update:all": "pnpm update --recursive && cd packages/hermes-api && uv lock --upgrade && uv sync"
   },
   "devDependencies": {
-    "shadcn": "^3.4.2"
+    "shadcn": "^3.5.0"
   },
   "engines": {
     "node": ">=22.0.0",
