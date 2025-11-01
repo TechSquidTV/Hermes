@@ -1,22 +1,18 @@
 name: 📚 Documentation
 description: Report documentation issues or suggest improvements
-title: "[DOCS] <brief description>"
+title: "[DOCS] "
 labels: ["documentation", "needs-triage"]
-assignees: []
 body:
   - type: dropdown
     id: issue_type
     attributes:
-      label: 🔍 What's wrong?
-      description: What kind of issue is this?
+      label: 🔍 Issue type
       options:
         - Missing documentation
         - Outdated information
         - Unclear explanation
         - Incorrect information
-        - Typos/grammar
-        - Better examples needed
-        - Missing screenshots/diagrams
+        - Typo/grammar
         - Other
     validations:
       required: true
@@ -25,25 +21,16 @@ body:
     id: description
     attributes:
       label: 📝 What needs to be fixed?
-      description: Describe the documentation issue and your suggested fix
       placeholder: |
-        **The problem:**
-        [What's wrong with the current documentation?]
+        The problem:
 
-        **The fix:**
-        [What should it say instead?]
+        The fix:
     validations:
       required: true
 
   - type: textarea
     id: additional
     attributes:
-      label: 📎 More details (optional)
-      description: Any additional context or examples
-      placeholder: |
-        - Screenshots (drag and drop)
-        - Links to similar good documentation
-        - Code examples that need docs
-        - Why this matters to users
+      label: 📎 Additional context (optional)
     validations:
       required: false
