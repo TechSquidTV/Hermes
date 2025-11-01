@@ -38,20 +38,27 @@ services:
       retries: 3
       start_period: 5s
 
-  # Frontend - builds and provides static files
+  # Frontend - nginx serving static files
   app:
     build:
       context: .
       dockerfile: packages/hermes-app/Dockerfile
     container_name: hermes-app
     restart: unless-stopped
+    environment:
+      # Optional: Configure API base URL at runtime
+      # Examples:
+      #   - Same domain (default): /api/v1
+      #   - Separate subdomain: https://api.hermes.example.com/api/v1
+      #   - Different domain: https://hermes-api.mydomain.com/api/v1
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-/api/v1}
     volumes:
       # Share built files with proxy via named volume
-      - app_dist:/app
+      - app_dist:/usr/share/nginx/html
     networks:
       - hermes-network
     healthcheck:
-      test: ["CMD", "test", "-f", "/app/index.html"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -62,6 +69,11 @@ services:
     build:
       context: ./packages/hermes-api
       dockerfile: Dockerfile
+      # Optional: Customize user UID/GID to match host user (defaults to 1000:1000)
+      # Uncomment to use your host user's UID/GID:
+      # args:
+      #   USER_UID: ${USER_UID:-1000}
+      #   USER_GID: ${USER_GID:-1000}
     container_name: hermes-api
     restart: unless-stopped
     ports:
@@ -86,13 +98,19 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --loop asyncio --access-log --log-level info
+    # Run uvicorn directly from venv to avoid uv run re-installing dev dependencies
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --loop asyncio --access-log --log-level info
 
   # Celery worker for background tasks
   celery_worker:
     build:
       context: ./packages/hermes-api
       dockerfile: Dockerfile
+      # Optional: Customize user UID/GID to match host user (defaults to 1000:1000)
+      # Should match api service if using shared volumes
+      # args:
+      #   USER_UID: ${USER_UID:-1000}
+      #   USER_GID: ${USER_GID:-1000}
     container_name: hermes-worker
     restart: unless-stopped
     env_file:
@@ -111,7 +129,8 @@ services:
         condition: service_healthy
       api:
         condition: service_healthy
-    command: uv run celery -A app.worker worker --loglevel=info --concurrency=1 --hostname=hermes-worker@%h --queues=hermes.downloads,hermes.cleanup,hermes.default
+    # Run celery directly from venv to avoid uv run re-installing dev dependencies
+    command: celery -A app.worker worker --loglevel=info --concurrency=1 --hostname=hermes-worker@%h --queues=hermes.downloads,hermes.cleanup,hermes.default
     healthcheck:
       test: ["CMD", "celery", "-A", "app.worker", "inspect", "ping"]
       interval: 30s

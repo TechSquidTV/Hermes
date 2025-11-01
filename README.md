@@ -2,7 +2,7 @@
 
 [![codecov](https://codecov.io/gh/TechSquidTV/Hermes/branch/main/graph/badge.svg)](https://codecov.io/gh/TechSquidTV/Hermes)
 
-🎥 **Download videos from YouTube and 1000+ sites with a robust API and beautiful, modern interface**
+**Download videos from YouTube and 1000+ sites with a robust API and beautiful, modern interface**
 
 Hermes is a self-hosted video downloader built on [yt-dlp](https://github.com/yt-dlp/yt-dlp).
 
@@ -11,14 +11,14 @@ Hermes **does not endorse** piracy, freebooting, or using downloads to bypass ad
 
 https://github.com/user-attachments/assets/7d9c6b96-d966-4989-a8b3-d5d49af463ae
 
-## ✨ Key Features
+## Key Features
 
 - 🎥 **Universal Support** - Download from YouTube, Vimeo, TikTok, and 1000+ sites
 - ⚡ **Background Processing** - Queue downloads and process them asynchronously
+- ▶️ **Playlists** - Download entire playlists asynchronously
 - 🔒 **Secure Authentication** - JWT tokens with API key management
-- 🐳 **Docker Ready** - One-command deployment with Docker Compose
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Pre-built Images (Recommended)
 
@@ -61,7 +61,7 @@ docker compose up -d
 
 Hermes offers two deployment approaches:
 
-#### 🏗️ **Pre-built Images (Recommended)**
+#### **Pre-built Images (Recommended)**
 - **Faster startup** - No build time required
 - **Stable releases** - Uses tested, published versions
 - **Smaller downloads** - Only pulls necessary images
@@ -73,7 +73,7 @@ Hermes offers two deployment approaches:
 docker compose -f docker-compose.example.yml up -d
 ```
 
-#### 🔨 **Build from Source**
+#### **Build from Source**
 - **Full customization** - Modify code and rebuild
 - **Latest changes** - Access to unreleased features
 - **Development** - Perfect for contributors
@@ -83,6 +83,31 @@ docker compose -f docker-compose.example.yml up -d
 # Builds images from local Dockerfiles
 docker compose up -d
 ```
+
+### Preparing Directories for Docker Volumes
+
+Before starting Docker containers, create the required directories with proper permissions. The API container runs as a non-root user (UID 1000), so mounted volumes must be writable:
+
+```bash
+# Create directories (paths should match your docker-compose volumes)
+mkdir -p ./data ./downloads ./temp
+
+# Set ownership for container user (default UID 1000)
+sudo chown -R 1000:1000 ./data ./downloads ./temp
+
+# Or match your current host user (useful for development)
+sudo chown -R $(id -u):$(id -g) ./data ./downloads ./temp
+
+# Or use permissive permissions (less secure)
+chmod -R 777 ./data ./downloads ./temp
+```
+
+**Required directories:**
+- `data/` - SQLite database and persistent data
+- `downloads/` - Downloaded video files
+- `temp/` - Temporary files during download
+
+> **Note:** Directory paths depend on your docker-compose configuration. Check the `volumes` section in your compose file to see where these are mounted from. For example, `docker-compose.example.yml` might use `./services/hermes/data` instead of `./data`.
 
 ### Customizing the Reverse Proxy
 
@@ -94,7 +119,7 @@ nano Caddyfile
 docker compose restart proxy
 ```
 
-#### 🌐 Domain Configuration Options
+#### Domain Configuration Options
 
 **Single Domain** (Recommended for most users):
 - Frontend and API on same domain: `hermes.example.com`
@@ -130,7 +155,7 @@ If you run into problems, please use our [issue templates](https://github.com/te
 - **[🎨 Frontend Issues](https://github.com/techsquidtv/hermes/issues/new?template=hermes-app-issue.yml)** - UI/UX problems
 - **[🐳 DevOps Issues](https://github.com/techsquidtv/hermes/issues/new?template=devops-issue.yml)** - Docker/deployment issues
 
-These templates help us help you faster! 🚀
+These templates help us help you faster!
 
 ### Manual Installation (Development)
 
@@ -157,34 +182,6 @@ pnpm dev
 - **[Frontend Guide](packages/hermes-app/README.md)** - React app development guide
 - **[Interactive API Docs](http://localhost:8000/docs)** - Live Swagger documentation
 - **[docker-compose.example.yml](docker-compose.example.yml)** - Pre-built images deployment configuration
-
-## 🤝 Contributing
-
-We welcome contributions! Here's how to get involved:
-
-### 🐛 Reporting Issues
-Use our [issue templates](https://github.com/techsquidtv/hermes/issues/new/choose) to report bugs and request features:
-- **[🐛 Bug Report](https://github.com/techsquidtv/hermes/issues/new?template=bug_report.yml)** - Report bugs and unexpected behavior
-- **[✨ Feature Request](https://github.com/techsquidtv/hermes/issues/new?template=feature_request.yml)** - Suggest new features
-- **[🔧 API Issues](https://github.com/techsquidtv/hermes/issues/new?template=hermes-api-issue.yml)** - Backend/API specific issues
-- **[🎨 Frontend Issues](https://github.com/techsquidtv/hermes/issues/new?template=hermes-app-issue.yml)** - UI/UX and frontend issues
-- **[🐳 DevOps Issues](https://github.com/techsquidtv/hermes/issues/new?template=devops-issue.yml)** - Docker/deployment issues
-- **[📚 Documentation](https://github.com/techsquidtv/hermes/issues/new?template=documentation.yml)** - Documentation improvements
-
-### 💻 Contributing Code
-
-**For Development:**
-- Use `docker-compose.dev.yml` for hot-reload development
-- Use `docker-compose.yml` to build from source with your local changes
-- See our [contribution guidelines](docs/CONTRIBUTING.md) for development setup, testing, and code standards
-
-**For Production Deployments:**
-- Use `docker-compose.example.yml` with pre-built images for faster, more reliable deployments
-
-## 📄 License
-
-See [LICENSE](LICENSE) for details.
-
 ---
 
 ## Hosting Partner

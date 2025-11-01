@@ -126,9 +126,11 @@ hermes.example.com {
 
 The application includes optimized Dockerfiles for both services:
 
-- **Frontend**: Multi-stage build with nginx for production
+- **Frontend**: Multi-stage build producing static files in a lightweight busybox container
 - **API**: Python application with uv package management
 - **Worker**: Celery worker for background tasks
+
+> **Note**: The frontend container doesn't run a web server - it just holds static files that are served by the reverse proxy (Caddy) via a shared Docker volume.
 
 #### Production Docker Compose
 
@@ -269,10 +271,8 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
-        # WebSocket support for real-time updates
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        # Note: Hermes uses Server-Sent Events (SSE), not WebSockets
+        # No special WebSocket configuration needed
     }
 }
 ```
@@ -423,6 +423,19 @@ sudo ufw enable
 ## Troubleshooting
 
 ### Common Issues
+
+**Dev dependencies being installed in production:**
+- **Symptom**: Logs show "Downloading black, ruff, mypy" on container startup
+- **Cause**: Using `uv run <command>` installs all dependencies including dev dependencies
+- **Solution**: Run commands directly from the venv instead:
+  ```yaml
+  # Bad - reinstalls dev dependencies
+  command: uv run uvicorn app.main:app
+
+  # Good - uses pre-installed dependencies only
+  command: uvicorn app.main:app
+  ```
+- **Note**: The Dockerfile already installs dependencies with `--no-dev`, but `uv run` bypasses this
 
 **Container won't start:**
 - Check if all required environment variables are set

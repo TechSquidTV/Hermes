@@ -182,7 +182,34 @@ See [QUICKSTART.md](./QUICKSTART.md) for all configuration options.
 
 ## 🐳 Docker Deployment
 
-The project includes Docker and Docker Compose configurations:
+The project includes Docker and Docker Compose configurations.
+
+### Preparing Volume Directories
+
+Before running the Docker container, prepare the required directories with proper permissions. The container runs as a non-root user (default UID 1000), so mounted volumes need to be writable:
+
+```bash
+# Create required directories
+mkdir -p ./data ./downloads ./temp
+
+# Set ownership for container user (default UID 1000)
+sudo chown -R 1000:1000 ./data ./downloads ./temp
+
+# Or match your current host user (useful for development)
+sudo chown -R $(id -u):$(id -g) ./data ./downloads ./temp
+
+# Or use permissive permissions (less secure)
+chmod -R 777 ./data ./downloads ./temp
+```
+
+**Note:** To use your host user's UID/GID with the second option, you can customize the Docker image at build time using `--build-arg USER_UID=$(id -u) --build-arg USER_GID=$(id -g)` if needed.
+
+**Volume Mounts:**
+- `/app/data` - SQLite database and persistent data
+- `/app/downloads` - Downloaded video files
+- `/app/temp` - Temporary files during download
+
+### Running with Docker
 
 ```bash
 # Development
@@ -196,8 +223,29 @@ docker run -d \
   -p 8000:8000 \
   -e HERMES_SECRET_KEY=your-secret-key \
   -e HERMES_DATABASE_URL=postgresql+asyncpg://user:pass@db/hermes \
-  -v /data/downloads:/app/downloads \
+  -v $(pwd)/downloads:/app/downloads \
+  -v $(pwd)/temp:/app/temp \
+  -v $(pwd)/data:/app/data \
   hermes-api:latest
+```
+
+### Docker Compose Example
+
+```yaml
+services:
+  hermes-api:
+    image: ghcr.io/techsquidtv/hermes-api:latest
+    environment:
+      - HERMES_SECRET_KEY=${HERMES_SECRET_KEY}
+      - HERMES_DATABASE_URL=sqlite+aiosqlite:///./data/hermes.db
+      - HERMES_REDIS_URL=redis://redis:6379
+      - HERMES_ALLOWED_ORIGINS=https://your-domain.com
+    volumes:
+      - ./services/hermes/downloads:/app/downloads
+      - ./services/hermes/temp:/app/temp
+      - ./services/hermes/data:/app/data
+    depends_on:
+      - redis
 ```
 
 ## 📊 Current Status

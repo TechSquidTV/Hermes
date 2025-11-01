@@ -72,9 +72,13 @@ class ApiClient {
   private baseURL: string
 
   constructor() {
-    // Simple priority: environment variable > default relative path
-    this.baseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
-    
+    // Priority: runtime config > build-time env > default
+    // Runtime config allows Docker containers to be configured without rebuilding
+    this.baseURL =
+      window.__RUNTIME_CONFIG__?.API_BASE_URL ||
+      import.meta.env.VITE_API_BASE_URL ||
+      '/api/v1'
+
     console.log(`[ApiClient] Using API base URL: ${this.baseURL}`)
   }
 
