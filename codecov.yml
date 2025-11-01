@@ -10,6 +10,10 @@ coverage:
         target: auto
         threshold: 1%
 
+# Ignore external UI component libraries
+ignore:
+  - "packages/hermes-app/src/components/ui/**"
+
 # Monorepo configuration
 flag_management:
   default_rules:

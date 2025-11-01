@@ -13,7 +13,12 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
       include: ['src/**/*.{ts,tsx}'],
-      exclude: ['src/**/*.test.{ts,tsx}', 'src/test/**', 'src/types/api.generated.ts'],
+      exclude: [
+        'src/**/*.test.{ts,tsx}',
+        'src/test/**',
+        'src/types/api.generated.ts',
+        'src/components/ui/**', // Exclude shadcn/radix UI components
+      ],
     },
     reporters: ['default', 'junit'],
     outputFile: {
