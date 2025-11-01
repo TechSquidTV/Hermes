@@ -92,10 +92,13 @@ Before starting Docker containers, create the required directories with proper p
 # Create directories (paths should match your docker-compose volumes)
 mkdir -p ./data ./downloads ./temp
 
-# Set ownership for UID 1000 (hermes user in container)
+# Set ownership for container user (default UID 1000)
 sudo chown -R 1000:1000 ./data ./downloads ./temp
 
-# Or use permissive permissions (less secure, but simpler)
+# Or match your current host user (useful for development)
+sudo chown -R $(id -u):$(id -g) ./data ./downloads ./temp
+
+# Or use permissive permissions (less secure)
 chmod -R 777 ./data ./downloads ./temp
 ```
 

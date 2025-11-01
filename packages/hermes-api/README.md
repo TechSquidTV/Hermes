@@ -186,18 +186,23 @@ The project includes Docker and Docker Compose configurations.
 
 ### Preparing Volume Directories
 
-Before running the Docker container, prepare the required directories with proper permissions. The container runs as a non-root user (UID 1000), so mounted volumes need to be writable:
+Before running the Docker container, prepare the required directories with proper permissions. The container runs as a non-root user (default UID 1000), so mounted volumes need to be writable:
 
 ```bash
 # Create required directories
 mkdir -p ./data ./downloads ./temp
 
-# Set ownership for UID 1000 (hermes user in container)
+# Set ownership for container user (default UID 1000)
 sudo chown -R 1000:1000 ./data ./downloads ./temp
+
+# Or match your current host user (useful for development)
+sudo chown -R $(id -u):$(id -g) ./data ./downloads ./temp
 
 # Or use permissive permissions (less secure)
 chmod -R 777 ./data ./downloads ./temp
 ```
+
+**Note:** To use your host user's UID/GID with the second option, you can customize the Docker image at build time using `--build-arg USER_UID=$(id -u) --build-arg USER_GID=$(id -g)` if needed.
 
 **Volume Mounts:**
 - `/app/data` - SQLite database and persistent data

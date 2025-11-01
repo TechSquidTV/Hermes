@@ -21,6 +21,11 @@ RUN uv sync --frozen --no-install-project --no-dev
 # Production stage - use distroless for smaller size
 FROM python:3.12-slim
 
+# Build args for configurable UID/GID (defaults to 1000)
+# Override at build time: docker build --build-arg USER_UID=$(id -u) --build-arg USER_GID=$(id -g)
+ARG USER_UID=1000
+ARG USER_GID=1000
+
 # Install only runtime dependencies
 RUN apt-get update && apt-get install -y \
     ffmpeg \
@@ -48,8 +53,9 @@ COPY entrypoint.sh ./
 # Copy application code
 COPY app/ ./app/
 
-# Create non-root user and set permissions
-RUN useradd --create-home --shell /bin/bash --uid 1000 hermes && \
+# Create non-root user with configurable UID/GID
+RUN groupadd --gid ${USER_GID} hermes && \
+    useradd --create-home --shell /bin/bash --uid ${USER_UID} --gid ${USER_GID} hermes && \
     chown -R hermes:hermes /app && \
     chmod -R 755 /app && \
     chmod +x /app/entrypoint.sh

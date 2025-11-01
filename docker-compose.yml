@@ -69,6 +69,11 @@ services:
     build:
       context: ./packages/hermes-api
       dockerfile: Dockerfile
+      # Optional: Customize user UID/GID to match host user (defaults to 1000:1000)
+      # Uncomment to use your host user's UID/GID:
+      # args:
+      #   USER_UID: ${USER_UID:-1000}
+      #   USER_GID: ${USER_GID:-1000}
     container_name: hermes-api
     restart: unless-stopped
     ports:
@@ -101,6 +106,11 @@ services:
     build:
       context: ./packages/hermes-api
       dockerfile: Dockerfile
+      # Optional: Customize user UID/GID to match host user (defaults to 1000:1000)
+      # Should match api service if using shared volumes
+      # args:
+      #   USER_UID: ${USER_UID:-1000}
+      #   USER_GID: ${USER_GID:-1000}
     container_name: hermes-worker
     restart: unless-stopped
     env_file:
