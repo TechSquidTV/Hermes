@@ -204,7 +204,6 @@ services:
    - **Domain**: `hermes.yourdomain.com`
    - **Forward Hostname/IP**: `hermes-proxy` (or container IP)
    - **Forward Port**: `80`
-   - Enable **Websockets Support**
    - Add **SSL Certificate** (Let's Encrypt)
 
 2. If not using Caddy, point directly to services:
@@ -244,10 +243,9 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        
-        # WebSocket support
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
+
+        # Note: Hermes uses Server-Sent Events (SSE), not WebSockets
+        # No special WebSocket configuration needed
     }
 
     # Frontend static files
@@ -285,11 +283,8 @@ server {
     ProxyPass / http://hermes-proxy:80/
     ProxyPassReverse / http://hermes-proxy:80/
 
-    # WebSocket support
-    RewriteEngine On
-    RewriteCond %{HTTP:Upgrade} websocket [NC]
-    RewriteCond %{HTTP:Connection} upgrade [NC]
-    RewriteRule ^/api/(.*) ws://api:8000/api/$1 [P,L]
+    # Note: Hermes uses Server-Sent Events (SSE), not WebSockets
+    # No special WebSocket configuration needed
 </VirtualHost>
 ```
 
@@ -434,9 +429,11 @@ HERMES_HTTPS_PORT=3443
 - Check file permissions in the volume
 - Ensure your proxy serves from `/app` or the mounted volume path
 
-### WebSocket connections fail
-- Enable WebSocket support in your reverse proxy
-- Forward `Upgrade` and `Connection` headers
+### Real-time updates not working
+- **Note**: Hermes uses Server-Sent Events (SSE) for real-time updates, not WebSockets
+- Ensure your reverse proxy allows long-lived HTTP connections
+- SSE works over standard HTTP/HTTPS - no special WebSocket configuration needed
+- Check browser console for SSE connection errors
 
 ### HTTPS redirect loops
 - Set `X-Forwarded-Proto` header correctly
