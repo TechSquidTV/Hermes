@@ -1,8 +1,49 @@
 import importlib.metadata
+import json
 import re
+from typing import Any
 
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
+from pydantic_settings.sources import EnvSettingsSource
+
+
+class CustomEnvSettingsSource(EnvSettingsSource):
+    """Custom environment settings source that handles list fields robustly."""
+
+    def prepare_field_value(
+        self, field_name: str, field: Any, value: Any, value_is_complex: bool
+    ) -> Any:
+        """Override to handle list fields with custom parsing."""
+        # Fields that should be parsed as flexible lists
+        LIST_FIELDS = {"allowed_origins", "api_keys"}
+
+        if field_name in LIST_FIELDS and isinstance(value, str):
+            # Handle empty strings
+            if not value.strip():
+                return []
+
+            # Try parsing as JSON first
+            try:
+                parsed = json.loads(value)
+                if isinstance(parsed, list):
+                    return [item.strip() for item in parsed if item.strip()]
+            except (json.JSONDecodeError, ValueError):
+                pass
+
+            # Check if comma-separated
+            if "," in value:
+                return [item.strip() for item in value.split(",") if item.strip()]
+
+            # Fall back to space-separated
+            return [item.strip() for item in value.split() if item.strip()]
+
+        # For all other fields, use the default behavior
+        return super().prepare_field_value(field_name, field, value, value_is_complex)
 
 
 class Settings(BaseSettings):
@@ -104,6 +145,23 @@ class Settings(BaseSettings):
     )
 
     model_config = SettingsConfigDict(env_prefix="HERMES_", case_sensitive=False)
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        """Use custom environment settings source for robust list field parsing."""
+        return (
+            init_settings,
+            CustomEnvSettingsSource(settings_cls),
+            dotenv_settings,
+            file_secret_settings,
+        )
 
 
 # Global settings instance
