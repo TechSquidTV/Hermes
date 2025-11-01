@@ -1,20 +1,17 @@
 name: 🐛 Bug Report
 description: Report a bug or unexpected behavior
-title: "[BUG] <brief description>"
+title: "[BUG] "
 labels: ["bug", "needs-triage"]
-assignees: []
 body:
   - type: dropdown
     id: package
     attributes:
       label: 📦 Package
-      description: Which package is this bug related to?
       options:
         - hermes-api (Backend/API)
         - hermes-app (Frontend/UI)
         - docs (Documentation)
         - devops (Docker/Deployment)
-        - general (Cross-cutting)
         - other
     validations:
       required: true
@@ -23,16 +20,13 @@ body:
     id: description
     attributes:
       label: 🐛 What happened?
-      description: Describe the bug and what you expected to happen
+      description: Describe the bug and what you expected
       placeholder: |
-        **What I did:**
-        [Describe the steps that led to the bug]
+        What I did:
 
-        **What I expected:**
-        [What should have happened]
+        What I expected:
 
-        **What actually happened:**
-        [What went wrong]
+        What actually happened:
     validations:
       required: true
 
@@ -40,15 +34,10 @@ body:
     id: reproduction
     attributes:
       label: 🔄 Steps to reproduce
-      description: How can someone else reproduce this bug?
       placeholder: |
-        1. Start Hermes with `pnpm dev`
-        2. Go to [specific page/section]
-        3. Click on [specific button/element]
-        4. See the bug
-
-        **Error messages:**
-        [Paste any error messages or drag screenshots here]
+        1.
+        2.
+        3.
     validations:
       required: true
 
@@ -56,24 +45,9 @@ body:
     id: environment
     attributes:
       label: 🌍 Environment (optional)
-      description: Your setup details (helps us reproduce the issue)
       placeholder: |
-        - **How you run Hermes:** Docker / Manual / Other
-        - **Operating System:** Linux / macOS / Windows
-        - **Browser:** Chrome / Firefox / Safari (if UI issue)
-        - **Version:** [Hermes version if known]
-    validations:
-      required: false
-
-  - type: textarea
-    id: additional
-    attributes:
-      label: 📝 Anything else?
-      description: Any other details that might help
-      placeholder: |
-        - Related issues or discussions
-        - Workarounds you've tried
-        - When this started happening
-        - Screenshots or videos (drag and drop)
+        - OS:
+        - Deployment: Docker / Manual / Other
+        - Version:
     validations:
       required: false

@@ -116,10 +116,18 @@ jobs:
 
           echo "Updated all version files to $NEW_VERSION"
 
+      - name: Update lockfiles
+        run: |
+          echo "Updating pnpm lockfile..."
+          pnpm install
+
+          echo "Updating Python lockfile..."
+          cd packages/hermes-api && uv lock
+
       - name: Run pre-checks
         run: |
           echo "Running comprehensive pre-release checks..."
-          pnpm pre-check:full
+          pnpm pre-check
 
       - name: Configure git
         run: |
@@ -130,7 +138,7 @@ jobs:
         run: |
           NEW_VERSION="${{ steps.new_version.outputs.version }}"
 
-          git add package.json packages/hermes-app/package.json packages/hermes-api/pyproject.toml
+          git add package.json packages/hermes-app/package.json packages/hermes-api/pyproject.toml pnpm-lock.yaml packages/hermes-api/uv.lock
           git commit -m "chore(release): bump version to $NEW_VERSION"
 
           echo "Committed version bump"

@@ -1,20 +1,17 @@
 name: ✨ Feature Request
 description: Suggest a new feature or enhancement
-title: "[FEATURE] <brief description>"
+title: "[FEATURE] "
 labels: ["enhancement", "needs-triage"]
-assignees: []
 body:
   - type: dropdown
     id: package
     attributes:
       label: 📦 Package
-      description: Which package would this feature belong to?
       options:
         - hermes-api (Backend/API)
         - hermes-app (Frontend/UI)
         - docs (Documentation)
         - devops (Docker/Deployment)
-        - general (Cross-cutting)
         - other
     validations:
       required: true
@@ -25,57 +22,18 @@ body:
       label: 💡 What feature do you want?
       description: Describe the feature and why it's needed
       placeholder: |
-        **The problem:**
-        [What's the current limitation or pain point?]
+        The problem:
 
-        **The solution:**
-        [How should this feature work?]
+        The solution:
 
-        **Why it matters:**
-        [Who benefits and how?]
+        Why it matters:
     validations:
       required: true
 
   - type: textarea
-    id: use_cases
-    attributes:
-      label: 🎬 How would you use it?
-      description: Give examples of how this feature would be used (optional)
-      placeholder: |
-        **Example 1:** As a [user type], I want to [action] so that [benefit]
-
-        **Example 2:** When [situation], users should be able to [action] because [reason]
-
-        **Example 3:** The [API/UI] should support [functionality] to enable [use case]
-    validations:
-      required: false
-
-  - type: textarea
-    id: implementation
-    attributes:
-      label: 🔧 Implementation thoughts (optional)
-      description: Any ideas on how to build this?
-      placeholder: |
-        **Technical approach:**
-        [API endpoints, UI components, database changes needed]
-
-        **Dependencies:**
-        [New libraries or integrations required]
-
-        **Workarounds:**
-        [How are you currently solving this problem?]
-    validations:
-      required: false
-
-  - type: textarea
     id: additional
     attributes:
-      label: 📝 Anything else?
-      description: Screenshots, mockups, or other details
-      placeholder: |
-        - Screenshots or mockups (drag and drop)
-        - Related issues or discussions
-        - Research or references
-        - Similar features in other tools
+      label: 📝 Additional context (optional)
+      description: Examples, mockups, or implementation ideas
     validations:
       required: false
