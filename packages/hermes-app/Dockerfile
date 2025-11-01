@@ -33,26 +33,28 @@ COPY packages/hermes-app/src ./src
 # Build the application
 RUN pnpm run build
 
-# Production image - lightweight container for static files
-FROM busybox:1.36-glibc AS runner
+# Production image - nginx serving static files with runtime config
+FROM nginx:alpine AS runner
 
 # Copy built static files from builder
-COPY --from=builder /app/dist /app
+COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Create non-root user
-RUN adduser -D -u 1000 hermes && \
-    chown -R hermes:hermes /app
+# Copy nginx configuration
+COPY packages/hermes-app/nginx.conf /etc/nginx/nginx.conf
 
-# Switch to non-root user
-USER hermes
+# Copy and prepare entrypoint script
+COPY packages/hermes-app/docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
-# Set working directory
-WORKDIR /app
-
-# Health check - verify static files exist
+# Health check - verify nginx is serving content
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD test -f /app/index.html || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://localhost/ || exit 1
 
-# This container holds static files for the reverse proxy to serve
-# It doesn't run a web server - just keeps files available via volume
-CMD ["sh", "-c", "echo 'Static files ready at /app' && sleep infinity"]
+# Expose port 80
+EXPOSE 80
+
+# Use custom entrypoint to generate runtime config
+ENTRYPOINT ["/docker-entrypoint.sh"]
+
+# Start nginx in foreground
+CMD ["nginx", "-g", "daemon off;"]

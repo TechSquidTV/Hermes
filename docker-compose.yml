@@ -38,20 +38,27 @@ services:
       retries: 3
       start_period: 5s
 
-  # Frontend - builds and provides static files
+  # Frontend - nginx serving static files
   app:
     build:
       context: .
       dockerfile: packages/hermes-app/Dockerfile
     container_name: hermes-app
     restart: unless-stopped
+    environment:
+      # Optional: Configure API base URL at runtime
+      # Examples:
+      #   - Same domain (default): /api/v1
+      #   - Separate subdomain: https://api.hermes.example.com/api/v1
+      #   - Different domain: https://hermes-api.mydomain.com/api/v1
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-/api/v1}
     volumes:
       # Share built files with proxy via named volume
-      - app_dist:/app
+      - app_dist:/usr/share/nginx/html
     networks:
       - hermes-network
     healthcheck:
-      test: ["CMD", "test", "-f", "/app/index.html"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
       interval: 30s
       timeout: 5s
       retries: 3
