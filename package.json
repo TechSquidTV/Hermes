@@ -29,10 +29,11 @@
     "format:check": "cd packages/hermes-api && uv run black --check --diff app/ tests/ && uv run isort --check-only --diff app/ tests/",
     "pre-check:api": "cd packages/hermes-api && uv run black --check app/ tests/ && uv run isort --check-only app/ tests/ && uv run ruff check app/ tests/ && uv run python -m mypy --explicit-package-bases app/ tests/ && uv run pytest",
     "pre-check:app": "pnpm --filter hermes-app lint && pnpm --filter hermes-app type-check && pnpm --filter hermes-app test",
-    "pre-check:full": "pnpm pre-check:api && pnpm pre-check:app"
+    "pre-check:full": "pnpm pre-check:api && pnpm pre-check:app",
+    "update:all": "pnpm update --recursive && cd packages/hermes-api && uv lock --upgrade && uv sync"
   },
   "devDependencies": {
-    "shadcn": "^3.4.2"
+    "shadcn": "^3.5.0"
   },
   "engines": {
     "node": ">=22.0.0",
