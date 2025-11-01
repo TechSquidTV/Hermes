@@ -17,8 +17,12 @@ describe('useStorageCalculations', () => {
       const storageInfo: StorageInfo = {
         total_space: 1000,
         used_space: 300,
-        downloads_space: 200,
-        downloads_count: 5,
+        free_space: 700,
+        usage_percentage: 30,
+        download_directory: '/downloads',
+        temp_directory: '/tmp',
+        downloads_size: 200,
+        temp_size: 100,
       }
 
       const { result } = renderHook(() => useStorageCalculations(storageInfo))
@@ -46,8 +50,12 @@ describe('useStorageCalculations', () => {
       const storageInfo: StorageInfo = {
         total_space: 0,
         used_space: 0,
-        downloads_space: 0,
-        downloads_count: 0,
+        free_space: 0,
+        usage_percentage: 0,
+        download_directory: '/downloads',
+        temp_directory: '/tmp',
+        downloads_size: 0,
+        temp_size: 0,
       }
 
       const { result } = renderHook(() => useStorageCalculations(storageInfo))
@@ -63,8 +71,12 @@ describe('useStorageCalculations', () => {
       const storageInfo: StorageInfo = {
         total_space: 1000,
         used_space: 0,
-        downloads_space: 0,
-        downloads_count: 0,
+        free_space: 1000,
+        usage_percentage: 0,
+        download_directory: '/downloads',
+        temp_directory: '/tmp',
+        downloads_size: 0,
+        temp_size: 0,
       }
 
       const { result } = renderHook(() => useStorageCalculations(storageInfo))
@@ -76,8 +88,12 @@ describe('useStorageCalculations', () => {
       const storageInfo: StorageInfo = {
         total_space: 1000,
         used_space: 500,
-        downloads_space: 500,
-        downloads_count: 10,
+        free_space: 500,
+        usage_percentage: 50,
+        download_directory: '/downloads',
+        temp_directory: '/tmp',
+        downloads_size: 500,
+        temp_size: 0,
       }
 
       const { result } = renderHook(() => useStorageCalculations(storageInfo))
@@ -89,8 +105,12 @@ describe('useStorageCalculations', () => {
       const storageInfo: StorageInfo = {
         total_space: 1000,
         used_space: 1000,
-        downloads_space: 1000,
-        downloads_count: 20,
+        free_space: 0,
+        usage_percentage: 100,
+        download_directory: '/downloads',
+        temp_directory: '/tmp',
+        downloads_size: 1000,
+        temp_size: 0,
       }
 
       const { result } = renderHook(() => useStorageCalculations(storageInfo))
@@ -103,8 +123,12 @@ describe('useStorageCalculations', () => {
       const storageInfo: StorageInfo = {
         total_space: 1000,
         used_space: 333,
-        downloads_space: 333,
-        downloads_count: 5,
+        free_space: 667,
+        usage_percentage: 33.3,
+        download_directory: '/downloads',
+        temp_directory: '/tmp',
+        downloads_size: 333,
+        temp_size: 0,
       }
 
       const { result } = renderHook(() => useStorageCalculations(storageInfo))
@@ -118,8 +142,12 @@ describe('useStorageCalculations', () => {
       const storageInfo: StorageInfo = {
         total_space: 1000,
         used_space: 910,
-        downloads_space: 910,
-        downloads_count: 15,
+        free_space: 90,
+        usage_percentage: 91,
+        download_directory: '/downloads',
+        temp_directory: '/tmp',
+        downloads_size: 910,
+        temp_size: 0,
       }
 
       const { result } = renderHook(() => useStorageCalculations(storageInfo))
@@ -132,8 +160,12 @@ describe('useStorageCalculations', () => {
       const storageInfo: StorageInfo = {
         total_space: 1000,
         used_space: 900,
-        downloads_space: 900,
-        downloads_count: 15,
+        free_space: 100,
+        usage_percentage: 90,
+        download_directory: '/downloads',
+        temp_directory: '/tmp',
+        downloads_size: 900,
+        temp_size: 0,
       }
 
       const { result } = renderHook(() => useStorageCalculations(storageInfo))
@@ -146,8 +178,12 @@ describe('useStorageCalculations', () => {
       const storageInfo: StorageInfo = {
         total_space: 1000,
         used_space: 890,
-        downloads_space: 890,
-        downloads_count: 15,
+        free_space: 110,
+        usage_percentage: 89,
+        download_directory: '/downloads',
+        temp_directory: '/tmp',
+        downloads_size: 890,
+        temp_size: 0,
       }
 
       const { result } = renderHook(() => useStorageCalculations(storageInfo))
@@ -161,8 +197,12 @@ describe('useStorageCalculations', () => {
       const storageInfo: StorageInfo = {
         total_space: 1000,
         used_space: 960,
-        downloads_space: 960,
-        downloads_count: 20,
+        free_space: 40,
+        usage_percentage: 96,
+        download_directory: '/downloads',
+        temp_directory: '/tmp',
+        downloads_size: 960,
+        temp_size: 0,
       }
 
       const { result } = renderHook(() => useStorageCalculations(storageInfo))
@@ -175,8 +215,12 @@ describe('useStorageCalculations', () => {
       const storageInfo: StorageInfo = {
         total_space: 1000,
         used_space: 950,
-        downloads_space: 950,
-        downloads_count: 20,
+        free_space: 50,
+        usage_percentage: 95,
+        download_directory: '/downloads',
+        temp_directory: '/tmp',
+        downloads_size: 950,
+        temp_size: 0,
       }
 
       const { result } = renderHook(() => useStorageCalculations(storageInfo))
@@ -189,8 +233,12 @@ describe('useStorageCalculations', () => {
       const storageInfo: StorageInfo = {
         total_space: 1000,
         used_space: 1000,
-        downloads_space: 1000,
-        downloads_count: 25,
+        free_space: 0,
+        usage_percentage: 100,
+        download_directory: '/downloads',
+        temp_directory: '/tmp',
+        downloads_size: 1000,
+        temp_size: 0,
       }
 
       const { result } = renderHook(() => useStorageCalculations(storageInfo))
@@ -204,8 +252,12 @@ describe('useStorageCalculations', () => {
       const storageInfo: StorageInfo = {
         total_space: 10_000_000_000, // 10TB
         used_space: 5_000_000_000, // 5TB
-        downloads_space: 5_000_000_000,
-        downloads_count: 1000,
+        free_space: 5_000_000_000,
+        usage_percentage: 50,
+        download_directory: '/downloads',
+        temp_directory: '/tmp',
+        downloads_size: 5_000_000_000,
+        temp_size: 0,
       }
 
       const { result } = renderHook(() => useStorageCalculations(storageInfo))
@@ -220,8 +272,12 @@ describe('useStorageCalculations', () => {
       const storageInfo: StorageInfo = {
         total_space: 100,
         used_space: 1,
-        downloads_space: 1,
-        downloads_count: 1,
+        free_space: 99,
+        usage_percentage: 1,
+        download_directory: '/downloads',
+        temp_directory: '/tmp',
+        downloads_size: 1,
+        temp_size: 0,
       }
 
       const { result } = renderHook(() => useStorageCalculations(storageInfo))
@@ -231,10 +287,16 @@ describe('useStorageCalculations', () => {
     })
 
     it('handles missing optional fields', () => {
-      const storageInfo = {
+      const storageInfo: StorageInfo = {
         total_space: 1000,
         used_space: 300,
-      } as StorageInfo
+        free_space: 700,
+        usage_percentage: 30,
+        download_directory: '/downloads',
+        temp_directory: '/tmp',
+        downloads_size: 0,
+        temp_size: 0,
+      }
 
       const { result } = renderHook(() => useStorageCalculations(storageInfo))
 
@@ -249,12 +311,16 @@ describe('useStorageCalculations', () => {
       const initialStorageInfo: StorageInfo = {
         total_space: 1000,
         used_space: 300,
-        downloads_space: 300,
-        downloads_count: 5,
+        free_space: 700,
+        usage_percentage: 30,
+        download_directory: '/downloads',
+        temp_directory: '/tmp',
+        downloads_size: 300,
+        temp_size: 0,
       }
 
       const { result, rerender } = renderHook(
-        ({ storageInfo }) => useStorageCalculations(storageInfo),
+        ({ storageInfo }: { storageInfo?: StorageInfo }) => useStorageCalculations(storageInfo),
         { initialProps: { storageInfo: initialStorageInfo } }
       )
 
@@ -264,8 +330,12 @@ describe('useStorageCalculations', () => {
       const updatedStorageInfo: StorageInfo = {
         total_space: 1000,
         used_space: 920,
-        downloads_space: 920,
-        downloads_count: 15,
+        free_space: 80,
+        usage_percentage: 92,
+        download_directory: '/downloads',
+        temp_directory: '/tmp',
+        downloads_size: 920,
+        temp_size: 0,
       }
 
       rerender({ storageInfo: updatedStorageInfo })
@@ -275,21 +345,25 @@ describe('useStorageCalculations', () => {
     })
 
     it('handles transition from defined to undefined', () => {
-      const initialStorageInfo: StorageInfo = {
+      const initialStorageInfo: StorageInfo | undefined = {
         total_space: 1000,
         used_space: 300,
-        downloads_space: 300,
-        downloads_count: 5,
+        free_space: 700,
+        usage_percentage: 30,
+        download_directory: '/downloads',
+        temp_directory: '/tmp',
+        downloads_size: 300,
+        temp_size: 0,
       }
 
       const { result, rerender } = renderHook(
-        ({ storageInfo }) => useStorageCalculations(storageInfo),
-        { initialProps: { storageInfo: initialStorageInfo } }
+        (storageInfo: StorageInfo | undefined) => useStorageCalculations(storageInfo),
+        { initialProps: initialStorageInfo }
       )
 
       expect(result.current.usagePercentage).toBe(30)
 
-      rerender({ storageInfo: undefined })
+      rerender(undefined)
 
       expect(result.current.usagePercentage).toBe(0)
       expect(result.current.totalSpace).toBe(0)
