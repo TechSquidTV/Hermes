@@ -107,7 +107,8 @@ services:
         condition: service_healthy
       hermes-api:
         condition: service_healthy
-    command: uv run celery -A app.tasks.celery_app worker --loglevel=info --concurrency=1 --hostname=hermes-worker@%h
+    # Run celery directly from venv to avoid uv run re-installing dev dependencies
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=1 --hostname=hermes-worker@%h
     healthcheck:
       test: ["CMD", "celery", "-A", "app.tasks.celery_app", "inspect", "ping"]
       interval: 30s

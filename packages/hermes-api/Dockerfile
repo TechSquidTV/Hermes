@@ -73,4 +73,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 ENTRYPOINT ["/app/entrypoint.sh"]
 
 # Run the application with optimized settings
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--loop", "asyncio"]
+# Use uvicorn directly from venv to avoid uv run re-installing dev dependencies
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--loop", "asyncio"]
