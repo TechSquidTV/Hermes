@@ -10,6 +10,7 @@ export default tseslint.config(
     ignores: [
       'dist/**',
       'node_modules/**',
+      'public/**', // Static assets and runtime config
       '*.config.js',
       '*.config.ts',
       'src/routeTree.gen.ts',
