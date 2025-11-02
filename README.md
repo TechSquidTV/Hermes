@@ -145,7 +145,7 @@ HERMES_ALLOWED_ORIGINS=https://hermes.example.com,https://hermes-api.example.com
 VITE_API_BASE_URL=https://hermes-api.example.com/api/v1
 ```
 
-See our [Reverse Proxy Guide](docs/REVERSE_PROXY_GUIDE.md) for integrating with existing setups (Traefik, nginx, etc.).
+See our [Proxy & Deployment Guide](docs/PROXY_DEPLOYMENT.md) for integrating with existing setups (Traefik, nginx, etc.) and deploying with separate subdomains.
 
 ### 🐛 Having Issues?
 

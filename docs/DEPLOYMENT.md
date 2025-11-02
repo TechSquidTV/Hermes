@@ -1,6 +1,6 @@
 # Deployment Guide
 
-This document provides detailed information about deploying Hermes in various environments.
+This document covers operational aspects of deploying Hermes including volume management, monitoring, backups, and security. For reverse proxy configuration and domain setup, see the [Proxy & Deployment Guide](PROXY_DEPLOYMENT.md).
 
 ## Docker Volume Mounts
 
@@ -43,6 +43,8 @@ Temporary files are stored separately to avoid cluttering the download directory
 - **Conversion artifacts** during format transcoding
 - **Cleanup target** - these files can be safely deleted to free space
 
+---
+
 ## Production Deployment
 
 ### Environment Setup
@@ -54,124 +56,25 @@ Temporary files are stored separately to avoid cluttering the download directory
 5. **Configure CORS origins** for your domain(s)
 6. **Set frontend API URL** if using separate domains
 
-### Domain Configuration Options
+### Domain Configuration
 
-#### Option 1: Single Domain (Recommended for most users)
+For domain configuration, reverse proxy setup, and deployment scenarios, see the [Proxy & Deployment Guide](PROXY_DEPLOYMENT.md) which covers:
 
-**Setup:**
-- Frontend and API on same domain: `hermes.example.com`
-- API accessible at: `hermes.example.com/api/`
-
-**Environment Variables:**
-```bash
-HERMES_ALLOWED_ORIGINS=https://hermes.example.com
-VITE_API_BASE_URL=/api/v1
-```
-
-**Caddyfile:**
-```caddyfile
-hermes.example.com {
-    handle /api/* {
-        reverse_proxy api:8000
-    }
-
-    handle {
-        root * /app
-        try_files {path} /index.html
-        file_server
-    }
-}
-```
-
-#### Option 2: Separate Domains (Advanced)
-
-**Setup:**
-- Frontend at: `hermes.example.com`
-- API at: `hermes-api.example.com`
-
-**Environment Variables:**
-```bash
-HERMES_ALLOWED_ORIGINS=https://hermes.example.com,https://hermes-api.example.com
-VITE_API_BASE_URL=https://hermes-api.example.com/api/v1
-```
-
-**Caddyfile:**
-```caddyfile
-# API Domain
-hermes-api.example.com {
-    handle /api/v1/* {
-        reverse_proxy api:8000
-    }
-
-    handle {
-        respond "Not Found" 404
-    }
-}
-
-# Frontend Domain
-hermes.example.com {
-    handle /api/* {
-        redir https://hermes-api.example.com{uri} permanent
-    }
-
-    handle {
-        root * /app
-        try_files {path} /index.html
-        file_server
-    }
-}
-```
+- Single domain deployment (default)
+- Separate subdomains setup
+- Integration with existing reverse proxies (Caddy, nginx, Traefik, Apache, etc.)
+- Complete configuration examples
+- Runtime API URL configuration
 
 ### Docker Deployment
 
 The application includes optimized Dockerfiles for both services:
 
-- **Frontend**: Multi-stage build producing static files in a lightweight busybox container
+- **Frontend**: Multi-stage build producing static files served by nginx
 - **API**: Python application with uv package management
 - **Worker**: Celery worker for background tasks
 
-> **Note**: The frontend container doesn't run a web server - it just holds static files that are served by the reverse proxy (Caddy) via a shared Docker volume.
-
-#### Production Docker Compose
-
-```yaml
-# Production configuration is in the main docker-compose.yml
-# Key features:
-# - Caddy reverse proxy with automatic HTTPS
-# - Static file serving via shared volumes
-# - Internal network for service communication
-# - Health checks for all services
-
-services:
-  proxy:
-    image: caddy:2-alpine
-    container_name: hermes-proxy
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - app_dist:/app:ro
-
-  app:
-    build: .
-    volumes:
-      - app_dist:/app
-
-  api:
-    build: ./packages/hermes-api
-    volumes:
-      - ./data:/app/data
-      - ./downloads:/app/downloads
-    # No ports exposed - accessed via proxy
-
-volumes:
-  app_dist:
-  caddy_data:
-```
-
-### Manual Deployment
+> **Note**: The frontend container runs nginx to serve static files and generate runtime configuration.
 
 #### Building Production Images
 
@@ -203,86 +106,19 @@ docker run -d \
 docker run -d \
   --name hermes-app \
   -p 3000:80 \
+  -e VITE_API_BASE_URL=/api/v1 \
   hermes-app:latest
 ```
 
-## Reverse Proxy Setup
-
-### Using Caddy (Default)
-
-The default `docker-compose.yml` includes Caddy as a reverse proxy. To customize:
-
-1. Edit the `Caddyfile` in the project root
-2. For production with a domain:
-```caddy
-hermes.yourdomain.com {
-    tls admin@yourdomain.com
-    
-    handle /health {
-        respond "healthy" 200
-    }
-    
-    handle /api/* {
-        reverse_proxy api:8000
-    }
-    
-    handle {
-        root * /app
-        try_files {path} /index.html
-        file_server
-    }
-}
-```
-3. Restart the proxy: `docker compose restart proxy`
-
-### Using Your Own Reverse Proxy
-
-If you have an existing reverse proxy (Traefik, nginx Proxy Manager, etc.):
-
-1. Remove the `proxy` service from `docker-compose.yml`
-2. Don't expose port 3000 on the `app` service
-3. Connect your reverse proxy to the `hermes-network`
-4. Point your proxy to:
-   - Static files: Mount the `app_dist` volume and serve from there
-   - API: `http://api:8000/api/`
-
-See the [Reverse Proxy Guide](REVERSE_PROXY_GUIDE.md) for detailed examples.
-
-### Legacy nginx Configuration
-
-For reference, if you need to use nginx as an external reverse proxy:
-
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-
-    # Frontend - serve from shared volume
-    location / {
-        root /path/to/app_dist/volume;
-        try_files $uri $uri/ /index.html;
-    }
-
-    # API
-    location /api/ {
-        proxy_pass http://api:8000/api/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        # Note: Hermes uses Server-Sent Events (SSE), not WebSockets
-        # No special WebSocket configuration needed
-    }
-}
-```
+---
 
 ## Monitoring & Health Checks
 
 ### Health Check Endpoints
 
 - **API Health**: `http://your-domain.com/api/v1/health/`
-- **Frontend Health**: `http://your-domain.com/health`
+  - Returns: `{"status":"healthy","timestamp":"...","version":"...","environment":"..."}`
+- **Frontend Health**: Nginx serves on port 80 - check with any HTTP request
 
 ### Version Status
 
@@ -311,14 +147,6 @@ The version status appears in the bottom-left of the sidebar and provides:
 3. **Direct links** to GitHub releases for easy access to changelogs
 4. **Pre-release messaging** when no releases have been published yet
 
-#### Integration with Release Process
-
-The version status feature automatically integrates with the release workflows:
-
-- Updates are detected when new tags are pushed (`hermes-app-v*`, `hermes-api-v*`)
-- Version comparison uses semantic versioning (MAJOR.MINOR.PATCH)
-- Links point to the correct release pages in the monorepo
-
 #### Deployment Considerations
 
 - **Docker Images**: Version status works with any deployment method (Docker, manual, etc.)
@@ -341,7 +169,9 @@ The version status feature automatically integrates with the release workflows:
 3. **Logs**
    - API logs for errors and authentication issues
    - Worker logs for download failures
-   - Nginx access logs for security monitoring
+   - Container logs for system issues
+
+---
 
 ## Backup Strategy
 
@@ -389,20 +219,24 @@ cp docker-compose.yml $BACKUP_DIR/
 find $BACKUP_DIR -name "*" -type f -mtime +7 -delete
 ```
 
+---
+
 ## Security Considerations
 
 ### Production Security Checklist
 
 - [ ] Use HTTPS with proper SSL certificates
 - [ ] Enable rate limiting (`HERMES_ENABLE_RATE_LIMITING=true`)
-- [ ] Set strong secret key
-- [ ] Configure CORS properly for your domain
-- [ ] Enable token blacklisting
+- [ ] Set strong secret key (32+ characters, random)
+- [ ] Configure CORS properly for your domain(s)
+- [ ] Enable token blacklisting (`HERMES_ENABLE_TOKEN_BLACKLIST=true`)
 - [ ] Set up proper firewall rules
 - [ ] Monitor authentication attempts
 - [ ] Keep all dependencies updated
-- [ ] Use non-root containers
+- [ ] Use non-root containers (default in Dockerfiles)
 - [ ] Implement proper backup strategy
+- [ ] Restrict access to sensitive endpoints
+- [ ] Use environment variables for secrets (never hardcode)
 
 ### Firewall Configuration
 
@@ -420,79 +254,215 @@ sudo ufw default allow outgoing
 sudo ufw enable
 ```
 
+### Environment Variable Security
+
+```bash
+# Generate secure secret key
+python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+
+# Set in .env with proper permissions
+chmod 600 .env
+chown your-user:your-user .env
+```
+
+---
+
 ## Troubleshooting
 
 ### Common Issues
 
-**Dev dependencies being installed in production:**
-- **Symptom**: Logs show "Downloading black, ruff, mypy" on container startup
-- **Cause**: Using `uv run <command>` installs all dependencies including dev dependencies
-- **Solution**: Run commands directly from the venv instead:
-  ```yaml
-  # Bad - reinstalls dev dependencies
-  command: uv run uvicorn app.main:app
+#### Dev dependencies being installed in production
 
-  # Good - uses pre-installed dependencies only
-  command: uvicorn app.main:app
-  ```
-- **Note**: The Dockerfile already installs dependencies with `--no-dev`, but `uv run` bypasses this
+**Symptom**: Logs show "Downloading black, ruff, mypy" on container startup
 
-**Container won't start:**
+**Cause**: Using `uv run <command>` installs all dependencies including dev dependencies
+
+**Solution**: Run commands directly from the venv instead:
+```yaml
+# Bad - reinstalls dev dependencies
+command: uv run uvicorn app.main:app
+
+# Good - uses pre-installed dependencies only
+command: uvicorn app.main:app
+```
+
+**Note**: The Dockerfile already installs dependencies with `--no-dev`, but `uv run` bypasses this
+
+#### Container won't start
+
 - Check if all required environment variables are set
 - Verify volume mount paths exist and are writable
-- Check Docker daemon status
+- Check Docker daemon status: `docker ps`
+- Review container logs: `docker compose logs <service>`
 
-**Database connection errors:**
+#### Database connection errors
+
 - Ensure database URL format is correct
 - Verify database server is running and accessible
 - Check network connectivity between containers
+- Verify credentials and permissions
 
-**Download failures:**
-- Check available disk space
+#### Download failures
+
+- Check available disk space: `df -h`
 - Verify yt-dlp can access the target URLs
-- Check worker container logs
+- Check worker container logs: `docker compose logs celery_worker`
+- Verify network connectivity from worker container
 
-**Authentication issues:**
-- Verify `HERMES_SECRET_KEY` is set correctly
+#### Authentication issues
+
+- Verify `HERMES_SECRET_KEY` is set correctly and consistently across all services
 - Check token expiration settings
-- Review CORS configuration
+- Review CORS configuration in `HERMES_ALLOWED_ORIGINS`
+- Clear browser cache and cookies
+- Check for expired or blacklisted tokens
+
+#### Real-time updates not working
+
+- Verify SSE endpoint is accessible: `/api/v1/events/*`
+- Check reverse proxy configuration (see [Proxy & Deployment Guide](PROXY_DEPLOYMENT.md))
+- Ensure proxy allows long-lived connections
+- Check for buffering issues in proxy configuration
 
 ### Log Locations
 
-- **API logs**: Container logs (`docker compose logs api`)
-- **Worker logs**: Container logs (`docker compose logs celery_worker`)
-- **Frontend logs**: Container logs (`docker compose logs hermes-app`)
-- **Redis logs**: Container logs (`docker compose logs redis`)
+Access container logs using Docker Compose:
+
+```bash
+# All services
+docker compose logs
+
+# Specific service
+docker compose logs api
+docker compose logs celery_worker
+docker compose logs app
+docker compose logs redis
+
+# Follow logs in real-time
+docker compose logs -f api
+
+# Last 100 lines
+docker compose logs --tail=100 api
+```
+
+### Debug Mode
+
+Enable debug mode for more verbose logging:
+
+```env
+# .env
+HERMES_DEBUG=true
+HERMES_DATABASE_ECHO=true
+```
+
+**Warning**: Never enable debug mode in production as it may expose sensitive information.
 
 ### Getting Support
 
-1. Check the [Docker setup guide](DOCKER_OPTIMIZATION_README.md)
-2. Review [configuration documentation](CONFIGURATION.md)
-3. Check API documentation in the individual package READMEs
-4. Search existing issues in the repository
+1. Check the [Proxy & Deployment Guide](PROXY_DEPLOYMENT.md) for proxy and domain issues
+2. Review [Configuration Guide](CONFIGURATION.md) for environment variables
+3. Check the [Docker setup guide](DOCKER_OPTIMIZATION_README.md) for optimization tips
+4. Search existing issues in the [GitHub repository](https://github.com/TechSquidTV/Hermes/issues)
+5. Create a new issue with:
+   - Your deployment configuration (redact secrets)
+   - Container logs
+   - Error messages
+   - Steps to reproduce
+
+---
 
 ## Performance Tuning
 
 ### API Performance
 
-- Adjust `HERMES_RATE_LIMIT_PER_MINUTE` based on your needs
-- Monitor database query performance
-- Consider using PostgreSQL for better performance under load
+- **Adjust rate limiting** based on your needs:
+  ```env
+  HERMES_RATE_LIMIT_PER_MINUTE=120  # Increase for more traffic
+  ```
+
+- **Monitor database query performance**:
+  ```env
+  HERMES_DATABASE_ECHO=true  # Enable query logging (dev only)
+  ```
+
+- **Use PostgreSQL** for better performance under load:
+  ```env
+  HERMES_DATABASE_URL=postgresql+asyncpg://user:pass@db:5432/hermes
+  ```
+
+- **Configure Redis maxmemory** policy:
+  ```yaml
+  redis:
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+  ```
 
 ### Worker Performance
 
-- Scale Celery workers based on download volume:
-  ```yaml
-  celery_worker:
-    # ... existing config ...
-    deploy:
-      replicas: 3  # Scale workers horizontally
-  ```
+Scale Celery workers based on download volume:
+
+```yaml
+# docker-compose.yml
+celery_worker:
+  # ... existing config ...
+  deploy:
+    replicas: 3  # Scale workers horizontally
+```
+
+Or run multiple named workers:
+
+```bash
+docker compose up -d --scale celery_worker=3
+```
+
+Adjust worker concurrency:
+
+```yaml
+celery_worker:
+  command: celery -A app.worker worker --loglevel=info --concurrency=4
+```
 
 ### Storage Optimization
 
-- Implement regular cleanup of temporary files
-- Use appropriate file formats for your use case
-- Consider external storage solutions for large download volumes
+- **Implement regular cleanup** of temporary files:
+  ```bash
+  # Cron job to clean temp directory
+  0 2 * * * find /path/to/temp -type f -mtime +7 -delete
+  ```
+
+- **Use appropriate file formats** for your use case:
+  - MP4 for broad compatibility
+  - WebM for smaller file sizes
+  - MKV for highest quality
+
+- **Monitor disk usage**:
+  ```bash
+  # Check disk space
+  df -h
+
+  # Check directory sizes
+  du -sh packages/hermes-api/downloads/
+  du -sh packages/hermes-api/temp/
+  ```
+
+- **Consider external storage** for large download volumes:
+  - NFS mounts
+  - S3-compatible object storage
+  - Network-attached storage (NAS)
+
+### Network Performance
+
+- **Enable gzip compression** in your reverse proxy
+- **Use HTTP/2** for better performance
+- **Enable caching** for static assets
+- **Use CDN** for frontend assets if serving globally
 
 See the [Docker optimization guide](DOCKER_OPTIMIZATION_README.md) for detailed performance recommendations.
+
+---
+
+## Related Documentation
+
+- [Proxy & Deployment Guide](PROXY_DEPLOYMENT.md) - Reverse proxy and domain configuration
+- [Configuration Guide](CONFIGURATION.md) - Environment variables reference
+- [Docker Optimization](DOCKER_OPTIMIZATION_README.md) - Docker performance tuning
+- [Main README](../README.md) - Getting started and overview
