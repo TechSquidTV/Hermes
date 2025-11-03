@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '@/services/api/client'
 import { formatDistanceToNow } from 'date-fns'
+import { getApiBaseUrl, isDevelopment } from '@/lib/config'
 
 export function GeneralSettings() {
   const { user, logout } = useAuth()
@@ -41,13 +42,13 @@ export function GeneralSettings() {
                 <Badge variant="secondary">API Server</Badge>
                 <span className="text-sm">
                   {(() => {
-                    const apiBase = import.meta.env.VITE_API_BASE_URL
-                    if (import.meta.env.DEV) {
+                    const apiBase = getApiBaseUrl()
+                    if (isDevelopment()) {
                       // Development: API runs on localhost:8000
                       return 'localhost:8000'
                     }
-                    // Production: Extract domain from VITE_API_BASE_URL
-                    if (apiBase && apiBase.startsWith('http')) {
+                    // Production: Extract domain from API base URL
+                    if (apiBase.startsWith('http')) {
                       return apiBase.replace(/^https?:\/\//, '').replace(/\/api\/v1$/, '')
                     }
                     // Fallback to current domain

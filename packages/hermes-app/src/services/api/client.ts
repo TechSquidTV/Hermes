@@ -67,18 +67,13 @@ interface SSETokenResponse {
 }
 
 import { TokenStorage } from '@/utils/tokenStorage'
+import { getApiBaseUrl } from '@/lib/config'
 
 class ApiClient {
   private baseURL: string
 
   constructor() {
-    // Priority: runtime config > build-time env > default
-    // Runtime config allows Docker containers to be configured without rebuilding
-    this.baseURL =
-      window.__RUNTIME_CONFIG__?.API_BASE_URL ||
-      import.meta.env.VITE_API_BASE_URL ||
-      '/api/v1'
-
+    this.baseURL = getApiBaseUrl()
     console.log(`[ApiClient] Using API base URL: ${this.baseURL}`)
   }
 

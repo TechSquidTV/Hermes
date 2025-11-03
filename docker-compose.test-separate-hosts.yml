@@ -1,0 +1,128 @@
+# Test configuration for separate app and API hosts
+# This simulates a production setup where the frontend and backend
+# are deployed on different subdomains (e.g., app.example.com and api.example.com)
+#
+# Usage:
+#   docker compose -f docker-compose.test-separate-hosts.yml up --build
+#
+# Access:
+#   App: http://localhost:3001
+#   API: http://localhost:8001/api/v1
+#
+# In this setup:
+#   - The app container runs nginx on port 3001
+#   - The API container runs on port 8001
+#   - The app is configured to call the API at http://localhost:8001/api/v1
+#   - This simulates separate subdomains without needing DNS setup
+
+services:
+  # Backend API - exposed directly on port 8001
+  api:
+    build:
+      context: ./packages/hermes-api
+      dockerfile: Dockerfile
+    container_name: hermes-api-test
+    restart: unless-stopped
+    ports:
+      - "8001:8000"
+    environment:
+      - HERMES_SECRET_KEY=${HERMES_SECRET_KEY:-test-secret-key-for-development-only}
+      - HERMES_REDIS_URL=redis://redis:6379
+      - HERMES_DEBUG=true
+      # CORS must allow requests from the app's origin
+      - HERMES_ALLOWED_ORIGINS=http://localhost:3001,http://127.0.0.1:3001
+    volumes:
+      - ./packages/hermes-api/downloads:/app/downloads
+      - ./packages/hermes-api/temp:/app/temp
+      - ./packages/hermes-api/data:/app/data
+    networks:
+      - hermes-test-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --loop asyncio --access-log --log-level info
+
+  # Celery worker for background tasks
+  celery_worker:
+    build:
+      context: ./packages/hermes-api
+      dockerfile: Dockerfile
+    container_name: hermes-worker-test
+    restart: unless-stopped
+    environment:
+      - HERMES_SECRET_KEY=${HERMES_SECRET_KEY:-test-secret-key-for-development-only}
+      - HERMES_REDIS_URL=redis://redis:6379
+      - HERMES_DEBUG=true
+    volumes:
+      - ./packages/hermes-api/downloads:/app/downloads
+      - ./packages/hermes-api/temp:/app/temp
+      - ./packages/hermes-api/data:/app/data
+    networks:
+      - hermes-test-network
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    command: celery -A app.worker worker --loglevel=info --concurrency=1 --hostname=hermes-worker@%h --queues=hermes.downloads,hermes.cleanup,hermes.default
+    healthcheck:
+      test: ["CMD", "celery", "-A", "app.worker", "inspect", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Frontend app - exposed directly on port 3001
+  app:
+    build:
+      context: .
+      dockerfile: packages/hermes-app/Dockerfile
+    container_name: hermes-app-test
+    restart: unless-stopped
+    ports:
+      - "3001:80"
+    environment:
+      # CRITICAL: Set the API base URL to the full URL of the API server
+      # This simulates a separate subdomain setup where the app cannot use a relative path
+      - VITE_API_BASE_URL=http://localhost:8001/api/v1
+    networks:
+      - hermes-test-network
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Redis for caching and task queue
+  redis:
+    image: redis:7-alpine
+    container_name: hermes-redis-test
+    restart: unless-stopped
+    volumes:
+      - redis_test_data:/data
+    networks:
+      - hermes-test-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+networks:
+  hermes-test-network:
+    driver: bridge
+
+volumes:
+  redis_test_data:

@@ -2,11 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSSE } from './useSSE';
 import { apiClient } from '@/services/api/client';
+import { getApiBaseUrl } from '@/lib/config';
 import type { components } from '@/types/api.generated';
 
 type DownloadStatus = components["schemas"]["DownloadStatus"];
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 /**
  * Hook for real-time download progress updates via SSE
@@ -67,10 +66,10 @@ export function useDownloadProgressSSE(downloadId: string) {
   }, [downloadId]);
 
   // Build SSE URL with ephemeral token
-  const sseUrl = useMemo(
-    () => (sseToken ? `${API_BASE_URL}/api/v1/events/downloads/${downloadId}?token=${sseToken}` : null),
-    [sseToken, downloadId]
-  );
+  const sseUrl = useMemo(() => {
+    if (!sseToken) return null;
+    return `${getApiBaseUrl()}/events/downloads/${downloadId}?token=${sseToken}`;
+  }, [sseToken, downloadId]);
 
   // Memoize options to prevent recreating connections on every render
   const sseOptions = useMemo(
