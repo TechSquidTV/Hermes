@@ -134,7 +134,9 @@ Deploy app and API on different subdomains for better separation, CDN integratio
 - Different SSL certificate requirements
 - Geographical distribution
 
-#### How Runtime Configuration Works
+## Runtime Configuration
+
+### How Runtime Configuration Works
 
 Hermes uses a **runtime configuration** system that allows you to configure the API URL without rebuilding the Docker image:
 
@@ -143,6 +145,27 @@ Hermes uses a **runtime configuration** system that allows you to configure the 
 3. **Runtime**: Browser loads `/config.js` which provides the API base URL
 
 This means you can change the API URL by simply setting an environment variable and restarting the container.
+
+#### Technical Implementation
+
+The frontend uses a centralized configuration utility (`src/lib/config.ts`) that provides a single source of truth for the API base URL:
+
+```typescript
+export function getApiBaseUrl(): string {
+  return (
+    window.__RUNTIME_CONFIG__?.API_BASE_URL ||
+    import.meta.env.VITE_API_BASE_URL ||
+    '/api/v1'
+  )
+}
+```
+
+This utility is used by all services (authentication, API client, SSE connections) to ensure consistent behavior across the application.
+
+**Priority order:**
+1. Runtime config (`window.__RUNTIME_CONFIG__.API_BASE_URL`) - Set via Docker env
+2. Build-time env (`import.meta.env.VITE_API_BASE_URL`) - Development fallback
+3. Default (`/api/v1`) - Same-domain proxy fallback
 
 #### Configuration Steps
 
@@ -1131,6 +1154,7 @@ After deploying, verify your setup:
 
 - [Main README](../README.md)
 - [Environment Variables Reference](../.env.example)
+- [Runtime Configuration Utility](../packages/hermes-app/src/lib/config.ts) - Centralized API URL configuration
 - [Issue Tracker](https://github.com/TechSquidTV/Hermes/issues)
 - [Docker Documentation](https://docs.docker.com/)
 

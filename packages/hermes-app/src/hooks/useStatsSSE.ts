@@ -2,8 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSSE } from './useSSE';
 import { apiClient } from '@/services/api/client';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+import { getApiBaseUrl } from '@/lib/config';
 
 export interface StatsUpdate {
   event: 'download_completed' | 'stats_refresh';
@@ -69,10 +68,10 @@ export function useStatsSSE() {
   }, []); // Only fetch once on mount
 
   // Build SSE URL with ephemeral token
-  const sseUrl = useMemo(
-    () => (sseToken ? `${API_BASE_URL}/api/v1/events/stats?token=${sseToken}` : null),
-    [sseToken]
-  );
+  const sseUrl = useMemo(() => {
+    if (!sseToken) return null;
+    return `${getApiBaseUrl()}/events/stats?token=${sseToken}`;
+  }, [sseToken]);
 
   // Memoize options to prevent recreating connections on every render
   const sseOptions = useMemo(

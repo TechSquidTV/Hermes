@@ -2,13 +2,14 @@
 
 import type { User, LoginCredentials, SignupCredentials, AuthResponse } from '@/types/auth'
 import { TokenStorage } from '@/utils/tokenStorage'
+import { getApiBaseUrl } from '@/lib/config'
 
 class AuthService {
   private baseURL: string
 
   constructor() {
-    // Use environment variable if available, otherwise use relative path for nginx proxy
-    this.baseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
+    this.baseURL = getApiBaseUrl()
+    console.log(`[AuthService] Using API base URL: ${this.baseURL}`)
   }
 
   public getBaseURL(): string {
