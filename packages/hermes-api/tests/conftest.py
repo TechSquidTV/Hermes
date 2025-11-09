@@ -63,7 +63,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 @pytest_asyncio.fixture
-async def client() -> AsyncGenerator[AsyncClient, None]:
+async def client(setup_test_database) -> AsyncGenerator[AsyncClient, None]:
     """Create an async HTTP client for testing with auth mocked."""
     from app.core.security import get_current_api_key
     from app.main import app
