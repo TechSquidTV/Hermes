@@ -45,6 +45,13 @@ We use semantic versioning (MAJOR.MINOR.PATCH) for all releases:
 
 ## 🏷️ Creating a Release
 
+Releases follow a structured workflow to ensure stability:
+
+1. **Develop Branch** → Changes merge to `develop`, automatically builds `develop` Docker images
+2. **Testing** → Test using `develop` Docker images before releasing
+3. **Main Branch** → When ready, merge `develop` to `main`
+4. **Release Workflow** → Manually trigger release from `main` branch
+
 Releases are created using the GitHub Actions workflow, which ensures consistency and runs in a clean CI environment.
 
 ### Using GitHub UI
@@ -254,9 +261,30 @@ git push origin :refs/tags/hermes-app-v1.0.0
 
 **Note**: Only delete tags that haven't been deployed to production. Once deployed, create a new version instead.
 
-## 🛡️ Pre-release Versions
+## 🛡️ Pre-release Testing
 
-For testing before a production release, use pre-release tags:
+### Develop Branch (Recommended)
+
+The **preferred method** for testing before production is using the `develop` branch:
+
+```bash
+# Pull and test develop images (automatically built on push to develop)
+docker pull ghcr.io/techsquidtv/hermes-app:develop
+docker pull ghcr.io/techsquidtv/hermes-api:develop
+
+# Test with docker-compose by updating image tags to :develop
+docker compose -f docker-compose.example.yml up -d
+```
+
+**Benefits:**
+- Automatic builds on every push to `develop`
+- No manual tagging required
+- Clear separation from production `latest` tag
+- Easy to test accumulated changes before release
+
+### Pre-release Version Tags (Alternative)
+
+For formal pre-release versions (alpha/beta/rc), you can use pre-release tags:
 
 ```bash
 # Alpha version
@@ -278,13 +306,25 @@ These will build and publish Docker images but won't update the `latest` tag.
 
 Before triggering a release:
 
-- [ ] Ensure all feature PRs are merged to `main`
-- [ ] Verify tests pass locally: `pnpm test:all` (optional but recommended)
-- [ ] Optional: Run `pnpm pre-check:full` locally to catch issues early
+**Development & Testing:**
+- [ ] All feature PRs are merged to `develop` branch
+- [ ] `develop` workflow has run successfully (check Actions tab)
+- [ ] Test using `develop` Docker images:
+  ```bash
+  docker pull ghcr.io/techsquidtv/hermes-app:develop
+  docker pull ghcr.io/techsquidtv/hermes-api:develop
+  ```
+- [ ] Verify all functionality works with `develop` images
+- [ ] Optional: Run `pnpm pre-check` locally to catch issues early
+
+**Pre-Release:**
+- [ ] Create PR from `develop` to `main`
+- [ ] Verify all PR checks pass
+- [ ] Merge PR to `main`
 - [ ] Update changelog (if maintained)
 - [ ] Document breaking changes (if any)
 
-To release:
+**Release:**
 
 - [ ] Trigger release workflow via GitHub UI or CLI (choose patch/minor/major)
 - [ ] Monitor workflow run in Actions tab

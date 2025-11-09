@@ -177,11 +177,20 @@ pnpm dev
 
 - **[Configuration Guide](docs/CONFIGURATION.md)** - Complete environment variables and settings reference
 - **[Deployment Guide](docs/DEPLOYMENT.md)** - Docker volumes, production deployment, and troubleshooting
-- **[Contributing Guide](docs/CONTRIBUTING.md)** - How to contribute code, tests, and documentation
+- **[Contributing Guide](docs/CONTRIBUTING.md)** - Development workflow, branch strategy, and how to contribute
+- **[Release Process](docs/RELEASE_PROCESS.md)** - Version management and release workflow
 - **[API Documentation](packages/hermes-api/README.md)** - Complete API reference and examples
 - **[Frontend Guide](packages/hermes-app/README.md)** - React app development guide
 - **[Interactive API Docs](http://localhost:8000/docs)** - Live Swagger documentation
 - **[docker-compose.example.yml](docker-compose.example.yml)** - Pre-built images deployment configuration
+
+### 🔀 Branch Strategy
+
+- **`main`** - Stable production releases (Docker: `latest`)
+- **`develop`** - Integration branch for testing (Docker: `develop`)
+- **Feature branches** - Your contributions (merge to `develop`)
+
+Contributors: Open PRs to `develop`, not `main`. See the [Contributing Guide](docs/CONTRIBUTING.md) for details.
 ---
 
 ## Hosting Partner
