@@ -51,7 +51,7 @@ Temporary files are stored separately to avoid cluttering the download directory
 
 1. **Set `HERMES_DEBUG=false`** in your `.env` file
 2. **Use a secure `HERMES_SECRET_KEY`** (generate with the methods in CONFIGURATION.md)
-3. **Configure production database URL** (PostgreSQL recommended for production)
+3. **Ensure SQLite database is properly backed up**
 4. **Set up proper Redis configuration**
 5. **Configure CORS origins** for your domain(s)
 6. **Set frontend API URL** if using separate domains
@@ -97,7 +97,7 @@ docker run -d \
   -p 8000:8000 \
   -e HERMES_SECRET_KEY=your-secret \
   -e HERMES_DEBUG=false \
-  -e HERMES_DATABASE_URL=postgresql+asyncpg://user:pass@db/hermes \
+  -e HERMES_DATABASE_URL=sqlite+aiosqlite:///./data/hermes.db \
   -v /data/hermes/downloads:/app/downloads \
   -v /data/hermes/data:/app/data \
   hermes-api:latest
@@ -178,11 +178,12 @@ The version status appears in the bottom-left of the sidebar and provides:
 ### Database Backups
 
 ```bash
-# SQLite backup (development)
+# SQLite backup
 cp packages/hermes-api/data/hermes.db packages/hermes-api/data/hermes.db.backup
 
-# PostgreSQL backup (production)
-pg_dump hermes > hermes_backup.sql
+# Create timestamped backup
+cp packages/hermes-api/data/hermes.db \
+   packages/hermes-api/data/hermes.db.backup.$(date +%Y%m%d_%H%M%S)
 ```
 
 ### File Backups
@@ -384,11 +385,7 @@ HERMES_DATABASE_ECHO=true
   ```env
   HERMES_DATABASE_ECHO=true  # Enable query logging (dev only)
   ```
-
-- **Use PostgreSQL** for better performance under load:
-  ```env
-  HERMES_DATABASE_URL=postgresql+asyncpg://user:pass@db:5432/hermes
-  ```
+  **Note:** Hermes uses SQLite for simplicity. For high-traffic production deployments, consider implementing database connection pooling or migrating to PostgreSQL (requires code changes).
 
 - **Configure Redis maxmemory** policy:
   ```yaml
