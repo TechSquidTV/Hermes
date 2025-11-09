@@ -221,8 +221,8 @@ class TestPublicConfigEndpoint:
         response = await client.get("/api/v1/config/public")
         assert response.status_code == 200
         data = response.json()
-        assert "allow_public_signup" in data
-        assert data["allow_public_signup"] is True
+        assert "allowPublicSignup" in data
+        assert data["allowPublicSignup"] is True
 
     @pytest.mark.asyncio
     async def test_public_config_with_signup_disabled(
@@ -242,7 +242,7 @@ class TestPublicConfigEndpoint:
         response = await client.get("/api/v1/config/public")
         assert response.status_code == 200
         data = response.json()
-        assert data["allow_public_signup"] is False
+        assert data["allowPublicSignup"] is False
 
     @pytest.mark.asyncio
     async def test_public_config_no_auth_required(self, client: AsyncClient):
@@ -254,4 +254,4 @@ class TestPublicConfigEndpoint:
 
         response = await client.get("/api/v1/config/public")
         assert response.status_code == 200
-        assert "allow_public_signup" in response.json()
+        assert "allowPublicSignup" in response.json()

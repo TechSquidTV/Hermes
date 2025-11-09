@@ -8,7 +8,7 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user_from_token
@@ -29,6 +29,7 @@ from app.db.repositories import (
     UserRepository,
 )
 from app.db.session import get_database_session
+from app.models.base import CamelCaseModel
 
 # Rate limiting setup (placeholder for now)
 # In production, you would use a proper rate limiting library like slowapi
@@ -109,53 +110,35 @@ class UserLogin(BaseModel):
     password: str
 
 
-class TokenResponse(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+class TokenResponse(CamelCaseModel):
+    """Token response with automatic camelCase conversion."""
 
-    access_token: str = Field(
-        ..., alias="accessToken", serialization_alias="accessToken"
-    )
-    refresh_token: str = Field(
-        ..., alias="refreshToken", serialization_alias="refreshToken"
-    )
-    token_type: str = Field(
-        default="bearer", alias="tokenType", serialization_alias="tokenType"
-    )
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
 
 
-class UserResponse(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+class UserResponse(CamelCaseModel):
+    """User information response model with automatic camelCase conversion."""
 
     id: str
     username: str
     email: str
     avatar: str | None
-    is_active: bool = Field(
-        default=True, alias="isActive", serialization_alias="isActive"
-    )
-    is_admin: bool = Field(
-        default=False, alias="isAdmin", serialization_alias="isAdmin"
-    )
+    is_active: bool = True
+    is_admin: bool = False
     preferences: dict | None = None
-    created_at: str = Field(..., alias="createdAt", serialization_alias="createdAt")
-    last_login: str | None = Field(
-        default=None, alias="lastLogin", serialization_alias="lastLogin"
-    )
+    created_at: str
+    last_login: str | None = None
 
 
-class AuthResponse(BaseModel):
-    access_token: str = Field(
-        ..., alias="accessToken", serialization_alias="accessToken"
-    )
-    refresh_token: str = Field(
-        ..., alias="refreshToken", serialization_alias="refreshToken"
-    )
-    token_type: str = Field(
-        default="bearer", alias="tokenType", serialization_alias="tokenType"
-    )
+class AuthResponse(CamelCaseModel):
+    """Authentication response with user and tokens."""
+
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
     user: UserResponse
-
-    model_config = ConfigDict(populate_by_name=True)
 
 
 @router.post("/login", response_model=AuthResponse)
@@ -531,7 +514,9 @@ class ApiKeyCreate(BaseModel):
     expires_at: datetime | None = None
 
 
-class ApiKeyResponse(BaseModel):
+class ApiKeyResponse(CamelCaseModel):
+    """API key response with automatic camelCase conversion."""
+
     id: str
     name: str
     key: str  # Only returned on creation, not on list
@@ -542,10 +527,10 @@ class ApiKeyResponse(BaseModel):
     last_used: str | None
     expires_at: str | None
 
-    model_config = ConfigDict(from_attributes=True)
 
+class ApiKeyListResponse(CamelCaseModel):
+    """API key list response with automatic camelCase conversion."""
 
-class ApiKeyListResponse(BaseModel):
     id: str
     name: str
     permissions: list[str]
@@ -554,8 +539,6 @@ class ApiKeyListResponse(BaseModel):
     created_at: str
     last_used: str | None
     expires_at: str | None
-
-    model_config = ConfigDict(from_attributes=True)
 
 
 @router.post("/change-password")

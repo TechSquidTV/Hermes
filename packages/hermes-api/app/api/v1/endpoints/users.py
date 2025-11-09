@@ -5,7 +5,7 @@ User management endpoints (admin only).
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_admin_user
@@ -13,59 +13,44 @@ from app.core.logging import get_logger
 from app.core.security import get_password_hash
 from app.db.repositories import UserRepository
 from app.db.session import get_database_session
+from app.models.base import CamelCaseModel
 
 router = APIRouter(prefix="/users", tags=["users"])
 logger = get_logger(__name__)
 
 
-class UserListResponse(BaseModel):
-    """User information for list view."""
-
-    model_config = ConfigDict(populate_by_name=True)
+class UserListResponse(CamelCaseModel):
+    """User information for list view with automatic camelCase conversion."""
 
     id: str
     username: str
     email: str
     avatar: str | None
-    is_active: bool = Field(
-        ..., alias="isActive", serialization_alias="isActive"
-    )
-    is_admin: bool = Field(
-        ..., alias="isAdmin", serialization_alias="isAdmin"
-    )
-    created_at: str = Field(
-        ..., alias="createdAt", serialization_alias="createdAt"
-    )
-    last_login: str | None = Field(
-        default=None, alias="lastLogin", serialization_alias="lastLogin"
-    )
+    is_active: bool
+    is_admin: bool
+    created_at: str
+    last_login: str | None = None
 
 
-class UserCreateAdmin(BaseModel):
-    """Admin user creation model."""
-
-    model_config = ConfigDict(populate_by_name=True)
+class UserCreateAdmin(CamelCaseModel):
+    """Admin user creation model with automatic camelCase conversion."""
 
     username: str
     email: EmailStr
     password: str
-    is_admin: bool = Field(default=False, alias="isAdmin")
+    is_admin: bool = False
 
 
-class UserUpdateAdmin(BaseModel):
-    """Admin user update model."""
+class UserUpdateAdmin(CamelCaseModel):
+    """Admin user update model with automatic camelCase conversion."""
 
-    model_config = ConfigDict(populate_by_name=True)
-
-    is_admin: bool = Field(..., alias="isAdmin")
+    is_admin: bool
 
 
-class UserUpdateActive(BaseModel):
-    """User active status update model."""
+class UserUpdateActive(CamelCaseModel):
+    """User active status update model with automatic camelCase conversion."""
 
-    model_config = ConfigDict(populate_by_name=True)
-
-    is_active: bool = Field(..., alias="isActive")
+    is_active: bool
 
 
 @router.get("/", response_model=List[UserListResponse])

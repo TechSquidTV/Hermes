@@ -3,19 +3,19 @@ Configuration management endpoints.
 """
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
 
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.security import get_current_api_key
+from app.models.base import CamelCaseModel
 from app.models.pydantic.config import Configuration, ConfigurationUpdate
 
 router = APIRouter(prefix="/config", tags=["configuration"])
 logger = get_logger(__name__)
 
 
-class PublicConfig(BaseModel):
-    """Public configuration that doesn't require authentication."""
+class PublicConfig(CamelCaseModel):
+    """Public configuration with automatic camelCase conversion."""
 
     allow_public_signup: bool
 

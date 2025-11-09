@@ -336,15 +336,15 @@ class TestApiKeyManagement:
         assert "name" in data
         assert "key" in data  # Should return the plain key only on creation
         assert "permissions" in data
-        assert "rate_limit" in data
-        assert "is_active" in data
-        assert "created_at" in data
+        assert "rateLimit" in data
+        assert "isActive" in data
+        assert "createdAt" in data
 
         # Check values
         assert data["name"] == "Test API Key"
         assert data["permissions"] == ["read", "write"]
-        assert data["rate_limit"] == 60
-        assert data["is_active"] is True
+        assert data["rateLimit"] == 60
+        assert data["isActive"] is True
         assert len(data["key"]) > 32  # Should be a long API key
 
     @pytest.mark.asyncio
@@ -414,7 +414,7 @@ class TestApiKeyManagement:
         assert "name" in api_key_data
         assert "key" not in api_key_data  # Should not expose the actual key
         assert "permissions" in api_key_data
-        assert "created_at" in api_key_data
+        assert "createdAt" in api_key_data
 
     @pytest.mark.asyncio
     async def test_list_api_keys_no_auth(self, client: AsyncClient):
