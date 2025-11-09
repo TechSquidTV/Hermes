@@ -45,11 +45,11 @@ async def initialize_admin_user() -> None:
     from sqlalchemy import select
 
     from app.core.security import get_password_hash
-    from app.db.base import get_db
+    from app.db.base import async_session_maker
     from app.db.models import User
 
-    # Get database session
-    async for db in get_db():
+    # Get database session using the session factory directly
+    async with async_session_maker() as db:
         try:
             # Check if any users exist
             result = await db.execute(select(User))
@@ -87,8 +87,6 @@ async def initialize_admin_user() -> None:
             logger.error(f"Failed to create initial admin user: {e}")
             await db.rollback()
             raise
-        finally:
-            break  # Only use the first db session
 
 
 @asynccontextmanager

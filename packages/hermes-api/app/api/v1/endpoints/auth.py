@@ -248,18 +248,15 @@ async def signup(
                 detail="Public signup is disabled. Contact your administrator to create an account.",
             )
 
-        # Check if username already exists
+        # Check if username or email already exists
+        # Use generic message to prevent user enumeration
         existing_user = await repos["users"].get_by_username(user_data.username)
-        if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT, detail="Username already exists"
-            )
-
-        # Check if email already exists
         existing_email = await repos["users"].get_by_email(user_data.email)
-        if existing_email:
+
+        if existing_user or existing_email:
             raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT, detail="Email already exists"
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Unable to create account with the provided credentials"
             )
 
         # Create new user

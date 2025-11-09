@@ -632,7 +632,8 @@ class TestSignup:
 
         assert response.status_code == 409
         data = response.json()
-        assert "username" in data["error"]["message"].lower()
+        # Generic message to prevent user enumeration
+        assert "unable to create account" in data["error"]["message"].lower()
 
     @pytest.mark.asyncio
     async def test_signup_duplicate_email(self, client: AsyncClient, test_user):
@@ -653,7 +654,8 @@ class TestSignup:
 
         assert response.status_code == 409
         data = response.json()
-        assert "email" in data["error"]["message"].lower()
+        # Generic message to prevent user enumeration
+        assert "unable to create account" in data["error"]["message"].lower()
 
     @pytest.mark.asyncio
     async def test_first_user_becomes_admin(self, client: AsyncClient):
