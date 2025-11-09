@@ -27,6 +27,58 @@ Thank you for considering contributing to Hermes! We welcome contributions from 
    - API: http://localhost:8000
    - API Docs: http://localhost:8000/docs
 
+## 🌳 Branch Strategy
+
+Hermes uses a structured branching workflow to ensure stable releases:
+
+### Branches
+
+- **`main`** - Production-ready code
+  - Protected branch
+  - Docker images tagged as `latest` and semantic versions (v1.2.3)
+  - Only receives PRs from `develop`
+  - Releases are manual and explicit
+
+- **`develop`** - Integration and testing branch
+  - All feature branches merge here first
+  - Docker images automatically built and tagged as `develop`
+  - Used for testing before production release
+
+- **`feature/*`, `fix/*`, `docs/*`** - Your work branches
+  - Branch from `develop`
+  - Merge back to `develop` via PR
+
+### Development Flow
+
+```
+Your Feature → develop → (test with develop images) → main → production release
+```
+
+**Step-by-step:**
+1. Create feature branch from `develop`
+2. Make changes and push
+3. Open PR to `develop` (runs automated checks)
+4. After merge, `develop` images are automatically built
+5. Test using `develop` Docker images
+6. When ready for release, create PR from `develop` to `main`
+7. After merge to `main`, manually trigger release workflow
+
+### Testing with Develop Images
+
+After your PR is merged to `develop`, test with the staging images:
+
+```bash
+# Pull develop images
+docker pull ghcr.io/techsquidtv/hermes-app:develop
+docker pull ghcr.io/techsquidtv/hermes-api:develop
+
+# Use with docker compose
+docker compose -f docker-compose.example.yml up -d
+# Edit docker-compose.example.yml to use :develop tags instead of :latest
+```
+
+These `develop` images are **not for production** - they're for testing before release.
+
 ## 🐳 Development Workflow
 
 ### Essential Commands
@@ -91,26 +143,32 @@ pnpm test:all        # All tests
 
 ## 🔄 CI/CD Pipeline
 
-All pull requests run automated checks:
+We have three automated workflows:
 
-**Frontend Changes:**
-- Type checking, linting, build, tests
+### 1. PR Checks (`.github/workflows/pr-checks.yml`)
+Runs on all PRs to `main`:
+- Frontend: Type checking, linting, build, tests
+- Backend: Formatting, linting, type checking, tests with coverage
+- Both run in parallel
+- **PRs are blocked if checks fail**
 
-**Backend Changes:**
-- Code formatting, linting, type checking, tests with coverage
+### 2. Develop Builds (`.github/workflows/develop.yml`)
+Runs on pushes to `develop`:
+- Runs full pre-check validation
+- Builds and pushes Docker images tagged as `develop`
+- Creates staging images for testing
+- **Automatic** - no manual trigger needed
 
-**Both:**
-- Full pipeline runs in parallel
-
-**🚫 PRs are blocked if:**
-- Tests fail
-- Type checking errors
-- Linting violations
-- Build failures
+### 3. Production Release (`.github/workflows/release.yml`)
+Manual workflow from `main` branch:
+- Bumps version in all packages
+- Runs full pre-check validation
+- Builds and pushes Docker images with version tags + `latest`
+- **Manual trigger only** - protected workflow
 
 **Local Testing:**
 ```bash
-pnpm pre-check    # Run everything locally
+pnpm pre-check    # Run everything locally before PR
 pnpm test:all     # Just tests
 pnpm lint         # Just linting
 ```
@@ -164,6 +222,11 @@ We use Cursor with AI assistance. The `.cursor/` directory contains project-spec
 
 ### 2. Create Feature Branch
 ```bash
+# First, ensure you're starting from develop
+git checkout develop
+git pull origin develop
+
+# Create your feature branch
 git checkout -b feature/amazing-new-feature
 # or fix/bug-description
 # or docs/update-readme
@@ -192,10 +255,12 @@ git push origin feature/amazing-new-feature
 ```
 
 ### 6. Create Pull Request
+- **Target**: Open PR against `develop` branch (not `main`)
 - Clear title and description
 - Link related issues
 - Add screenshots for UI changes
 - Ensure all CI checks pass
+- After merge, test with `develop` Docker images
 
 ## 🏗️ Architecture Guidelines
 

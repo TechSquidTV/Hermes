@@ -25,6 +25,21 @@ jobs:
       packages: write
 
     steps:
+      - name: Verify main branch
+        run: |
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "❌ ERROR: Release workflow can only be run from the main branch"
+            echo "Current branch: ${{ github.ref }}"
+            echo ""
+            echo "To release:"
+            echo "1. Ensure your changes are merged to develop first"
+            echo "2. Test using develop Docker images"
+            echo "3. Create a PR from develop to main"
+            echo "4. After merge, run this workflow from main"
+            exit 1
+          fi
+          echo "✅ Running from main branch"
+
       - name: Checkout code
         uses: actions/checkout@v5
         with:
@@ -248,3 +263,6 @@ jobs:
           echo "docker pull ghcr.io/${{ github.repository_owner }}/hermes-app:$NEW_VERSION" >> $GITHUB_STEP_SUMMARY
           echo "docker pull ghcr.io/${{ github.repository_owner }}/hermes-api:$NEW_VERSION" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🎯 Production Release" >> $GITHUB_STEP_SUMMARY
+          echo "These images are tagged as \`latest\` and are now the default for all users." >> $GITHUB_STEP_SUMMARY
