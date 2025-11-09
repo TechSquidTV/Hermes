@@ -18,6 +18,79 @@ logger = logging.getLogger(__name__)
 setup_logging()
 
 
+async def initialize_admin_user() -> None:
+    """
+    Initialize admin user from environment variables if configured.
+
+    This function checks if:
+    1. No users exist in the database
+    2. Initial admin credentials are provided in settings
+
+    If both conditions are met, creates the first admin user.
+    """
+    # Check if initial admin credentials are configured
+    if not all(
+        [
+            settings.initial_admin_username,
+            settings.initial_admin_email,
+            settings.initial_admin_password,
+        ]
+    ):
+        logger.info("No initial admin credentials configured, skipping admin creation")
+        return
+
+    # Import here to avoid circular imports
+    import uuid
+
+    from sqlalchemy import select
+
+    from app.core.security import get_password_hash
+    from app.db.base import get_db
+    from app.db.models import User
+
+    # Get database session
+    async for db in get_db():
+        try:
+            # Check if any users exist
+            result = await db.execute(select(User))
+            existing_users = result.scalars().all()
+
+            if existing_users:
+                logger.info(
+                    f"Users already exist ({len(existing_users)}), skipping admin creation"
+                )
+                return
+
+            # Create admin user
+            admin_user = User(
+                id=str(uuid.uuid4()),
+                username=settings.initial_admin_username,
+                email=settings.initial_admin_email,
+                password_hash=get_password_hash(settings.initial_admin_password),
+                is_active=True,
+                is_admin=True,
+            )
+
+            db.add(admin_user)
+            await db.commit()
+
+            logger.info(
+                f"Initial admin user created successfully: {settings.initial_admin_username}",
+                extra={
+                    "admin_username": settings.initial_admin_username,
+                    "admin_email": settings.initial_admin_email,
+                    "security_event": "admin_user_created",
+                },
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to create initial admin user: {e}")
+            await db.rollback()
+            raise
+        finally:
+            break  # Only use the first db session
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan context manager."""
@@ -41,6 +114,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to create database tables: {e}")
         raise
+
+    # Initialize admin user if configured
+    try:
+        await initialize_admin_user()
+    except Exception as e:
+        logger.error(f"Failed to initialize admin user: {e}")
+        # Don't raise - allow server to start even if admin creation fails
 
     yield
 

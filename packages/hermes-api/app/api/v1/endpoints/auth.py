@@ -128,6 +128,7 @@ class UserResponse(BaseModel):
     username: str
     email: str
     avatar: str | None
+    is_admin: bool = False
     preferences: dict | None = None
     created_at: str
     last_login: str | None
@@ -208,6 +209,7 @@ async def login(
                 username=user.username,
                 email=user.email,
                 avatar=user.avatar,
+                is_admin=user.is_admin,
                 preferences=user.preferences,
                 created_at=user.created_at.isoformat() if user.created_at else None,
                 last_login=user.last_login.isoformat() if user.last_login else None,
@@ -238,6 +240,21 @@ async def signup(
     try:
         repos = get_repositories_from_session(db_session)
 
+        # Check if any users exist
+        user_count = await repos["users"].count()
+        is_first_user = user_count == 0
+
+        # If users exist and public signup is disabled, reject
+        if not is_first_user and not settings.allow_public_signup:
+            logger.warning(
+                "Signup attempt rejected - public signup disabled",
+                username=user_data.username,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Public signup is disabled. Contact your administrator to create an account.",
+            )
+
         # Check if username already exists
         existing_user = await repos["users"].get_by_username(user_data.username)
         if existing_user:
@@ -246,11 +263,22 @@ async def signup(
             )
 
         # Create new user
+        # First user automatically becomes admin
         user = await repos["users"].create(
             username=user_data.username,
             email=user_data.email,
             password_hash=get_password_hash(user_data.password),
+            is_admin=is_first_user,
         )
+
+        # Log admin creation for security audit
+        if is_first_user:
+            logger.info(
+                "First user created and granted admin privileges",
+                username=user.username,
+                user_id=user.id,
+                security_event="first_user_admin_created",
+            )
 
         # Create tokens
         access_token = create_access_token(
@@ -271,6 +299,7 @@ async def signup(
                 username=user.username,
                 email=user.email,
                 avatar=user.avatar,
+                is_admin=user.is_admin,
                 preferences=user.preferences,
                 created_at=user.created_at.isoformat() if user.created_at else None,
                 last_login=user.last_login.isoformat() if user.last_login else None,
@@ -456,6 +485,7 @@ async def update_profile(
             username=user.username,
             email=user.email,
             avatar=user.avatar,
+            is_admin=user.is_admin,
             preferences=user.preferences,
             created_at=user.created_at.isoformat() if user.created_at else None,
             last_login=user.last_login.isoformat() if user.last_login else None,

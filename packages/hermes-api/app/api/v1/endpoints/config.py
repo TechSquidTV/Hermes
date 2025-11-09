@@ -3,6 +3,7 @@ Configuration management endpoints.
 """
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -11,6 +12,24 @@ from app.models.pydantic.config import Configuration, ConfigurationUpdate
 
 router = APIRouter(prefix="/config", tags=["configuration"])
 logger = get_logger(__name__)
+
+
+class PublicConfig(BaseModel):
+    """Public configuration that doesn't require authentication."""
+
+    allow_public_signup: bool
+
+
+@router.get("/public", response_model=PublicConfig)
+async def get_public_configuration():
+    """
+    Get public configuration settings.
+
+    This endpoint is accessible without authentication and returns
+    configuration that the frontend needs to display correctly,
+    such as whether public signup is allowed.
+    """
+    return PublicConfig(allow_public_signup=settings.allow_public_signup)
 
 
 @router.get("/", response_model=Configuration)
