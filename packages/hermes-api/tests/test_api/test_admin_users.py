@@ -59,13 +59,13 @@ class TestAdminUserListing:
         assert isinstance(data, list)
         assert len(data) >= 2  # At least admin and test_user
 
-        # Check that users have required fields
+        # Check that users have required fields (camelCase from API)
         user_data = data[0]
         assert "id" in user_data
         assert "username" in user_data
         assert "email" in user_data
-        assert "is_admin" in user_data
-        assert "is_active" in user_data
+        assert "isAdmin" in user_data
+        assert "isActive" in user_data
 
     @pytest.mark.asyncio
     async def test_non_admin_cannot_list_users(
@@ -128,8 +128,8 @@ class TestAdminUserCreation:
         data = response.json()
         assert data["username"] == "newuser"
         assert data["email"] == "newuser@example.com"
-        assert data["is_admin"] is False
-        assert data["is_active"] is True
+        assert data["isAdmin"] is False
+        assert data["isActive"] is True
 
     @pytest.mark.asyncio
     async def test_admin_can_create_admin_user(
@@ -154,7 +154,7 @@ class TestAdminUserCreation:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["is_admin"] is True
+        assert data["isAdmin"] is True
 
     @pytest.mark.asyncio
     async def test_non_admin_cannot_create_user(
@@ -223,12 +223,12 @@ class TestPromoteDemoteAdmin:
         response = await client.patch(
             f"/api/v1/users/{test_user.id}/admin",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={"is_admin": True},
+            json={"isAdmin": True},
         )
 
         assert response.status_code == 200
         data = response.json()
-        assert data["is_admin"] is True
+        assert data["isAdmin"] is True
 
     @pytest.mark.asyncio
     async def test_admin_can_demote_admin_to_user(
@@ -256,12 +256,12 @@ class TestPromoteDemoteAdmin:
         response = await client.patch(
             f"/api/v1/users/{second_admin.id}/admin",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={"is_admin": False},
+            json={"isAdmin": False},
         )
 
         assert response.status_code == 200
         data = response.json()
-        assert data["is_admin"] is False
+        assert data["isAdmin"] is False
 
     @pytest.mark.asyncio
     async def test_cannot_demote_last_admin(
@@ -277,7 +277,7 @@ class TestPromoteDemoteAdmin:
         response = await client.patch(
             f"/api/v1/users/{admin_user.id}/admin",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={"is_admin": False},
+            json={"isAdmin": False},
         )
 
         assert response.status_code == 400
@@ -297,7 +297,7 @@ class TestPromoteDemoteAdmin:
         response = await client.patch(
             f"/api/v1/users/{test_user2.id}/admin",
             headers={"Authorization": f"Bearer {auth_token}"},
-            json={"is_admin": True},
+            json={"isAdmin": True},
         )
 
         assert response.status_code == 403
@@ -321,12 +321,12 @@ class TestActivateDeactivateUser:
         response = await client.patch(
             f"/api/v1/users/{test_user.id}/active",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={"is_active": False},
+            json={"isActive": False},
         )
 
         assert response.status_code == 200
         data = response.json()
-        assert data["is_active"] is False
+        assert data["isActive"] is False
 
     @pytest.mark.asyncio
     async def test_admin_can_activate_user(
@@ -345,12 +345,12 @@ class TestActivateDeactivateUser:
         response = await client.patch(
             f"/api/v1/users/{test_user.id}/active",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={"is_active": True},
+            json={"isActive": True},
         )
 
         assert response.status_code == 200
         data = response.json()
-        assert data["is_active"] is True
+        assert data["isActive"] is True
 
     @pytest.mark.asyncio
     async def test_admin_cannot_deactivate_self(
@@ -365,7 +365,7 @@ class TestActivateDeactivateUser:
         response = await client.patch(
             f"/api/v1/users/{admin_user.id}/active",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={"is_active": False},
+            json={"isActive": False},
         )
 
         assert response.status_code == 400
