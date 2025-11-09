@@ -19,6 +19,7 @@ from app.api.v1.endpoints import (
     stats,
     storage,
     timeline,
+    users,
 )
 
 # Create the main API router
@@ -102,4 +103,9 @@ api_router.include_router(
     events.router,
     prefix="/events",
     tags=["events"],
+)
+
+api_router.include_router(
+    users.router,
+    tags=["users"],
 )
