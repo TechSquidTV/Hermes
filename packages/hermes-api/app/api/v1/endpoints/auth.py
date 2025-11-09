@@ -272,6 +272,13 @@ async def signup(
                 status_code=status.HTTP_409_CONFLICT, detail="Username already exists"
             )
 
+        # Check if email already exists
+        existing_email = await repos["users"].get_by_email(user_data.email)
+        if existing_email:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="Email already exists"
+            )
+
         # Create new user
         # First user automatically becomes admin
         user = await repos["users"].create(
