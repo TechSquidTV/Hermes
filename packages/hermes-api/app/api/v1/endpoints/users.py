@@ -5,7 +5,7 @@ User management endpoints (admin only).
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_admin_user
@@ -21,35 +21,51 @@ logger = get_logger(__name__)
 class UserListResponse(BaseModel):
     """User information for list view."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str
     username: str
     email: str
     avatar: str | None
-    is_active: bool
-    is_admin: bool
-    created_at: str
-    last_login: str | None
+    is_active: bool = Field(
+        ..., alias="isActive", serialization_alias="isActive"
+    )
+    is_admin: bool = Field(
+        ..., alias="isAdmin", serialization_alias="isAdmin"
+    )
+    created_at: str = Field(
+        ..., alias="createdAt", serialization_alias="createdAt"
+    )
+    last_login: str | None = Field(
+        default=None, alias="lastLogin", serialization_alias="lastLogin"
+    )
 
 
 class UserCreateAdmin(BaseModel):
     """Admin user creation model."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     username: str
     email: EmailStr
     password: str
-    is_admin: bool = False
+    is_admin: bool = Field(default=False, alias="isAdmin")
 
 
 class UserUpdateAdmin(BaseModel):
     """Admin user update model."""
 
-    is_admin: bool
+    model_config = ConfigDict(populate_by_name=True)
+
+    is_admin: bool = Field(..., alias="isAdmin")
 
 
 class UserUpdateActive(BaseModel):
     """User active status update model."""
 
-    is_active: bool
+    model_config = ConfigDict(populate_by_name=True)
+
+    is_active: bool = Field(..., alias="isActive")
 
 
 @router.get("/", response_model=List[UserListResponse])

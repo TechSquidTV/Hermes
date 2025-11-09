@@ -124,14 +124,23 @@ class TokenResponse(BaseModel):
 
 
 class UserResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str
     username: str
     email: str
     avatar: str | None
-    is_admin: bool = False
+    is_active: bool = Field(
+        default=True, alias="isActive", serialization_alias="isActive"
+    )
+    is_admin: bool = Field(
+        default=False, alias="isAdmin", serialization_alias="isAdmin"
+    )
     preferences: dict | None = None
-    created_at: str
-    last_login: str | None
+    created_at: str = Field(..., alias="createdAt", serialization_alias="createdAt")
+    last_login: str | None = Field(
+        default=None, alias="lastLogin", serialization_alias="lastLogin"
+    )
 
 
 class AuthResponse(BaseModel):
