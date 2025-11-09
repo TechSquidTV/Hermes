@@ -222,7 +222,7 @@ docker build -f docker/Dockerfile -t hermes-api:latest .
 docker run -d \
   -p 8000:8000 \
   -e HERMES_SECRET_KEY=your-secret-key \
-  -e HERMES_DATABASE_URL=postgresql+asyncpg://user:pass@db/hermes \
+  -e HERMES_DATABASE_URL=sqlite+aiosqlite:///./data/hermes.db \
   -v $(pwd)/downloads:/app/downloads \
   -v $(pwd)/temp:/app/temp \
   -v $(pwd)/data:/app/data \

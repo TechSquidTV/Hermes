@@ -26,7 +26,7 @@ All configuration is managed through environment variables with the `HERMES_` pr
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HERMES_DATABASE_URL` | `sqlite+aiosqlite:///./data/hermes.db` | Database connection URL. Supports SQLite, PostgreSQL, MySQL. |
+| `HERMES_DATABASE_URL` | `sqlite+aiosqlite:///./data/hermes.db` | Database connection URL. **SQLite only** - uses aiosqlite for async support. |
 | `HERMES_DATABASE_ECHO` | `false` | Enable SQL query logging for debugging |
 
 ### Redis Configuration
@@ -149,12 +149,12 @@ HERMES_REDIS_URL=redis://localhost:6379
 API_PORT=8000
 ```
 
-### Production with PostgreSQL
+### Production
 
 ```bash
 HERMES_DEBUG=false
 HERMES_SECRET_KEY=your-production-secret-key-change-this
-HERMES_DATABASE_URL=postgresql+asyncpg://user:password@db:5432/hermes
+HERMES_DATABASE_URL=sqlite+aiosqlite:///./data/hermes.db
 HERMES_REDIS_URL=redis://redis:6379/0
 API_PORT=8000
 HERMES_RATE_LIMIT_PER_MINUTE=30
@@ -166,7 +166,7 @@ HERMES_RATE_LIMIT_PER_MINUTE=30
 # In .env file
 HERMES_DEBUG=false
 HERMES_SECRET_KEY=your-secure-production-key
-HERMES_DATABASE_URL=postgresql+asyncpg://user:password@db/hermes
+HERMES_DATABASE_URL=sqlite+aiosqlite:///./data/hermes.db
 HERMES_REDIS_URL=redis://redis:6379
 API_PORT=8000
 HERMES_APP_PORT=3000
@@ -213,7 +213,7 @@ openssl rand -hex 32
 **Database connection errors:**
 - Verify `HERMES_DATABASE_URL` format is correct
 - For SQLite: `sqlite+aiosqlite:///path/to/db.sqlite`
-- For PostgreSQL: `postgresql+asyncpg://user:password@host:port/db`
+- **Note:** Only SQLite is currently supported
 
 **Redis connection errors:**
 - Verify `HERMES_REDIS_URL` is accessible
