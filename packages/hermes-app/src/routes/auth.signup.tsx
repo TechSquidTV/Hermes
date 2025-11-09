@@ -1,15 +1,17 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
-import { Loader2, Check, X } from 'lucide-react'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Loader2, Check, X, AlertCircle } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 import { HermesLogoLight } from '@/components/hermes-logo'
+import { configService } from '@/services/config'
 
 function SignupPage() {
   const [username, setUsername] = useState('')
@@ -17,8 +19,28 @@ function SignupPage() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [signupDisabled, setSignupDisabled] = useState(false)
+  const [checkingConfig, setCheckingConfig] = useState(true)
   const { signup } = useAuth()
   const navigate = useNavigate()
+
+  // Check if signup is disabled
+  useEffect(() => {
+    const checkSignupStatus = async () => {
+      try {
+        const config = await configService.getPublicConfig()
+        setSignupDisabled(!config.allowPublicSignup)
+      } catch (error) {
+        console.error('[Signup] Failed to fetch public config:', error)
+        // On error, assume signup is allowed (fail open for better UX)
+        setSignupDisabled(false)
+      } finally {
+        setCheckingConfig(false)
+      }
+    }
+
+    checkSignupStatus()
+  }, [])
 
   // Password validation
   const passwordRequirements = {
@@ -52,10 +74,34 @@ function SignupPage() {
       navigate({ to: '/' })
     } catch (error) {
       console.error('[Signup] Failed:', error)
-      toast.error('Signup failed. Please try again.')
+
+      // Handle 403 Forbidden (signup disabled)
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      if (errorMessage.includes('403')) {
+        toast.error('Public signup is disabled. Contact your administrator.')
+        setSignupDisabled(true)
+      } else if (errorMessage.includes('409')) {
+        toast.error('Username or email already exists')
+      } else {
+        toast.error('Signup failed. Please try again.')
+      }
     } finally {
       setIsLoading(false)
     }
+  }
+
+  // Show loading state while checking config
+  if (checkingConfig) {
+    return (
+      <div className="flex items-center justify-center p-4">
+        <Card className="w-full max-w-md shadow-lg">
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin mb-4 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Loading...</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -73,6 +119,15 @@ function SignupPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {signupDisabled && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Signup Disabled</AlertTitle>
+              <AlertDescription>
+                Public account registration is currently disabled. Please contact your administrator to create an account for you.
+              </AlertDescription>
+            </Alert>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="username">Username</Label>
@@ -83,7 +138,7 @@ function SignupPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
-                disabled={isLoading}
+                disabled={isLoading || signupDisabled}
               />
             </div>
             <div className="space-y-2">
@@ -95,7 +150,7 @@ function SignupPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                disabled={isLoading}
+                disabled={isLoading || signupDisabled}
               />
             </div>
             <div className="space-y-2">
@@ -107,7 +162,7 @@ function SignupPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                disabled={isLoading}
+                disabled={isLoading || signupDisabled}
               />
               {password.length > 0 && (
                 <div className="space-y-1 text-xs mt-2">
@@ -139,7 +194,7 @@ function SignupPage() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
-                disabled={isLoading}
+                disabled={isLoading || signupDisabled}
               />
               {confirmPassword.length > 0 && (
                 <PasswordRequirement
@@ -151,7 +206,7 @@ function SignupPage() {
             <Button
               type="submit"
               className="w-full"
-              disabled={isLoading || !isPasswordValid || !doPasswordsMatch}
+              disabled={isLoading || signupDisabled || !isPasswordValid || !doPasswordsMatch}
               size="lg"
             >
               {isLoading ? (

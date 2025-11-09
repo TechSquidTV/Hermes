@@ -6,6 +6,8 @@ export interface User {
   email: string
   avatar?: string
   createdAt: string
+  isAdmin: boolean
+  isActive: boolean
   preferences?: UserPreferences
 }
 

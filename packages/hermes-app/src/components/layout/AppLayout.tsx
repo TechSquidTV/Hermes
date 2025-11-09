@@ -29,6 +29,8 @@ const routeNames: Record<string, string> = {
   '/settings/appearance': 'Appearance',
   '/auth/login': 'Login',
   '/auth/signup': 'Sign Up',
+  '/admin': 'Admin',
+  '/admin/users': 'User Management',
 }
 
 function DynamicBreadcrumbs() {
