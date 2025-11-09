@@ -4,10 +4,12 @@ Pydantic models for storage information.
 
 from typing import List
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from app.models.base import CamelCaseModel
 
 
-class CleanupRecommendation(BaseModel):
+class CleanupRecommendation(CamelCaseModel):
     """Storage cleanup recommendation."""
 
     type: str = Field(
@@ -18,7 +20,7 @@ class CleanupRecommendation(BaseModel):
     file_count: int = Field(0, description="Number of files affected")
 
 
-class StorageInfo(BaseModel):
+class StorageInfo(CamelCaseModel):
     """Storage usage information."""
 
     total_space: int = Field(..., description="Total storage space in bytes")

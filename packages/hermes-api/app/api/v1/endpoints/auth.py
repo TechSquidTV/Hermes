@@ -503,12 +503,16 @@ async def update_profile(
         )
 
 
-class PasswordChange(BaseModel):
+class PasswordChange(CamelCaseModel):
+    """Password change request with automatic camelCase conversion."""
+
     current_password: str
     new_password: str = Field(..., min_length=8)
 
 
-class ApiKeyCreate(BaseModel):
+class ApiKeyCreate(CamelCaseModel):
+    """API key creation request with automatic camelCase conversion."""
+
     name: str = Field(..., min_length=1, max_length=100, description="API key name")
     permissions: list[str] = Field(default_factory=list)
     expires_at: datetime | None = None
