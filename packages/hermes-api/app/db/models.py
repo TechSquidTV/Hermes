@@ -311,6 +311,7 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     avatar = Column(String, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
+    is_admin = Column(Boolean, default=False, nullable=False, index=True)
     preferences = Column(
         JSON, nullable=True, default=dict
     )  # User preferences (theme, etc.)
