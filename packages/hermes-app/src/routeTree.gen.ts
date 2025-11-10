@@ -75,9 +75,9 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/queue': typeof QueueRoute
   '/settings': typeof SettingsRouteWithChildren
+  '/admin/users': typeof AdminUsersRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
-  '/admin/users': typeof AdminUsersRoute
   '/settings/api-keys': typeof SettingsApiKeysRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/general': typeof SettingsGeneralRoute
@@ -86,9 +86,9 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/queue': typeof QueueRoute
+  '/admin/users': typeof AdminUsersRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
-  '/admin/users': typeof AdminUsersRoute
   '/settings/api-keys': typeof SettingsApiKeysRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/general': typeof SettingsGeneralRoute
@@ -99,9 +99,9 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/queue': typeof QueueRoute
   '/settings': typeof SettingsRouteWithChildren
+  '/admin/users': typeof AdminUsersRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
-  '/admin/users': typeof AdminUsersRoute
   '/settings/api-keys': typeof SettingsApiKeysRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/general': typeof SettingsGeneralRoute
@@ -113,9 +113,9 @@ export interface FileRouteTypes {
     | '/'
     | '/queue'
     | '/settings'
+    | '/admin/users'
     | '/auth/login'
     | '/auth/signup'
-    | '/admin/users'
     | '/settings/api-keys'
     | '/settings/appearance'
     | '/settings/general'
@@ -124,9 +124,9 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/queue'
+    | '/admin/users'
     | '/auth/login'
     | '/auth/signup'
-    | '/admin/users'
     | '/settings/api-keys'
     | '/settings/appearance'
     | '/settings/general'
@@ -136,9 +136,9 @@ export interface FileRouteTypes {
     | '/'
     | '/queue'
     | '/settings'
+    | '/admin/users'
     | '/auth/login'
     | '/auth/signup'
-    | '/admin/users'
     | '/settings/api-keys'
     | '/settings/appearance'
     | '/settings/general'
@@ -149,9 +149,9 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   QueueRoute: typeof QueueRoute
   SettingsRoute: typeof SettingsRouteWithChildren
+  AdminUsersRoute: typeof AdminUsersRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthSignupRoute: typeof AuthSignupRoute
-  AdminUsersRoute: typeof AdminUsersRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -251,9 +251,9 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   QueueRoute: QueueRoute,
   SettingsRoute: SettingsRouteWithChildren,
+  AdminUsersRoute: AdminUsersRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthSignupRoute: AuthSignupRoute,
-  AdminUsersRoute: AdminUsersRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

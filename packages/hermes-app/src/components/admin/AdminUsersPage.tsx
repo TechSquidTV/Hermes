@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
 import {
   Users,
   Plus,
@@ -20,10 +21,19 @@ import { adminService, type CreateUserRequest } from '@/services/admin'
 import type { User } from '@/types/auth'
 import { useAuth } from '@/contexts/AuthContext'
 
+type ConfirmationState = {
+  type: 'toggle-admin' | 'toggle-active' | 'delete' | null
+  user: User | null
+}
+
 export function AdminUsersPage() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateForm, setShowCreateForm] = useState(false)
+  const [confirmation, setConfirmation] = useState<ConfirmationState>({
+    type: null,
+    user: null,
+  })
   const [newUser, setNewUser] = useState<CreateUserRequest>({
     username: '',
     email: '',
@@ -69,53 +79,84 @@ export function AdminUsersPage() {
     }
   }
 
-  const handleToggleAdmin = async (userId: string, username: string, isCurrentlyAdmin: boolean) => {
-    const action = isCurrentlyAdmin ? 'demote' : 'promote'
-    if (!confirm(`Are you sure you want to ${action} ${username} ${isCurrentlyAdmin ? 'from' : 'to'} admin?`)) {
-      return
-    }
+  const handleToggleAdmin = async (user: User) => {
+    setConfirmation({ type: 'toggle-admin', user })
+  }
+
+  const handleToggleActive = async (user: User) => {
+    setConfirmation({ type: 'toggle-active', user })
+  }
+
+  const handleDeleteUser = async (user: User) => {
+    setConfirmation({ type: 'delete', user })
+  }
+
+  const confirmAction = async () => {
+    if (!confirmation.user) return
+
+    const user = confirmation.user
+    const action = confirmation.type
 
     try {
-      await adminService.updateAdminStatus(userId, !isCurrentlyAdmin)
-      toast.success(`User ${action}d successfully`)
+      if (action === 'toggle-admin') {
+        await adminService.updateAdminStatus(user.id, !user.isAdmin)
+        const actionText = user.isAdmin ? 'demoted' : 'promoted'
+        toast.success(`User ${actionText} successfully`)
+      } else if (action === 'toggle-active') {
+        await adminService.updateActiveStatus(user.id, !user.isActive)
+        const actionText = user.isActive ? 'deactivated' : 'activated'
+        toast.success(`User ${actionText} successfully`)
+      } else if (action === 'delete') {
+        await adminService.deleteUser(user.id)
+        toast.success('User deleted successfully')
+      }
       loadUsers()
     } catch (error) {
-      toast.error(`Failed to ${action} user`, {
+      const actionText =
+        action === 'toggle-admin' ? (user.isAdmin ? 'demote' : 'promote') :
+        action === 'toggle-active' ? (user.isActive ? 'deactivate' : 'activate') :
+        'delete'
+      toast.error(`Failed to ${actionText} user`, {
         description: error instanceof Error ? error.message : 'Unknown error',
       })
+    } finally {
+      setConfirmation({ type: null, user: null })
     }
   }
 
-  const handleToggleActive = async (userId: string, username: string, isCurrentlyActive: boolean) => {
-    const action = isCurrentlyActive ? 'deactivate' : 'activate'
-    if (!confirm(`Are you sure you want to ${action} ${username}?`)) {
-      return
-    }
+  const getConfirmationProps = () => {
+    if (!confirmation.user) return null
 
-    try {
-      await adminService.updateActiveStatus(userId, !isCurrentlyActive)
-      toast.success(`User ${action}d successfully`)
-      loadUsers()
-    } catch (error) {
-      toast.error(`Failed to ${action} user`, {
-        description: error instanceof Error ? error.message : 'Unknown error',
-      })
-    }
-  }
+    const user = confirmation.user
 
-  const handleDeleteUser = async (userId: string, username: string) => {
-    if (!confirm(`Are you sure you want to delete ${username}? This action cannot be undone.`)) {
-      return
-    }
-
-    try {
-      await adminService.deleteUser(userId)
-      toast.success('User deleted successfully')
-      loadUsers()
-    } catch (error) {
-      toast.error('Failed to delete user', {
-        description: error instanceof Error ? error.message : 'Unknown error',
-      })
+    switch (confirmation.type) {
+      case 'toggle-admin': {
+        const action = user.isAdmin ? 'demote' : 'promote'
+        return {
+          title: `${action === 'promote' ? 'Promote' : 'Demote'} User`,
+          description: `Are you sure you want to ${action} ${user.username} ${user.isAdmin ? 'from' : 'to'} admin?`,
+          confirmText: action === 'promote' ? 'Promote' : 'Demote',
+          variant: 'default' as const,
+        }
+      }
+      case 'toggle-active': {
+        const action = user.isActive ? 'deactivate' : 'activate'
+        return {
+          title: `${action === 'activate' ? 'Activate' : 'Deactivate'} User`,
+          description: `Are you sure you want to ${action} ${user.username}?`,
+          confirmText: action === 'activate' ? 'Activate' : 'Deactivate',
+          variant: 'default' as const,
+        }
+      }
+      case 'delete':
+        return {
+          title: 'Delete User',
+          description: `Are you sure you want to delete ${user.username}? This action cannot be undone.`,
+          confirmText: 'Delete',
+          variant: 'destructive' as const,
+        }
+      default:
+        return null
     }
   }
 
@@ -248,7 +289,7 @@ export function AdminUsersPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleToggleAdmin(user.id, user.username, user.isAdmin)}
+                        onClick={() => handleToggleAdmin(user)}
                         disabled={currentUser?.id === user.id}
                         title={currentUser?.id === user.id ? "Cannot modify your own admin status" : undefined}
                       >
@@ -268,7 +309,7 @@ export function AdminUsersPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleToggleActive(user.id, user.username, user.isActive)}
+                        onClick={() => handleToggleActive(user)}
                         disabled={currentUser?.id === user.id}
                         title={currentUser?.id === user.id ? "Cannot deactivate yourself" : undefined}
                       >
@@ -288,7 +329,7 @@ export function AdminUsersPage() {
                       <Button
                         size="sm"
                         variant="destructive"
-                        onClick={() => handleDeleteUser(user.id, user.username)}
+                        onClick={() => handleDeleteUser(user)}
                         disabled={currentUser?.id === user.id}
                         title={currentUser?.id === user.id ? "Cannot delete yourself" : undefined}
                       >
@@ -303,6 +344,15 @@ export function AdminUsersPage() {
           )}
         </CardContent>
       </Card>
+
+      {confirmation.type && getConfirmationProps() && (
+        <ConfirmationDialog
+          isOpen={true}
+          onClose={() => setConfirmation({ type: null, user: null })}
+          onConfirm={confirmAction}
+          {...getConfirmationProps()!}
+        />
+      )}
     </div>
   )
 }
