@@ -433,7 +433,9 @@ async def get_current_user(
     logger.info(f"[/me] current_user dict: {current_user}")
     user_response = UserResponse(**current_user)
     logger.info(f"[/me] UserResponse object: {user_response.model_dump()}")
-    logger.info(f"[/me] UserResponse JSON (aliased): {user_response.model_dump(by_alias=True)}")
+    logger.info(
+        f"[/me] UserResponse JSON (aliased): {user_response.model_dump(by_alias=True)}"
+    )
     return user_response
 
 
