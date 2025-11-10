@@ -256,7 +256,7 @@ async def signup(
         if existing_user or existing_email:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Unable to create account with the provided credentials"
+                detail="Unable to create account with the provided credentials",
             )
 
         # Create new user
