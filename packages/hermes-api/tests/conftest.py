@@ -54,7 +54,7 @@ async def setup_test_database():
 
 
 @pytest_asyncio.fixture
-async def db_session() -> AsyncGenerator[AsyncSession, None]:
+async def db_session(setup_test_database) -> AsyncGenerator[AsyncSession, None]:
     """Create a database session for tests."""
     from app.db.base import async_session_maker
 
@@ -125,7 +125,29 @@ async def test_user2(db_session: AsyncSession):
 
 
 @pytest_asyncio.fixture
-async def auth_token(test_user):
+async def test_admin_user(db_session: AsyncSession):
+    """Create a test admin user for admin tests."""
+    from app.core.security import get_password_hash
+    from app.db.repositories import UserRepository
+
+    user_repo = UserRepository(db_session)
+
+    # Create test admin user
+    user = await user_repo.create(
+        username="adminuser",
+        email="admin@example.com",
+        password_hash=get_password_hash("adminpass123"),
+        is_admin=True,
+    )
+
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    return user
+
+
+@pytest.fixture
+def auth_token(test_user):
     """Create an authentication token for a test user."""
     from app.core.security import create_access_token
 
@@ -136,13 +158,25 @@ async def auth_token(test_user):
     return token
 
 
-@pytest_asyncio.fixture
-async def auth_token2(test_user2):
+@pytest.fixture
+def auth_token2(test_user2):
     """Create an authentication token for the second test user."""
     from app.core.security import create_access_token
 
     token = create_access_token(
         data={"sub": test_user2.username, "user_id": test_user2.id}
+    )
+
+    return token
+
+
+@pytest.fixture
+def admin_auth_token(test_admin_user):
+    """Create an authentication token for the admin test user."""
+    from app.core.security import create_access_token
+
+    token = create_access_token(
+        data={"sub": test_admin_user.username, "user_id": test_admin_user.id}
     )
 
     return token
