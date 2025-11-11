@@ -16,6 +16,7 @@ from app.db.models import (
     Download,
     DownloadFile,
     DownloadHistory,
+    SystemSettings,
     TokenBlacklist,
     User,
     Webhook,
@@ -970,6 +971,40 @@ class BatchRepository(BaseRepository):
         }
 
 
+class SystemSettingsRepository(BaseRepository):
+    """Repository for SystemSettings model operations (singleton)."""
+
+    async def get_settings(self) -> Optional[SystemSettings]:
+        """Get the singleton system settings (ID=1)."""
+        result = await self.session.execute(
+            select(SystemSettings).where(SystemSettings.id == 1)
+        )
+        return result.scalar_one_or_none()
+
+    async def update_allow_public_signup(
+        self, value: bool, user_id: Optional[str] = None
+    ) -> SystemSettings:
+        """Update the allow_public_signup setting."""
+        settings = await self.get_settings()
+
+        if not settings:
+            # Create if doesn't exist (shouldn't happen if migration ran)
+            settings = SystemSettings(
+                id=1,
+                allow_public_signup=value,
+                updated_by_user_id=user_id,
+                updated_at=datetime.now(timezone.utc),
+            )
+            self.session.add(settings)
+        else:
+            settings.allow_public_signup = value
+            settings.updated_by_user_id = user_id
+            settings.updated_at = datetime.now(timezone.utc)
+
+        await self.commit()
+        return settings
+
+
 # Convenience function to get repositories with session
 async def get_repositories() -> Dict[str, BaseRepository]:
     """Get all repository instances with a database session."""
@@ -983,4 +1018,5 @@ async def get_repositories() -> Dict[str, BaseRepository]:
             "history": DownloadHistoryRepository(session),
             "token_blacklist": TokenBlacklistRepository(session),
             "batch": BatchRepository(session),
+            "system_settings": SystemSettingsRepository(session),
         }

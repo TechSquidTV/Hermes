@@ -376,3 +376,24 @@ class TokenBlacklist(Base):
 
     def __repr__(self):
         return f"<TokenBlacklist(id={self.id}, token_id={self.token_id[:8]}..., reason={self.reason})>"
+
+
+class SystemSettings(Base):
+    """Model for system-wide settings (singleton table with ID=1)."""
+
+    __tablename__ = "system_settings"
+
+    id = Column(Integer, primary_key=True, default=1)  # Always 1 (singleton)
+    allow_public_signup = Column(Boolean, default=True, nullable=False)
+    updated_by_user_id = Column(String, nullable=True)  # User who last updated
+
+    # Timestamps
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    def __repr__(self):
+        return f"<SystemSettings(id={self.id}, allow_public_signup={self.allow_public_signup})>"
