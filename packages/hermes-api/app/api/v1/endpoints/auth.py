@@ -30,6 +30,7 @@ from app.db.repositories import (
 )
 from app.db.session import get_database_session
 from app.models.base import CamelCaseModel
+from app.services.system_settings_service import system_settings_service
 
 # Rate limiting setup (placeholder for now)
 # In production, you would use a proper rate limiting library like slowapi
@@ -238,7 +239,8 @@ async def signup(
         is_first_user = user_count == 0
 
         # If users exist and public signup is disabled, reject
-        if not is_first_user and not settings.allow_public_signup:
+        allow_public_signup = await system_settings_service.get_allow_public_signup()
+        if not is_first_user and not allow_public_signup:
             logger.warning(
                 "Signup attempt rejected - public signup disabled",
                 username=user_data.username,

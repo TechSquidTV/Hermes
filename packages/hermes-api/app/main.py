@@ -115,6 +115,22 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to create database tables: {e}")
         raise
 
+    # Warm up system settings cache
+    try:
+        from app.services.system_settings_service import system_settings_service
+
+        logger.info("Initializing system settings service...")
+        allow_signup = await system_settings_service.get_allow_public_signup()
+        logger.info(
+            f"System settings loaded successfully (allow_public_signup={allow_signup})"
+        )
+    except Exception as e:
+        logger.warning(
+            f"Failed to initialize system settings service: {e} "
+            "(will fall back to environment variables)"
+        )
+        # Don't raise - allow server to start with fallback to env vars
+
     # Initialize admin user if configured
     try:
         await initialize_admin_user()
