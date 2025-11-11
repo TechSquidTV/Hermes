@@ -4,11 +4,13 @@ Pydantic models for configuration management.
 
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from app.models.base import CamelCaseModel
 
 
-class Configuration(BaseModel):
-    """Current API configuration."""
+class Configuration(CamelCaseModel):
+    """Current API configuration with automatic camelCase conversion."""
 
     # Download settings
     output_template: str = Field(..., description="Default output filename template")
@@ -42,8 +44,8 @@ class Configuration(BaseModel):
     debug_mode: bool = Field(..., description="Debug mode enabled")
 
 
-class ConfigurationUpdate(BaseModel):
-    """Configuration update request."""
+class ConfigurationUpdate(CamelCaseModel):
+    """Configuration update request with automatic camelCase conversion."""
 
     # Download settings
     output_template: Optional[str] = Field(

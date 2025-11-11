@@ -531,6 +531,114 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get System Settings
+         * @description Get current system settings.
+         *
+         *     Admin-only endpoint for retrieving system-wide settings including:
+         *     - Public signup control
+         *     - Update history
+         *
+         *     **Requires**: Admin authentication
+         */
+        get: operations["get_system_settings_api_v1_admin_settings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/settings/signup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Signup Setting
+         * @description Update the public signup setting.
+         *
+         *     Allows admins to enable or disable public user registration.
+         *
+         *     **Note**: The first user signup is always allowed regardless of this setting
+         *     to ensure system bootstrap capability.
+         *
+         *     **Requires**: Admin authentication
+         */
+        put: operations["update_signup_setting_api_v1_admin_settings_signup_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Admin Configuration
+         * @description Get current API configuration.
+         *
+         *     Admin-only endpoint for viewing system configuration including:
+         *     - Download defaults (format, subtitles, thumbnails)
+         *     - Performance settings (concurrency, retries, timeout)
+         *     - Storage settings (directories, cleanup)
+         *     - API settings (rate limits, debug mode)
+         *
+         *     **Note**: Sensitive settings like secret keys are not exposed.
+         *
+         *     **Requires**: Admin authentication
+         */
+        get: operations["get_admin_configuration_api_v1_admin_config_get"];
+        /**
+         * Update Admin Configuration
+         * @description Update API configuration.
+         *
+         *     Admin-only endpoint for updating runtime configuration settings.
+         *     Only provided fields will be updated.
+         *
+         *     **Note**: Configuration changes are runtime-only and will be reset on restart.
+         *     For persistent changes, update environment variables or configuration files.
+         *
+         *     **Supported Updates**:
+         *     - Download defaults
+         *     - Performance settings
+         *     - Cleanup settings
+         *     - Rate limits
+         *
+         *     **Not Supported** (require restart):
+         *     - Database URLs
+         *     - Secret keys
+         *     - Core directories (requires file system changes)
+         *
+         *     **Requires**: Admin authentication
+         *
+         *     Returns the updated configuration.
+         */
+        put: operations["update_admin_configuration_api_v1_admin_config_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/history/": {
         parameters: {
             query?: never;
@@ -745,7 +853,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/config/": {
+    "/api/v1/config/public": {
         parameters: {
             query?: never;
             header?: never;
@@ -753,41 +861,15 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Configuration
-         * @description Get current API configuration.
+         * Get Public Configuration
+         * @description Get public configuration settings.
          *
-         *     Returns all configurable settings including:
-         *     - Download defaults (format, subtitles, thumbnails)
-         *     - Performance settings (concurrency, retries, timeout)
-         *     - Storage settings (directories, cleanup)
-         *     - API settings (rate limits, debug mode)
-         *
-         *     Note: Sensitive settings like secret keys are not exposed.
+         *     This endpoint is accessible without authentication and returns
+         *     configuration that the frontend needs to display correctly,
+         *     such as whether public signup is allowed.
          */
-        get: operations["get_configuration_api_v1_config__get"];
-        /**
-         * Update Configuration
-         * @description Update API configuration.
-         *
-         *     Updates runtime configuration settings. Only provided fields will be updated.
-         *
-         *     **Note**: Configuration changes are runtime-only and will be reset on restart.
-         *     For persistent changes, update environment variables or configuration files.
-         *
-         *     **Supported Updates**:
-         *     - Download defaults
-         *     - Performance settings
-         *     - Cleanup settings
-         *     - Rate limits
-         *
-         *     **Not Supported** (require restart):
-         *     - Database URLs
-         *     - Secret keys
-         *     - Core directories (requires file system changes)
-         *
-         *     Returns the updated configuration.
-         */
-        put: operations["update_configuration_api_v1_config__put"];
+        get: operations["get_public_configuration_api_v1_config_public_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -1084,6 +1166,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Users
+         * @description List all users (admin only).
+         *
+         *     Returns a list of all users in the system with their basic information.
+         *     Only accessible by administrators.
+         */
+        get: operations["list_users_api_v1_users__get"];
+        put?: never;
+        /**
+         * Create User As Admin
+         * @description Create a new user as admin (admin only).
+         *
+         *     This endpoint allows administrators to create user accounts
+         *     even when public signup is disabled.
+         */
+        post: operations["create_user_as_admin_api_v1_users__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/admin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update User Admin Status
+         * @description Promote or demote user admin status (admin only).
+         *
+         *     Allows administrators to grant or revoke admin privileges.
+         *
+         *     **Security Check**: Cannot demote yourself if you're the last admin.
+         */
+        patch: operations["update_user_admin_status_api_v1_users__user_id__admin_patch"];
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update User Active Status
+         * @description Activate or deactivate user account (admin only).
+         *
+         *     Allows administrators to enable or disable user accounts.
+         *     Deactivated users cannot log in.
+         */
+        patch: operations["update_user_active_status_api_v1_users__user_id__active_patch"];
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete User
+         * @description Delete a user account (admin only).
+         *
+         *     Permanently deletes a user account and all associated data.
+         *     Cannot delete your own account.
+         */
+        delete: operations["delete_user_api_v1_users__user_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -1128,7 +1310,10 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** ApiKeyCreate */
+        /**
+         * ApiKeyCreate
+         * @description API key creation request with automatic camelCase conversion.
+         */
         ApiKeyCreate: {
             /**
              * Name
@@ -1137,10 +1322,13 @@ export interface components {
             name: string;
             /** Permissions */
             permissions?: string[];
-            /** Expires At */
-            expires_at?: string | null;
+            /** Expiresat */
+            expiresAt?: string | null;
         };
-        /** ApiKeyListResponse */
+        /**
+         * ApiKeyListResponse
+         * @description API key list response with automatic camelCase conversion.
+         */
         ApiKeyListResponse: {
             /** Id */
             id: string;
@@ -1148,18 +1336,21 @@ export interface components {
             name: string;
             /** Permissions */
             permissions: string[];
-            /** Rate Limit */
-            rate_limit: number;
-            /** Is Active */
-            is_active: boolean;
-            /** Created At */
-            created_at: string;
-            /** Last Used */
-            last_used: string | null;
-            /** Expires At */
-            expires_at: string | null;
+            /** Ratelimit */
+            rateLimit: number;
+            /** Isactive */
+            isActive: boolean;
+            /** Createdat */
+            createdAt: string;
+            /** Lastused */
+            lastUsed: string | null;
+            /** Expiresat */
+            expiresAt: string | null;
         };
-        /** ApiKeyResponse */
+        /**
+         * ApiKeyResponse
+         * @description API key response with automatic camelCase conversion.
+         */
         ApiKeyResponse: {
             /** Id */
             id: string;
@@ -1169,16 +1360,16 @@ export interface components {
             key: string;
             /** Permissions */
             permissions: string[];
-            /** Rate Limit */
-            rate_limit: number;
-            /** Is Active */
-            is_active: boolean;
-            /** Created At */
-            created_at: string;
-            /** Last Used */
-            last_used: string | null;
-            /** Expires At */
-            expires_at: string | null;
+            /** Ratelimit */
+            rateLimit: number;
+            /** Isactive */
+            isActive: boolean;
+            /** Createdat */
+            createdAt: string;
+            /** Lastused */
+            lastUsed: string | null;
+            /** Expiresat */
+            expiresAt: string | null;
         };
         /**
          * ApiStatistics
@@ -1191,59 +1382,62 @@ export interface components {
              */
             period: string;
             /**
-             * Total Downloads
+             * Totaldownloads
              * @description Total downloads in period
              */
-            total_downloads: number;
+            totalDownloads: number;
             /**
-             * Successful Downloads
+             * Successfuldownloads
              * @description Successful downloads
              */
-            successful_downloads: number;
+            successfulDownloads: number;
             /**
-             * Failed Downloads
+             * Faileddownloads
              * @description Failed downloads
              */
-            failed_downloads: number;
+            failedDownloads: number;
             /**
-             * Success Rate
+             * Successrate
              * @description Success rate (0.0 to 1.0)
              */
-            success_rate: number;
+            successRate: number;
             /**
-             * Average Download Time
+             * Averagedownloadtime
              * @description Average download time in seconds
              */
-            average_download_time: number;
+            averageDownloadTime: number;
             /**
-             * Total Bandwidth Used
+             * Totalbandwidthused
              * @description Total bandwidth in bytes
              */
-            total_bandwidth_used: number;
+            totalBandwidthUsed: number;
             /**
-             * Popular Extractors
+             * Popularextractors
              * @description Most popular extractors
              */
-            popular_extractors?: components["schemas"]["ExtractorStats"][];
+            popularExtractors?: components["schemas"]["ExtractorStats"][];
             /**
-             * Error Breakdown
+             * Errorbreakdown
              * @description Error type breakdown
              */
-            error_breakdown?: components["schemas"]["ErrorBreakdown"][];
+            errorBreakdown?: components["schemas"]["ErrorBreakdown"][];
             /**
-             * Peak Hour
+             * Peakhour
              * @description Peak usage hour (0-23)
              * @default 0
              */
-            peak_hour: number;
+            peakHour: number;
             /**
-             * Total Storage Used
+             * Totalstorageused
              * @description Total storage used in bytes
              * @default 0
              */
-            total_storage_used: number;
+            totalStorageUsed: number;
         };
-        /** AuthResponse */
+        /**
+         * AuthResponse
+         * @description Authentication response with user and tokens.
+         */
         AuthResponse: {
             /** Accesstoken */
             accessToken: string;
@@ -1273,22 +1467,22 @@ export interface components {
              */
             format: string;
             /**
-             * Download Subtitles
+             * Downloadsubtitles
              * @description Whether to download subtitles for all videos
              * @default false
              */
-            download_subtitles: boolean;
+            downloadSubtitles: boolean;
             /**
-             * Download Thumbnail
+             * Downloadthumbnail
              * @description Whether to download thumbnails for all videos
              * @default false
              */
-            download_thumbnail: boolean;
+            downloadThumbnail: boolean;
             /**
-             * Output Directory
+             * Outputdirectory
              * @description Base output directory for all downloads
              */
-            output_directory?: string | null;
+            outputDirectory?: string | null;
             /**
              * Priority
              * @description Download priority
@@ -1302,15 +1496,15 @@ export interface components {
          */
         BatchDownloadResponse: {
             /**
-             * Batch Id
+             * Batchid
              * @description Unique identifier for the batch download
              */
-            batch_id: string;
+            batchId: string;
             /**
-             * Total Downloads
+             * Totaldownloads
              * @description Total number of downloads in the batch
              */
-            total_downloads: number;
+            totalDownloads: number;
             /**
              * Status
              * @description Current batch status
@@ -1328,10 +1522,10 @@ export interface components {
          */
         CancelResponse: {
             /**
-             * Download Id
+             * Downloadid
              * @description Download identifier that was cancelled
              */
-            download_id: string;
+            downloadId: string;
             /**
              * Cancelled
              * @description Whether cancellation was successful
@@ -1349,25 +1543,25 @@ export interface components {
          */
         CleanupOrphanedResponse: {
             /**
-             * Orphaned Count
+             * Orphanedcount
              * @description Number of orphaned downloads found
              */
-            orphaned_count: number;
+            orphanedCount: number;
             /**
-             * Deleted Count
+             * Deletedcount
              * @description Number of orphaned downloads deleted
              */
-            deleted_count: number;
+            deletedCount: number;
             /**
-             * Dry Run
+             * Dryrun
              * @description Whether this was a dry run
              */
-            dry_run: boolean;
+            dryRun: boolean;
             /**
-             * Would Delete
+             * Woulddelete
              * @description Details of downloads that would be deleted (dry run only)
              */
-            would_delete?: {
+            wouldDelete?: {
                 [key: string]: unknown;
             }[] | null;
         };
@@ -1387,16 +1581,16 @@ export interface components {
              */
             description: string;
             /**
-             * Potential Savings
+             * Potentialsavings
              * @description Bytes that could be freed
              */
-            potential_savings: number;
+            potentialSavings: number;
             /**
-             * File Count
+             * Filecount
              * @description Number of files affected
              * @default 0
              */
-            file_count: number;
+            fileCount: number;
         };
         /**
          * CleanupRequest
@@ -1404,34 +1598,34 @@ export interface components {
          */
         CleanupRequest: {
             /**
-             * Older Than Days
+             * Olderthandays
              * @description Delete files older than N days
              */
-            older_than_days?: number | null;
+            olderThanDays?: number | null;
             /**
-             * Delete Failed Downloads
+             * Deletefaileddownloads
              * @description Delete records of failed downloads
              * @default false
              */
-            delete_failed_downloads: boolean;
+            deleteFailedDownloads: boolean;
             /**
-             * Delete Temp Files
+             * Deletetempfiles
              * @description Delete temporary download files
              * @default true
              */
-            delete_temp_files: boolean;
+            deleteTempFiles: boolean;
             /**
-             * Max Files To Delete
+             * Maxfilestodelete
              * @description Maximum number of files to delete
              * @default 100
              */
-            max_files_to_delete: number;
+            maxFilesToDelete: number;
             /**
-             * Dry Run
+             * Dryrun
              * @description Preview what would be deleted without actually deleting
              * @default false
              */
-            dry_run: boolean;
+            dryRun: boolean;
         };
         /**
          * CleanupResponse
@@ -1439,165 +1633,165 @@ export interface components {
          */
         CleanupResponse: {
             /**
-             * Files Deleted
+             * Filesdeleted
              * @description Number of files actually deleted
              */
-            files_deleted: number;
+            filesDeleted: number;
             /**
-             * Space Freed
+             * Spacefreed
              * @description Total space freed in bytes
              */
-            space_freed: number;
+            spaceFreed: number;
             /**
-             * Files Previewed
+             * Filespreviewed
              * @description Files that would be deleted (dry_run=true)
              * @default 0
              */
-            files_previewed: number;
+            filesPreviewed: number;
             /**
              * Errors
              * @description Errors encountered
              */
             errors?: string[];
             /**
-             * Dry Run
+             * Dryrun
              * @description Whether this was a dry run
              */
-            dry_run: boolean;
+            dryRun: boolean;
         };
         /**
          * Configuration
-         * @description Current API configuration.
+         * @description Current API configuration with automatic camelCase conversion.
          */
         Configuration: {
             /**
-             * Output Template
+             * Outputtemplate
              * @description Default output filename template
              */
-            output_template: string;
+            outputTemplate: string;
             /**
-             * Default Format
+             * Defaultformat
              * @description Default format selection
              */
-            default_format: string;
+            defaultFormat: string;
             /**
-             * Download Subtitles
+             * Downloadsubtitles
              * @description Default subtitle download setting
              */
-            download_subtitles: boolean;
+            downloadSubtitles: boolean;
             /**
-             * Download Thumbnail
+             * Downloadthumbnail
              * @description Default thumbnail download setting
              */
-            download_thumbnail: boolean;
+            downloadThumbnail: boolean;
             /**
-             * Output Directory
+             * Outputdirectory
              * @description Default output directory
              */
-            output_directory: string;
+            outputDirectory: string;
             /**
-             * Max Concurrent Downloads
+             * Maxconcurrentdownloads
              * @description Maximum concurrent downloads
              */
-            max_concurrent_downloads: number;
+            maxConcurrentDownloads: number;
             /**
-             * Retry Attempts
+             * Retryattempts
              * @description Number of retry attempts
              */
-            retry_attempts: number;
+            retryAttempts: number;
             /**
              * Timeout
              * @description Request timeout in seconds
              */
             timeout: number;
             /**
-             * Temp Directory
+             * Tempdirectory
              * @description Temporary files directory
              */
-            temp_directory: string;
+            tempDirectory: string;
             /**
-             * Cleanup Enabled
+             * Cleanupenabled
              * @description Automatic cleanup enabled
              * @default true
              */
-            cleanup_enabled: boolean;
+            cleanupEnabled: boolean;
             /**
-             * Cleanup Older Than Days
+             * Cleanupolderthandays
              * @description Auto-cleanup file age threshold
              * @default 30
              */
-            cleanup_older_than_days: number;
+            cleanupOlderThanDays: number;
             /**
-             * Rate Limit Per Minute
+             * Ratelimitperminute
              * @description API rate limit per minute
              */
-            rate_limit_per_minute: number;
+            rateLimitPerMinute: number;
             /**
-             * Debug Mode
+             * Debugmode
              * @description Debug mode enabled
              */
-            debug_mode: boolean;
+            debugMode: boolean;
         };
         /**
          * ConfigurationUpdate
-         * @description Configuration update request.
+         * @description Configuration update request with automatic camelCase conversion.
          */
         ConfigurationUpdate: {
             /**
-             * Output Template
+             * Outputtemplate
              * @description Default output filename template
              */
-            output_template?: string | null;
+            outputTemplate?: string | null;
             /**
-             * Default Format
+             * Defaultformat
              * @description Default format selection
              */
-            default_format?: string | null;
+            defaultFormat?: string | null;
             /**
-             * Download Subtitles
+             * Downloadsubtitles
              * @description Default subtitle download setting
              */
-            download_subtitles?: boolean | null;
+            downloadSubtitles?: boolean | null;
             /**
-             * Download Thumbnail
+             * Downloadthumbnail
              * @description Default thumbnail download setting
              */
-            download_thumbnail?: boolean | null;
+            downloadThumbnail?: boolean | null;
             /**
-             * Output Directory
+             * Outputdirectory
              * @description Default output directory
              */
-            output_directory?: string | null;
+            outputDirectory?: string | null;
             /**
-             * Max Concurrent Downloads
+             * Maxconcurrentdownloads
              * @description Maximum concurrent downloads
              */
-            max_concurrent_downloads?: number | null;
+            maxConcurrentDownloads?: number | null;
             /**
-             * Retry Attempts
+             * Retryattempts
              * @description Number of retry attempts
              */
-            retry_attempts?: number | null;
+            retryAttempts?: number | null;
             /**
              * Timeout
              * @description Request timeout in seconds
              */
             timeout?: number | null;
             /**
-             * Cleanup Enabled
+             * Cleanupenabled
              * @description Automatic cleanup enabled
              */
-            cleanup_enabled?: boolean | null;
+            cleanupEnabled?: boolean | null;
             /**
-             * Cleanup Older Than Days
+             * Cleanupolderthandays
              * @description Auto-cleanup file age threshold
              */
-            cleanup_older_than_days?: number | null;
+            cleanupOlderThanDays?: number | null;
             /**
-             * Rate Limit Per Minute
+             * Ratelimitperminute
              * @description API rate limit per minute
              */
-            rate_limit_per_minute?: number | null;
+            rateLimitPerMinute?: number | null;
         };
         /**
          * CreateSSETokenRequest
@@ -1636,16 +1830,16 @@ export interface components {
              */
             downloads: number;
             /**
-             * Success Rate
+             * Successrate
              * @description Success rate (0.0 to 1.0)
              */
-            success_rate: number;
+            successRate: number;
             /**
-             * Total Size
+             * Totalsize
              * @description Total bytes downloaded
              * @default 0
              */
-            total_size: number;
+            totalSize: number;
         };
         /**
          * DeleteFilesRequest
@@ -1670,20 +1864,20 @@ export interface components {
          */
         DeleteFilesResponse: {
             /**
-             * Deleted Files
+             * Deletedfiles
              * @description Number of files successfully deleted
              */
-            deleted_files: number;
+            deletedFiles: number;
             /**
-             * Failed Deletions
+             * Faileddeletions
              * @description List of files that could not be deleted
              */
-            failed_deletions?: string[];
+            failedDeletions?: string[];
             /**
-             * Total Freed Space
+             * Totalfreedspace
              * @description Total bytes freed by deletion
              */
-            total_freed_space: number;
+            totalFreedSpace: number;
         };
         /**
          * DownloadHistory
@@ -1691,46 +1885,46 @@ export interface components {
          */
         DownloadHistory: {
             /**
-             * Total Downloads
+             * Totaldownloads
              * @description Total number of downloads
              */
-            total_downloads: number;
+            totalDownloads: number;
             /**
-             * Success Rate
+             * Successrate
              * @description Overall success rate (0.0 to 1.0)
              */
-            success_rate: number;
+            successRate: number;
             /**
-             * Average Download Time
+             * Averagedownloadtime
              * @description Average download time in seconds
              */
-            average_download_time: number;
+            averageDownloadTime: number;
             /**
-             * Total Size
+             * Totalsize
              * @description Total bytes downloaded
              * @default 0
              */
-            total_size: number;
+            totalSize: number;
             /**
-             * Popular Extractors
+             * Popularextractors
              * @description Most used extractors
              */
-            popular_extractors?: components["schemas"]["PopularExtractor"][];
+            popularExtractors?: components["schemas"]["PopularExtractor"][];
             /**
-             * Daily Stats
+             * Dailystats
              * @description Daily breakdown
              */
-            daily_stats?: components["schemas"]["DailyStats"][];
+            dailyStats?: components["schemas"]["DailyStats"][];
             /**
              * Items
              * @description Individual history items
              */
             items?: components["schemas"]["HistoryItem"][];
             /**
-             * Total Items
+             * Totalitems
              * @description Total number of items matching filters
              */
-            total_items: number;
+            totalItems: number;
             /**
              * Page
              * @description Current page number
@@ -1738,11 +1932,11 @@ export interface components {
              */
             page: number;
             /**
-             * Per Page
+             * Perpage
              * @description Items per page
              * @default 20
              */
-            per_page: number;
+            perPage: number;
         };
         /**
          * DownloadProgress
@@ -1760,15 +1954,15 @@ export interface components {
              */
             status?: string | null;
             /**
-             * Downloaded Bytes
+             * Downloadedbytes
              * @description Number of bytes downloaded
              */
-            downloaded_bytes?: number | null;
+            downloadedBytes?: number | null;
             /**
-             * Total Bytes
+             * Totalbytes
              * @description Total bytes to download
              */
-            total_bytes?: number | null;
+            totalBytes?: number | null;
             /**
              * Speed
              * @description Download speed in bytes per second
@@ -1786,10 +1980,10 @@ export interface components {
          */
         DownloadQueue: {
             /**
-             * Total Items
+             * Totalitems
              * @description Total number of items in queue
              */
-            total_items: number;
+            totalItems: number;
             /**
              * Pending
              * @description Number of pending downloads
@@ -1839,32 +2033,32 @@ export interface components {
              */
             format: string;
             /**
-             * Output Template
+             * Outputtemplate
              * @description Output filename template
              */
-            output_template?: string | null;
+            outputTemplate?: string | null;
             /**
-             * Download Subtitles
+             * Downloadsubtitles
              * @description Whether to download subtitles
              * @default false
              */
-            download_subtitles: boolean;
+            downloadSubtitles: boolean;
             /**
-             * Download Thumbnail
+             * Downloadthumbnail
              * @description Whether to download thumbnail
              * @default false
              */
-            download_thumbnail: boolean;
+            downloadThumbnail: boolean;
             /**
-             * Subtitle Languages
+             * Subtitlelanguages
              * @description List of subtitle languages to download
              */
-            subtitle_languages?: string[] | null;
+            subtitleLanguages?: string[] | null;
             /**
-             * Output Directory
+             * Outputdirectory
              * @description Custom output directory
              */
-            output_directory?: string | null;
+            outputDirectory?: string | null;
             /**
              * Metadata
              * @description Additional metadata for the download
@@ -1880,15 +2074,15 @@ export interface components {
                 [key: string]: string;
             } | null;
             /**
-             * Cookie File
+             * Cookiefile
              * @description Path to cookie file for authentication
              */
-            cookie_file?: string | null;
+            cookieFile?: string | null;
             /**
-             * Browser Cookies
+             * Browsercookies
              * @description Browser cookie extraction settings
              */
-            browser_cookies?: {
+            browserCookies?: {
                 [key: string]: string;
             } | null;
         };
@@ -1898,10 +2092,10 @@ export interface components {
          */
         DownloadResponse: {
             /**
-             * Download Id
+             * Downloadid
              * @description Unique identifier for this download
              */
-            download_id: string;
+            downloadId: string;
             /**
              * Status
              * @description Current download status
@@ -1913,10 +2107,10 @@ export interface components {
              */
             message: string;
             /**
-             * Estimated Completion
+             * Estimatedcompletion
              * @description Estimated completion time
              */
-            estimated_completion?: string | null;
+            estimatedCompletion?: string | null;
         };
         /**
          * DownloadResult
@@ -1934,20 +2128,20 @@ export interface components {
              */
             title?: string | null;
             /**
-             * File Size
+             * Filesize
              * @description File size in bytes
              */
-            file_size?: number | null;
+            fileSize?: number | null;
             /**
              * Duration
              * @description Video duration in seconds
              */
             duration?: number | null;
             /**
-             * Thumbnail Url
+             * Thumbnailurl
              * @description Thumbnail URL
              */
-            thumbnail_url?: string | null;
+            thumbnailUrl?: string | null;
             /**
              * Extractor
              * @description Extractor used (youtube, vimeo, etc)
@@ -1965,10 +2159,10 @@ export interface components {
          */
         DownloadStatus: {
             /**
-             * Download Id
+             * Downloadid
              * @description Unique download identifier
              */
-            download_id: string;
+            downloadId: string;
             /**
              * Status
              * @description Current download status
@@ -1977,10 +2171,10 @@ export interface components {
             /** @description Progress information */
             progress?: components["schemas"]["DownloadProgress"] | null;
             /**
-             * Current Filename
+             * Currentfilename
              * @description Current output filename being written
              */
-            current_filename?: string | null;
+            currentFilename?: string | null;
             /**
              * Message
              * @description Current status message
@@ -1994,11 +2188,11 @@ export interface components {
             /** @description Final video information when completed */
             result?: components["schemas"]["DownloadResult"] | null;
             /**
-             * Created At
+             * Createdat
              * Format: date-time
              * @description Timestamp when download was created
              */
-            created_at: string;
+            createdAt: string;
         };
         /**
          * DownloadedFile
@@ -2021,21 +2215,21 @@ export interface components {
              */
             size: number;
             /**
-             * Created At
+             * Createdat
              * Format: date-time
              * @description File creation timestamp
              */
-            created_at: string;
+            createdAt: string;
             /**
-             * Modified At
+             * Modifiedat
              * @description File modification timestamp
              */
-            modified_at?: string | null;
+            modifiedAt?: string | null;
             /**
-             * Video Info
+             * Videoinfo
              * @description Associated video information
              */
-            video_info?: {
+            videoInfo?: {
                 [key: string]: unknown;
             } | null;
         };
@@ -2045,10 +2239,10 @@ export interface components {
          */
         ErrorBreakdown: {
             /**
-             * Error Type
+             * Errortype
              * @description Error type/category
              */
-            error_type: string;
+            errorType: string;
             /**
              * Count
              * @description Number of occurrences
@@ -2087,15 +2281,15 @@ export interface components {
          */
         FileList: {
             /**
-             * Total Files
+             * Totalfiles
              * @description Total number of files found
              */
-            total_files: number;
+            totalFiles: number;
             /**
-             * Total Size
+             * Totalsize
              * @description Total size of all files in bytes
              */
-            total_size: number;
+            totalSize: number;
             /**
              * Files
              * @description List of downloaded files
@@ -2108,10 +2302,10 @@ export interface components {
          */
         FormatDetail: {
             /**
-             * Format Id
+             * Formatid
              * @description Format identifier
              */
-            format_id?: string | null;
+            formatId?: string | null;
             /**
              * Ext
              * @description File extension
@@ -2148,10 +2342,10 @@ export interface components {
              */
             filesize?: number | null;
             /**
-             * Format Note
+             * Formatnote
              * @description Format description
              */
-            format_note?: string | null;
+            formatNote?: string | null;
         };
         /**
          * FormatInfo
@@ -2195,7 +2389,7 @@ export interface components {
          */
         FormatInfo: {
             /**
-             * Video Formats
+             * Videoformats
              * @description Supported video format extensions
              * @example [
              *       "mp4",
@@ -2206,9 +2400,9 @@ export interface components {
              *       "mov"
              *     ]
              */
-            video_formats: string[];
+            videoFormats: string[];
             /**
-             * Audio Formats
+             * Audioformats
              * @description Supported audio format extensions
              * @example [
              *       "mp3",
@@ -2219,9 +2413,9 @@ export interface components {
              *       "aac"
              *     ]
              */
-            audio_formats: string[];
+            audioFormats: string[];
             /**
-             * Subtitle Formats
+             * Subtitleformats
              * @description Supported subtitle format extensions
              * @example [
              *       "vtt",
@@ -2230,9 +2424,9 @@ export interface components {
              *       "sub"
              *     ]
              */
-            subtitle_formats: string[];
+            subtitleFormats: string[];
             /**
-             * Quality Options
+             * Qualityoptions
              * @description Available quality selection options
              * @example [
              *       "best",
@@ -2243,17 +2437,17 @@ export interface components {
              *       "bestaudio"
              *     ]
              */
-            quality_options: string[];
+            qualityOptions: string[];
             /**
-             * Resolution Options
+             * Resolutionoptions
              * @description Common video resolution options
              */
-            resolution_options?: string[];
+            resolutionOptions?: string[];
             /**
-             * Format Notes
+             * Formatnotes
              * @description Descriptions for format selection options
              */
-            format_notes?: {
+            formatNotes?: {
                 [key: string]: unknown;
             };
         };
@@ -2268,10 +2462,10 @@ export interface components {
          */
         HistoryItem: {
             /**
-             * Download Id
+             * Downloadid
              * @description Download identifier
              */
-            download_id: string;
+            downloadId: string;
             /**
              * Url
              * @description Video URL
@@ -2283,27 +2477,27 @@ export interface components {
              */
             status: string;
             /**
-             * Started At
+             * Startedat
              * Format: date-time
              * @description When download started
              */
-            started_at: string;
+            startedAt: string;
             /**
-             * Completed At
+             * Completedat
              * Format: date-time
              * @description When download finished
              */
-            completed_at: string;
+            completedAt: string;
             /**
              * Duration
              * @description Download duration in seconds
              */
             duration: number;
             /**
-             * File Size
+             * Filesize
              * @description File size in bytes
              */
-            file_size?: number | null;
+            fileSize?: number | null;
             /**
              * Extractor
              * @description Extractor used (e.g., youtube)
@@ -2315,17 +2509,20 @@ export interface components {
              */
             title?: string | null;
             /**
-             * Error Message
+             * Errormessage
              * @description Error message if failed
              */
-            error_message?: string | null;
+            errorMessage?: string | null;
         };
-        /** PasswordChange */
+        /**
+         * PasswordChange
+         * @description Password change request with automatic camelCase conversion.
+         */
         PasswordChange: {
-            /** Current Password */
-            current_password: string;
-            /** New Password */
-            new_password: string;
+            /** Currentpassword */
+            currentPassword: string;
+            /** Newpassword */
+            newPassword: string;
         };
         /**
          * PlaylistEntry
@@ -2385,6 +2582,14 @@ export interface components {
             percentage: number;
         };
         /**
+         * PublicConfig
+         * @description Public configuration with automatic camelCase conversion.
+         */
+        PublicConfig: {
+            /** Allowpublicsignup */
+            allowPublicSignup: boolean;
+        };
+        /**
          * SSETokenPermission
          * @description Permissions for SSE tokens (currently only read).
          * @enum {string}
@@ -2401,11 +2606,11 @@ export interface components {
              */
             token: string;
             /**
-             * Expires At
+             * Expiresat
              * Format: date-time
              * @description Token expiration timestamp
              */
-            expires_at: string;
+            expiresAt: string;
             /**
              * Scope
              * @description Token scope
@@ -2428,52 +2633,52 @@ export interface components {
          */
         StorageInfo: {
             /**
-             * Total Space
+             * Totalspace
              * @description Total storage space in bytes
              */
-            total_space: number;
+            totalSpace: number;
             /**
-             * Used Space
+             * Usedspace
              * @description Used storage space in bytes
              */
-            used_space: number;
+            usedSpace: number;
             /**
-             * Free Space
+             * Freespace
              * @description Free storage space in bytes
              */
-            free_space: number;
+            freeSpace: number;
             /**
-             * Usage Percentage
+             * Usagepercentage
              * @description Storage usage percentage (0-100)
              */
-            usage_percentage: number;
+            usagePercentage: number;
             /**
-             * Download Directory
+             * Downloaddirectory
              * @description Main download directory path
              */
-            download_directory: string;
+            downloadDirectory: string;
             /**
-             * Temp Directory
+             * Tempdirectory
              * @description Temporary files directory path
              */
-            temp_directory: string;
+            tempDirectory: string;
             /**
-             * Downloads Size
+             * Downloadssize
              * @description Size of downloads directory in bytes
              * @default 0
              */
-            downloads_size: number;
+            downloadsSize: number;
             /**
-             * Temp Size
+             * Tempsize
              * @description Size of temp directory in bytes
              * @default 0
              */
-            temp_size: number;
+            tempSize: number;
             /**
-             * Cleanup Recommendations
+             * Cleanuprecommendations
              * @description Cleanup recommendations
              */
-            cleanup_recommendations?: components["schemas"]["CleanupRecommendation"][];
+            cleanupRecommendations?: components["schemas"]["CleanupRecommendation"][];
         };
         /**
          * SubtitleDetail
@@ -2495,6 +2700,18 @@ export interface components {
              * @description Language code
              */
             lang?: string | null;
+        };
+        /**
+         * SystemSettingsResponse
+         * @description System settings response with automatic camelCase conversion.
+         */
+        SystemSettingsResponse: {
+            /** Allowpublicsignup */
+            allowPublicSignup: boolean;
+            /** Updatedat */
+            updatedAt?: string | null;
+            /** Updatedbyuserid */
+            updatedByUserId?: string | null;
         };
         /**
          * ThumbnailDetail
@@ -2522,7 +2739,10 @@ export interface components {
              */
             resolution?: string | null;
         };
-        /** TokenResponse */
+        /**
+         * TokenResponse
+         * @description Token response with automatic camelCase conversion.
+         */
         TokenResponse: {
             /** Accesstoken */
             accessToken: string;
@@ -2534,6 +2754,17 @@ export interface components {
              */
             tokenType: string;
         };
+        /**
+         * UpdateSignupSettingRequest
+         * @description Request to update signup setting.
+         */
+        UpdateSignupSettingRequest: {
+            /**
+             * Enabled
+             * @description Whether to allow public signups
+             */
+            enabled: boolean;
+        };
         /** UserCreate */
         UserCreate: {
             /** Username */
@@ -2543,6 +2774,48 @@ export interface components {
             /** Password */
             password: string;
         };
+        /**
+         * UserCreateAdmin
+         * @description Admin user creation model with automatic camelCase conversion.
+         */
+        UserCreateAdmin: {
+            /** Username */
+            username: string;
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /** Password */
+            password: string;
+            /**
+             * Isadmin
+             * @default false
+             */
+            isAdmin: boolean;
+        };
+        /**
+         * UserListResponse
+         * @description User information for list view with automatic camelCase conversion.
+         */
+        UserListResponse: {
+            /** Id */
+            id: string;
+            /** Username */
+            username: string;
+            /** Email */
+            email: string;
+            /** Avatar */
+            avatar: string | null;
+            /** Isactive */
+            isActive: boolean;
+            /** Isadmin */
+            isAdmin: boolean;
+            /** Createdat */
+            createdAt: string;
+            /** Lastlogin */
+            lastLogin?: string | null;
+        };
         /** UserLogin */
         UserLogin: {
             /** Username */
@@ -2550,7 +2823,10 @@ export interface components {
             /** Password */
             password: string;
         };
-        /** UserResponse */
+        /**
+         * UserResponse
+         * @description User information response model with automatic camelCase conversion.
+         */
         UserResponse: {
             /** Id */
             id: string;
@@ -2560,14 +2836,40 @@ export interface components {
             email: string;
             /** Avatar */
             avatar: string | null;
+            /**
+             * Isactive
+             * @default true
+             */
+            isActive: boolean;
+            /**
+             * Isadmin
+             * @default false
+             */
+            isAdmin: boolean;
             /** Preferences */
             preferences?: {
                 [key: string]: unknown;
             } | null;
-            /** Created At */
-            created_at: string;
-            /** Last Login */
-            last_login: string | null;
+            /** Createdat */
+            createdAt: string;
+            /** Lastlogin */
+            lastLogin?: string | null;
+        };
+        /**
+         * UserUpdateActive
+         * @description User active status update model with automatic camelCase conversion.
+         */
+        UserUpdateActive: {
+            /** Isactive */
+            isActive: boolean;
+        };
+        /**
+         * UserUpdateAdmin
+         * @description Admin user update model with automatic camelCase conversion.
+         */
+        UserUpdateAdmin: {
+            /** Isadmin */
+            isAdmin: boolean;
         };
         /** ValidationError */
         ValidationError: {
@@ -2609,20 +2911,20 @@ export interface components {
              */
             uploader?: string | null;
             /**
-             * Upload Date
+             * Uploaddate
              * @description Upload date (YYYYMMDD format)
              */
-            upload_date?: string | null;
+            uploadDate?: string | null;
             /**
-             * View Count
+             * Viewcount
              * @description Number of views
              */
-            view_count?: number | null;
+            viewCount?: number | null;
             /**
-             * Webpage Url
+             * Webpageurl
              * @description Original webpage URL
              */
-            webpage_url: string;
+            webpageUrl: string;
             /**
              * Extractor
              * @description Extractor used
@@ -2646,20 +2948,20 @@ export interface components {
                 [key: string]: components["schemas"]["SubtitleDetail"][];
             };
             /**
-             * Playlist Count
+             * Playlistcount
              * @description Number of videos in playlist
              */
-            playlist_count?: number | null;
+            playlistCount?: number | null;
             /**
-             * Playlist Id
+             * Playlistid
              * @description Playlist identifier
              */
-            playlist_id?: string | null;
+            playlistId?: string | null;
             /**
-             * Playlist Title
+             * Playlisttitle
              * @description Playlist name
              */
-            playlist_title?: string | null;
+            playlistTitle?: string | null;
             /**
              * Entries
              * @description Playlist video entries
@@ -3370,6 +3672,112 @@ export interface operations {
             };
         };
     };
+    get_system_settings_api_v1_admin_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemSettingsResponse"];
+                };
+            };
+        };
+    };
+    update_signup_setting_api_v1_admin_settings_signup_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSignupSettingRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemSettingsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_admin_configuration_api_v1_admin_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Configuration"];
+                };
+            };
+        };
+    };
+    update_admin_configuration_api_v1_admin_config_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfigurationUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Configuration"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_download_history_api_v1_history__get: {
         parameters: {
             query?: {
@@ -3608,7 +4016,7 @@ export interface operations {
             };
         };
     };
-    get_configuration_api_v1_config__get: {
+    get_public_configuration_api_v1_config_public_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -3623,40 +4031,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Configuration"];
-                };
-            };
-        };
-    };
-    update_configuration_api_v1_config__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ConfigurationUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Configuration"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["PublicConfig"];
                 };
             };
         };
@@ -3844,6 +4219,162 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    list_users_api_v1_users__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserListResponse"][];
+                };
+            };
+        };
+    };
+    create_user_as_admin_api_v1_users__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserCreateAdmin"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_user_admin_status_api_v1_users__user_id__admin_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserUpdateAdmin"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_user_active_status_api_v1_users__user_id__active_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserUpdateActive"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_user_api_v1_users__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

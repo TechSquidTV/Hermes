@@ -232,5 +232,6 @@ openssl rand -hex 32
 5. **Monitor authentication attempts**
 6. **Keep dependencies updated**
 7. **Use proper database backups**
+8. **User enumeration protection** - Signup endpoints use generic error messages to prevent attackers from discovering registered usernames/emails
 
 See the [Docker setup guide](DOCKER_OPTIMIZATION_README.md) for production deployment recommendations.

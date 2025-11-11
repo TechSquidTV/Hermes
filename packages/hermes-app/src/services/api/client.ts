@@ -69,6 +69,10 @@ interface SSETokenResponse {
 import { TokenStorage } from '@/utils/tokenStorage'
 import { getApiBaseUrl } from '@/lib/config'
 
+interface ApiRequestInit extends RequestInit {
+  skipAuth?: boolean
+}
+
 class ApiClient {
   private baseURL: string
 
@@ -113,34 +117,44 @@ class ApiClient {
     return new Error(`Authentication error: ${errorMessage}`)
   }
 
-  async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  async request<T>(endpoint: string, options: ApiRequestInit = {}): Promise<T> {
     // Use endpoint as-is to match exact backend route definitions
     // FastAPI routes without trailing slashes should not receive them from the client
     const url = `${this.baseURL}${endpoint}`
 
-    // Add auth headers
-    const headers = await this.getAuthHeaders()
-    options.headers = {
-      ...headers,
-      ...options.headers,
+    // Add auth headers unless skipAuth is true
+    const skipAuth = options.skipAuth ?? false
+    const { skipAuth: _, ...fetchOptions } = options
+
+    if (!skipAuth) {
+      const headers = await this.getAuthHeaders()
+      fetchOptions.headers = {
+        ...headers,
+        ...fetchOptions.headers,
+      }
+    } else {
+      fetchOptions.headers = {
+        'Content-Type': 'application/json',
+        ...fetchOptions.headers,
+      }
     }
 
     // Handle 401 errors by attempting token refresh
-    const response = await fetch(url, options)
+    const response = await fetch(url, fetchOptions)
 
-    if (response.status === 401) {
+    if (response.status === 401 && !skipAuth) {
       try {
         // Try to refresh token
         await this.refreshToken()
 
         // Retry request with new token
         const newHeaders = await this.getAuthHeaders()
-        options.headers = {
+        fetchOptions.headers = {
           ...newHeaders,
-          ...options.headers,
+          ...fetchOptions.headers,
         }
 
-        const retryResponse = await fetch(url, options)
+        const retryResponse = await fetch(url, fetchOptions)
         if (!retryResponse.ok) {
           throw new Error(`HTTP ${retryResponse.status}: ${retryResponse.statusText}`)
         }
@@ -313,14 +327,50 @@ class ApiClient {
   }
 
   // Configuration
+  async getPublicConfig(): Promise<{ allowPublicSignup: boolean }> {
+    return this.request<{ allowPublicSignup: boolean }>('/config/public', {
+      skipAuth: true,
+    })
+  }
+
+  // Admin-only configuration (moved from /config to /admin/config)
+  async getAdminConfig(): Promise<Configuration> {
+    return this.request<Configuration>('/admin/config')
+  }
+
+  async updateAdminConfig(config: ConfigurationUpdate): Promise<Configuration> {
+    return this.request<Configuration>('/admin/config', {
+      method: 'PUT',
+      body: JSON.stringify(config),
+    })
+  }
+
+  // Legacy method - deprecated, use getAdminConfig() instead
   async getConfiguration(): Promise<Configuration> {
-    return this.request<Configuration>('/config')
+    return this.getAdminConfig()
   }
 
   async updateConfiguration(config: ConfigurationUpdate): Promise<Configuration> {
-    return this.request<Configuration>('/config', {
+    return this.updateAdminConfig(config)
+  }
+
+  // Admin Settings
+  async getAdminSettings(): Promise<{
+    allowPublicSignup: boolean
+    updatedAt?: string
+    updatedByUserId?: string
+  }> {
+    return this.request('/admin/settings')
+  }
+
+  async updateSignupSetting(enabled: boolean): Promise<{
+    allowPublicSignup: boolean
+    updatedAt?: string
+    updatedByUserId?: string
+  }> {
+    return this.request('/admin/settings/signup', {
       method: 'PUT',
-      body: JSON.stringify(config),
+      body: JSON.stringify({ enabled }),
     })
   }
 

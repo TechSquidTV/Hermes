@@ -84,9 +84,9 @@ services:
       - HERMES_SECRET_KEY=${HERMES_SECRET_KEY}
       - HERMES_REDIS_URL=${HERMES_REDIS_URL:-redis://redis:6379}
     volumes:
-      - ./packages/hermes-api/downloads:/app/downloads
-      - ./packages/hermes-api/temp:/app/temp
-      - ./packages/hermes-api/data:/app/data
+      - ./data/downloads:/app/downloads
+      - ./data/temp:/app/temp
+      - ./data/data:/app/data
     networks:
       - hermes-network
     depends_on:
@@ -119,9 +119,9 @@ services:
       - HERMES_SECRET_KEY=${HERMES_SECRET_KEY}
       - HERMES_REDIS_URL=${HERMES_REDIS_URL:-redis://redis:6379}
     volumes:
-      - ./packages/hermes-api/downloads:/app/downloads
-      - ./packages/hermes-api/temp:/app/temp
-      - ./packages/hermes-api/data:/app/data
+      - ./data/downloads:/app/downloads
+      - ./data/temp:/app/temp
+      - ./data/data:/app/data
     networks:
       - hermes-network
     depends_on:

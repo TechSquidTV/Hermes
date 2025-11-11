@@ -93,7 +93,7 @@ export function useDownloadProgressSSE(downloadId: string) {
 
   // Update React Query cache when SSE data arrives
   useEffect(() => {
-    if (data && data.download_id === downloadId) {
+    if (data && data.downloadId === downloadId) {
       queryClient.setQueryData(
         ['download', 'progress', downloadId],
         data

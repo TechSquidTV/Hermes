@@ -32,17 +32,30 @@ export function useAnalytics(options: UseAnalyticsOptions = {}) {
   }
 }
 
+// Types for the raw API response with snake_case
+interface ExtractorStat {
+  extractor: string
+  count: number
+  percentage: number
+}
+
+interface ErrorStat {
+  error_type: string
+  count: number
+  percentage: number
+}
+
 // Hook specifically for chart data transformation
 export function useChartData(stats?: ApiStatistics) {
   // Transform stats for extractor pie chart
-  const extractorChartData = stats?.popular_extractors?.map(extractor => ({
+  const extractorChartData = (stats?.popularExtractors as ExtractorStat[] | undefined)?.map((extractor) => ({
     name: extractor.extractor,
     value: extractor.count,
     percentage: extractor.percentage,
   })) || []
 
   // Transform stats for error breakdown chart
-  const errorChartData = stats?.error_breakdown?.map(error => ({
+  const errorChartData = (stats?.errorBreakdown as ErrorStat[] | undefined)?.map((error) => ({
     name: error.error_type,
     value: error.count,
     percentage: error.percentage,

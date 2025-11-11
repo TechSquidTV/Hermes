@@ -103,6 +103,7 @@ async def get_current_user_from_token(
             "username": user.username,
             "email": user.email,
             "avatar": user.avatar,
+            "is_admin": user.is_admin,
             "preferences": user.preferences,
             "created_at": user.created_at.isoformat() if user.created_at else None,
             "last_login": user.last_login.isoformat() if user.last_login else None,
@@ -141,3 +142,32 @@ async def get_token_from_header(
 ) -> str:
     """Extract token from Authorization header."""
     return credentials.credentials
+
+
+# Admin-only dependency
+async def get_current_admin_user(
+    current_user: dict = Depends(get_current_user_from_token),
+) -> dict:
+    """
+    Verify that the current user is an admin.
+
+    This dependency should be used for admin-only endpoints.
+    Raises 403 Forbidden if the user is not an admin.
+    """
+    if not current_user.get("is_admin", False):
+        logger.warning(
+            "Non-admin user attempted to access admin endpoint",
+            user_id=current_user.get("id"),
+            username=current_user.get("username"),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+
+    logger.info(
+        "Admin user authenticated",
+        user_id=current_user.get("id"),
+        username=current_user.get("username"),
+    )
+    return current_user

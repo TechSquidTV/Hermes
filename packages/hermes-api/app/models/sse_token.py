@@ -17,6 +17,8 @@ from enum import Enum
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.models.base import CamelCaseModel
+
 
 class SSETokenScope(str, Enum):
     """Available SSE token scopes."""
@@ -121,7 +123,7 @@ class CreateSSETokenRequest(BaseModel):
     )
 
 
-class SSETokenResponse(BaseModel):
+class SSETokenResponse(CamelCaseModel):
     """Response containing created SSE token."""
 
     token: str = Field(..., description="The ephemeral SSE token")

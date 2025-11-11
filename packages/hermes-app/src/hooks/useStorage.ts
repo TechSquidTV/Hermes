@@ -19,10 +19,10 @@ export function useCleanup() {
   return useMutation({
     mutationFn: (request: CleanupRequest) => apiClient.cleanupDownloads(request),
     onSuccess: (data, variables) => {
-      if (variables.dry_run) {
-        toast.info(`Cleanup preview: ${data.files_previewed} files, ${data.space_freed} freed`)
+      if (variables.dryRun) {
+        toast.info(`Cleanup preview: ${data.filesPreviewed} files, ${data.spaceFreed} freed`)
       } else {
-        toast.success(`Cleanup completed! ${data.files_deleted} files deleted, ${data.space_freed} freed`)
+        toast.success(`Cleanup completed! ${data.filesDeleted} files deleted, ${data.spaceFreed} freed`)
         queryClient.invalidateQueries({ queryKey: ['storage'] })
         queryClient.invalidateQueries({ queryKey: ['queue'] })
       }
@@ -34,8 +34,8 @@ export function useCleanup() {
 }
 
 export function useStorageCalculations(storageInfo?: StorageInfo) {
-  const totalSpace = storageInfo?.total_space || 0
-  const usedSpace = storageInfo?.used_space || 0
+  const totalSpace = storageInfo?.totalSpace || 0
+  const usedSpace = storageInfo?.usedSpace || 0
   const freeSpace = totalSpace - usedSpace
 
   const usagePercentage = totalSpace > 0 ? (usedSpace / totalSpace) * 100 : 0

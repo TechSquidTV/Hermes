@@ -16,7 +16,8 @@ https://github.com/user-attachments/assets/7d9c6b96-d966-4989-a8b3-d5d49af463ae
 - 🎥 **Universal Support** - Download from YouTube, Vimeo, TikTok, and 1000+ sites
 - ⚡ **Background Processing** - Queue downloads and process them asynchronously
 - ▶️ **Playlists** - Download entire playlists asynchronously
-- 🔒 **Secure Authentication** - JWT tokens with API key management
+- 🔒 **Secure Authentication** - JWT tokens with API key management and admin user control
+- 👥 **User Management** - Admin controls for self-hosted deployments with configurable signup
 
 ## Quick Start
 
@@ -146,6 +147,59 @@ VITE_API_BASE_URL=https://hermes-api.example.com/api/v1
 ```
 
 See our [Proxy & Deployment Guide](docs/PROXY_DEPLOYMENT.md) for integrating with existing setups (Traefik, nginx, etc.) and deploying with separate subdomains.
+
+## 🔒 Self-Hosting Security
+
+Hermes includes security features designed specifically for self-hosted deployments:
+
+### Signup Control
+
+By default, anyone with access to your Hermes instance can create an account. For self-hosted deployments, you can restrict signup:
+
+**Option 1: First User Becomes Admin** (Default)
+- The first user to sign up automatically gets admin privileges
+- Subsequent users can only sign up if public signup is enabled
+- Simple for personal deployments
+
+**Option 2: Disable Public Signup**
+```bash
+# In your .env file:
+HERMES_ALLOW_PUBLIC_SIGNUP=false
+```
+- Only administrators can create new accounts via admin panel
+- Prevents unauthorized account creation
+- Recommended for shared/exposed deployments
+
+**Option 3: Pre-seed Initial Admin** (Docker-friendly)
+```bash
+# In your .env file:
+HERMES_INITIAL_ADMIN_USERNAME=admin
+HERMES_INITIAL_ADMIN_EMAIL=admin@example.com
+HERMES_INITIAL_ADMIN_PASSWORD=changeme123
+```
+- Admin account created automatically on first startup
+- Perfect for Docker deployments and automation
+- **Important**: Change the password after first login!
+
+### Admin User Management
+
+Administrators have access to user management features:
+- **Create users** - Add accounts when public signup is disabled
+- **Promote/demote admins** - Grant admin privileges to trusted users
+- **Activate/deactivate accounts** - Disable access without deleting users
+- **Delete users** - Permanently remove accounts
+- **Safety checks** - Cannot delete yourself or the last admin
+
+Access admin features via: **API endpoints at `/api/v1/users`** (see [API docs](http://localhost:8000/docs))
+
+### Security Best Practices
+
+1. **Set a strong secret key**: Generate with `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`
+2. **Disable public signup** for non-personal deployments: `HERMES_ALLOW_PUBLIC_SIGNUP=false`
+3. **Change default credentials** if using pre-seeded admin
+4. **Use HTTPS** in production (Caddy provides automatic HTTPS)
+5. **Restrict CORS origins** to your actual domains in `.env`
+6. **Keep Hermes updated** to get the latest security patches
 
 ### 🐛 Having Issues?
 

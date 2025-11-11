@@ -56,7 +56,7 @@ export function QueueCharts() {
   })) || []
 
   // Transform stats data for extractor pie chart
-  const extractorData = statsData?.popular_extractors?.map((item, index) => ({
+  const extractorData = statsData?.popularExtractors?.map((item, index) => ({
     name: item.extractor,
     value: item.count,
     percentage: item.percentage,
@@ -64,8 +64,8 @@ export function QueueCharts() {
   })) || []
 
   // Transform error data for bar chart
-  const errorData = statsData?.error_breakdown?.map((item, index) => ({
-    name: item.error_type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+  const errorData = statsData?.errorBreakdown?.map((item, index) => ({
+    name: item.errorType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
     count: item.count,
     percentage: item.percentage,
     fill: COLORS[index % COLORS.length],

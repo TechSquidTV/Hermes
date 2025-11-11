@@ -16,6 +16,7 @@ from app.db.models import (
     Download,
     DownloadFile,
     DownloadHistory,
+    SystemSettings,
     TokenBlacklist,
     User,
     Webhook,
@@ -367,7 +368,12 @@ class UserRepository(BaseRepository):
     """Repository for User model operations."""
 
     async def create(
-        self, username: str, password_hash: str, email: str, avatar: str = None
+        self,
+        username: str,
+        password_hash: str,
+        email: str,
+        avatar: str = None,
+        is_admin: bool = False,
     ) -> User:
         """Create a new user."""
         user_id = str(uuid.uuid4())
@@ -379,6 +385,7 @@ class UserRepository(BaseRepository):
             password_hash=password_hash,
             avatar=avatar,
             is_active=True,
+            is_admin=is_admin,
             created_at=datetime.now(timezone.utc),
         )
 
@@ -402,6 +409,13 @@ class UserRepository(BaseRepository):
         """Get user by ID."""
         result = await self.session.execute(select(User).where(User.id == user_id))
         return result.scalar_one_or_none()
+
+    async def count(self) -> int:
+        """Count total number of users."""
+        from sqlalchemy import func
+
+        result = await self.session.execute(select(func.count(User.id)))
+        return result.scalar_one()
 
     async def update_last_login(self, user_id: str) -> Optional[User]:
         """Update user's last login timestamp."""
@@ -957,6 +971,40 @@ class BatchRepository(BaseRepository):
         }
 
 
+class SystemSettingsRepository(BaseRepository):
+    """Repository for SystemSettings model operations (singleton)."""
+
+    async def get_settings(self) -> Optional[SystemSettings]:
+        """Get the singleton system settings (ID=1)."""
+        result = await self.session.execute(
+            select(SystemSettings).where(SystemSettings.id == 1)
+        )
+        return result.scalar_one_or_none()
+
+    async def update_allow_public_signup(
+        self, value: bool, user_id: Optional[str] = None
+    ) -> SystemSettings:
+        """Update the allow_public_signup setting."""
+        settings = await self.get_settings()
+
+        if not settings:
+            # Create if doesn't exist (shouldn't happen if migration ran)
+            settings = SystemSettings(
+                id=1,
+                allow_public_signup=value,
+                updated_by_user_id=user_id,
+                updated_at=datetime.now(timezone.utc),
+            )
+            self.session.add(settings)
+        else:
+            settings.allow_public_signup = value
+            settings.updated_by_user_id = user_id
+            settings.updated_at = datetime.now(timezone.utc)
+
+        await self.commit()
+        return settings
+
+
 # Convenience function to get repositories with session
 async def get_repositories() -> Dict[str, BaseRepository]:
     """Get all repository instances with a database session."""
@@ -970,4 +1018,5 @@ async def get_repositories() -> Dict[str, BaseRepository]:
             "history": DownloadHistoryRepository(session),
             "token_blacklist": TokenBlacklistRepository(session),
             "batch": BatchRepository(session),
+            "system_settings": SystemSettingsRepository(session),
         }

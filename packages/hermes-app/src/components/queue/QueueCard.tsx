@@ -49,8 +49,8 @@ export function QueueCard({ download, isSelectable = false, isSelected = false, 
     onSuccess: (data) => {
       // Wait for animation to complete before invalidating queries
       setTimeout(() => {
-        if (data.deleted_files > 0) {
-          toast.success(`File deleted! Freed ${(data.total_freed_space / 1024 / 1024).toFixed(2)} MB`)
+        if (data.deletedFiles > 0) {
+          toast.success(`File deleted! Freed ${(data.totalFreedSpace / 1024 / 1024).toFixed(2)} MB`)
         }
         // Invalidate all queue-related queries to ensure UI updates
         // Invalidate queue queries with different filter combinations
@@ -131,7 +131,7 @@ export function QueueCard({ download, isSelectable = false, isSelected = false, 
         <div className="flex items-center pr-2">
           <Checkbox
             checked={isSelected}
-            onCheckedChange={() => onToggleSelect?.(download.download_id)}
+            onCheckedChange={() => onToggleSelect?.(download.downloadId)}
             variant="default"
             size="default"
           />
@@ -139,9 +139,9 @@ export function QueueCard({ download, isSelectable = false, isSelected = false, 
       )}
       <div className="flex-1 min-w-0 space-y-2">
         <div className="flex items-center gap-2">
-          {isDownloadResult(download.result) && download.result.thumbnail_url && (
+          {isDownloadResult(download.result) && download.result.thumbnailUrl && (
             <img
-              src={download.result.thumbnail_url}
+              src={download.result.thumbnailUrl}
               alt={download.result.title || 'Video thumbnail'}
               className="w-12 h-8 object-cover rounded shrink-0"
               onError={(e) => {
@@ -153,7 +153,7 @@ export function QueueCard({ download, isSelectable = false, isSelected = false, 
           <p className="text-sm font-medium truncate">
             {(() => {
               const result = isDownloadResult(download.result) ? download.result : undefined
-              return result?.title || `Download ${download.download_id}`
+              return result?.title || `Download ${download.downloadId}`
             })()}
           </p>
         </div>
@@ -169,7 +169,7 @@ export function QueueCard({ download, isSelectable = false, isSelected = false, 
           <span>{getTimestamp()}</span>
           {(() => {
             const result = isDownloadResult(download.result) ? download.result : undefined
-            return result?.file_size && <span>• {formatFileSize(result.file_size)}</span>
+            return result?.fileSize && <span>• {formatFileSize(result.fileSize)}</span>
           })()}
           {(() => {
             const result = isDownloadResult(download.result) ? download.result : undefined
@@ -180,7 +180,7 @@ export function QueueCard({ download, isSelectable = false, isSelected = false, 
         {/* Use real-time SSE progress for active downloads, static display for completed/failed */}
         {(download.status === 'downloading' || download.status === 'processing' || download.status === 'queued') ? (
           <DownloadProgressTracker
-            downloadId={download.download_id}
+            downloadId={download.downloadId}
             isActive={true}
             showConnectionStatus={false}
             size="default"
@@ -190,8 +190,8 @@ export function QueueCard({ download, isSelectable = false, isSelected = false, 
           <DownloadProgress
             progress={download.progress?.percentage ?? undefined}
             status={download.status}
-            downloadedBytes={download.progress?.downloaded_bytes ?? undefined}
-            totalBytes={download.progress?.total_bytes ?? undefined}
+            downloadedBytes={download.progress?.downloadedBytes ?? undefined}
+            totalBytes={download.progress?.totalBytes ?? undefined}
             speed={download.progress?.speed ?? undefined}
             estimatedTimeRemaining={download.progress?.eta ?? undefined}
             showDetails={true}
@@ -218,7 +218,7 @@ export function QueueCard({ download, isSelectable = false, isSelected = false, 
                 title="Download File"
                 onClick={() => {
                   const result = isDownloadResult(download.result) ? download.result : undefined
-                  handleDownloadFile(download.current_filename, result?.title || 'download')
+                  handleDownloadFile(download.currentFilename, result?.title || 'download')
                 }}
               >
                 <Download className="h-4 w-4" />
@@ -230,7 +230,7 @@ export function QueueCard({ download, isSelectable = false, isSelected = false, 
                 title="Delete"
                 onClick={() => {
                   const result = isDownloadResult(download.result) ? download.result : undefined
-                  handleDeleteFile(download.current_filename, result?.title || 'download')
+                  handleDeleteFile(download.currentFilename, result?.title || 'download')
                 }}
                 disabled={deleteMutation.isPending}
               >

@@ -4,10 +4,12 @@ Pydantic models for cleanup operations.
 
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from app.models.base import CamelCaseModel
 
 
-class CleanupRequest(BaseModel):
+class CleanupRequest(CamelCaseModel):
     """Request for cleanup operation."""
 
     older_than_days: Optional[int] = Field(
@@ -25,7 +27,7 @@ class CleanupRequest(BaseModel):
     )
 
 
-class CleanupResponse(BaseModel):
+class CleanupResponse(CamelCaseModel):
     """Response from cleanup operation."""
 
     files_deleted: int = Field(..., description="Number of files actually deleted")

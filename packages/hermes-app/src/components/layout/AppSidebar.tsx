@@ -10,6 +10,7 @@ import {
   Download,
   Settings2,
   LogOut,
+  Shield,
 } from 'lucide-react';
 import {
   Avatar,
@@ -68,6 +69,17 @@ const navigationData = {
         { title: 'General', url: '/settings/general' },
         { title: 'API Keys', url: '/settings/api-keys' },
         { title: 'Appearance', url: '/settings/appearance' },
+      ],
+    },
+  ],
+  navAdmin: [
+    {
+      title: 'Admin',
+      url: '/admin',
+      icon: Shield,
+      items: [
+        { title: 'Users', url: '/admin/users' },
+        { title: 'Settings', url: '/admin/settings' },
       ],
     },
   ],
@@ -156,6 +168,56 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             )}
           </SidebarMenu>
         </SidebarGroup>
+
+        {/* Admin Navigation - Only visible to admins */}
+        {user?.isAdmin && (
+          <SidebarGroup>
+            <SidebarMenu>
+              {navigationData.navAdmin.map((item) =>
+                item.items ? (
+                  <Collapsible
+                    key={item.title}
+                    asChild
+                    defaultOpen={false}
+                    className="group/collapsible"
+                  >
+                    <SidebarMenuItem>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuButton tooltip={item.title}>
+                          {item.icon && <item.icon />}
+                          <span>{item.title}</span>
+                          <ChevronRight className="ml-auto transition-transform duration-300 group-data-[state=open]/collapsible:rotate-90" />
+                        </SidebarMenuButton>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <SidebarMenuSub>
+                          {item.items?.map((subItem) => (
+                            <SidebarMenuSubItem key={subItem.title}>
+                              <SidebarMenuSubButton asChild>
+                                <Link to={subItem.url}>
+                                  <span>{subItem.title}</span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          ))}
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    </SidebarMenuItem>
+                  </Collapsible>
+                ) : (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild tooltip={item.title}>
+                      <Link to={item.url}>
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )
+              )}
+            </SidebarMenu>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       {/* Version Status */}

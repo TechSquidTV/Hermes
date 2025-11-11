@@ -10,13 +10,13 @@ The Docker setup uses volume mounts to persist data and provide access to downlo
 
 | Host Path | Container Path | Purpose | Contents |
 |-----------|----------------|---------|----------|
-| `./packages/hermes-api/data/` | `/app/data/` | **Database Storage** | SQLite database file (`hermes.db`) containing user accounts, download history, queue state, and application settings |
-| `./packages/hermes-api/downloads/` | `/app/downloads/` | **Completed Downloads** | Successfully downloaded video files, organized by format and quality |
-| `./packages/hermes-api/temp/` | `/app/temp/` | **Temporary Files** | Intermediate files during download process, partial downloads, and temporary processing files |
+| `./data/data/` | `/app/data/` | **Database Storage** | SQLite database file (`hermes.db`) containing user accounts, download history, queue state, and application settings |
+| `./data/downloads/` | `/app/downloads/` | **Completed Downloads** | Successfully downloaded video files, organized by format and quality |
+| `./data/temp/` | `/app/temp/` | **Temporary Files** | Intermediate files during download process, partial downloads, and temporary processing files |
 
 ### Database Persistence (`data/`)
 
-The SQLite database is persisted to the host machine at `packages/hermes-api/data/hermes.db`. This ensures:
+The SQLite database is persisted to the host machine at `data/data/hermes.db`. This ensures:
 
 - **User accounts** and authentication data persist across container restarts
 - **Download history** and queue state are preserved
@@ -179,18 +179,18 @@ The version status appears in the bottom-left of the sidebar and provides:
 
 ```bash
 # SQLite backup
-cp packages/hermes-api/data/hermes.db packages/hermes-api/data/hermes.db.backup
+cp data/data/hermes.db data/data/hermes.db.backup
 
 # Create timestamped backup
-cp packages/hermes-api/data/hermes.db \
-   packages/hermes-api/data/hermes.db.backup.$(date +%Y%m%d_%H%M%S)
+cp data/data/hermes.db \
+   data/data/hermes.db.backup.$(date +%Y%m%d_%H%M%S)
 ```
 
 ### File Backups
 
 ```bash
 # Backup downloads directory
-tar -czf downloads_backup_$(date +%Y%m%d).tar.gz packages/hermes-api/downloads/
+tar -czf downloads_backup_$(date +%Y%m%d).tar.gz data/downloads/
 
 # Backup configuration
 cp .env .env.backup
@@ -207,10 +207,10 @@ BACKUP_DIR="/data/backups"
 DATE=$(date +%Y%m%d_%H%M%S)
 
 # Database backup
-cp packages/hermes-api/data/hermes.db $BACKUP_DIR/db_backup_$DATE.sqlite
+cp data/data/hermes.db $BACKUP_DIR/db_backup_$DATE.sqlite
 
 # Downloads backup (incremental)
-rsync -a --delete packages/hermes-api/downloads/ $BACKUP_DIR/downloads_backup_$DATE/
+rsync -a --delete data/downloads/ $BACKUP_DIR/downloads_backup_$DATE/
 
 # Configuration backup
 cp .env $BACKUP_DIR/
@@ -437,8 +437,8 @@ celery_worker:
   df -h
 
   # Check directory sizes
-  du -sh packages/hermes-api/downloads/
-  du -sh packages/hermes-api/temp/
+  du -sh data/downloads/
+  du -sh data/temp/
   ```
 
 - **Consider external storage** for large download volumes:

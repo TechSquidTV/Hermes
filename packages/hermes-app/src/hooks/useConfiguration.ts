@@ -5,6 +5,17 @@ import type { components } from '@/types/api.generated'
 
 type ConfigurationUpdate = components["schemas"]["ConfigurationUpdate"]
 
+// Type for the actual API response with snake_case properties
+interface ConfigResponse {
+  output_template: string
+  default_format: string
+  download_subtitles: boolean
+  download_thumbnail: boolean
+  max_concurrent_downloads: number
+  cleanup_enabled: boolean
+  cleanup_older_than_days: number
+}
+
 export function useConfiguration() {
   const queryClient = useQueryClient()
 
@@ -58,30 +69,32 @@ export function useConfiguration() {
 // Hook for specific configuration sections
 export function useMediaConfig() {
   const { config, updateField, isUpdating } = useConfiguration()
+  const configData = config as ConfigResponse | undefined
 
   return {
-    outputTemplate: config?.output_template || '',
-    defaultFormat: config?.default_format || 'best',
-    downloadSubtitles: config?.download_subtitles || false,
-    downloadThumbnail: config?.download_thumbnail || false,
-    updateOutputTemplate: (value: string) => updateField('output_template', value),
-    updateDefaultFormat: (value: string) => updateField('default_format', value),
-    updateDownloadSubtitles: (value: boolean) => updateField('download_subtitles', value),
-    updateDownloadThumbnail: (value: boolean) => updateField('download_thumbnail', value),
+    outputTemplate: configData?.output_template || '',
+    defaultFormat: configData?.default_format || 'best',
+    downloadSubtitles: configData?.download_subtitles || false,
+    downloadThumbnail: configData?.download_thumbnail || false,
+    updateOutputTemplate: (value: string) => updateField('outputTemplate', value),
+    updateDefaultFormat: (value: string) => updateField('defaultFormat', value),
+    updateDownloadSubtitles: (value: boolean) => updateField('downloadSubtitles', value),
+    updateDownloadThumbnail: (value: boolean) => updateField('downloadThumbnail', value),
     isUpdating,
   }
 }
 
 export function useStorageConfig() {
   const { config, updateField, isUpdating } = useConfiguration()
+  const configData = config as ConfigResponse | undefined
 
   return {
-    maxConcurrentDownloads: config?.max_concurrent_downloads || 3,
-    cleanupEnabled: config?.cleanup_enabled || false,
-    cleanupOlderThanDays: config?.cleanup_older_than_days || 30,
-    updateMaxConcurrentDownloads: (value: number) => updateField('max_concurrent_downloads', value),
-    updateCleanupEnabled: (value: boolean) => updateField('cleanup_enabled', value),
-    updateCleanupOlderThanDays: (value: number) => updateField('cleanup_older_than_days', value),
+    maxConcurrentDownloads: configData?.max_concurrent_downloads || 3,
+    cleanupEnabled: configData?.cleanup_enabled || false,
+    cleanupOlderThanDays: configData?.cleanup_older_than_days || 30,
+    updateMaxConcurrentDownloads: (value: number) => updateField('maxConcurrentDownloads', value),
+    updateCleanupEnabled: (value: boolean) => updateField('cleanupEnabled', value),
+    updateCleanupOlderThanDays: (value: number) => updateField('cleanupOlderThanDays', value),
     isUpdating,
   }
 }

@@ -40,8 +40,8 @@ export function useUrlProcessing(options: UseUrlProcessingOptions = {}) {
       await downloadMutation.mutateAsync({
         url: targetUrl,
         format: defaultFormat,
-        download_subtitles: false,
-        download_thumbnail: false,
+        downloadSubtitles: false,
+        downloadThumbnail: false,
       })
       onSuccess?.(downloadMutation.data)
       setUrl('') // Clear URL after successful download

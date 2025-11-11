@@ -4,10 +4,12 @@ Pydantic models for API statistics.
 
 from typing import List
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from app.models.base import CamelCaseModel
 
 
-class ExtractorStats(BaseModel):
+class ExtractorStats(CamelCaseModel):
     """Extractor usage statistics."""
 
     extractor: str = Field(..., description="Extractor name")
@@ -15,7 +17,7 @@ class ExtractorStats(BaseModel):
     percentage: float = Field(..., description="Percentage of total")
 
 
-class ErrorBreakdown(BaseModel):
+class ErrorBreakdown(CamelCaseModel):
     """Error type breakdown."""
 
     error_type: str = Field(..., description="Error type/category")
@@ -23,7 +25,7 @@ class ErrorBreakdown(BaseModel):
     percentage: float = Field(..., description="Percentage of failures")
 
 
-class ApiStatistics(BaseModel):
+class ApiStatistics(CamelCaseModel):
     """API usage statistics."""
 
     period: str = Field(..., description="Statistics period (day, week, month, year)")

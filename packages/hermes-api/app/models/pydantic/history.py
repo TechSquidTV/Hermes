@@ -6,10 +6,12 @@ from datetime import date as date_type
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from app.models.base import CamelCaseModel
 
 
-class HistoryItem(BaseModel):
+class HistoryItem(CamelCaseModel):
     """Individual history record."""
 
     download_id: str = Field(..., description="Download identifier")
@@ -24,7 +26,7 @@ class HistoryItem(BaseModel):
     error_message: Optional[str] = Field(None, description="Error message if failed")
 
 
-class DailyStats(BaseModel):
+class DailyStats(CamelCaseModel):
     """Daily statistics."""
 
     date: date_type = Field(..., description="Date")
@@ -33,7 +35,7 @@ class DailyStats(BaseModel):
     total_size: int = Field(0, description="Total bytes downloaded")
 
 
-class PopularExtractor(BaseModel):
+class PopularExtractor(CamelCaseModel):
     """Popular extractor statistics."""
 
     extractor: str = Field(..., description="Extractor name")
@@ -41,7 +43,7 @@ class PopularExtractor(BaseModel):
     percentage: float = Field(..., description="Percentage of total downloads")
 
 
-class DownloadHistory(BaseModel):
+class DownloadHistory(CamelCaseModel):
     """Complete download history with statistics."""
 
     total_downloads: int = Field(..., description="Total number of downloads")

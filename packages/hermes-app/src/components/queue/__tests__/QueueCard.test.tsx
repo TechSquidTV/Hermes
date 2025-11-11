@@ -168,25 +168,25 @@ describe('QueueCard', () => {
   }
 
   const mockDownload: DownloadStatus = {
-    download_id: 'test-123',
+    downloadId: 'test-123',
     status: 'queued',
     message: '',
     result: {
       title: 'Test Video',
       url: 'https://example.com/video',
       extractor: 'youtube',
-      file_size: 1024 * 1024 * 50, // 50 MB
-      thumbnail_url: 'https://example.com/thumb.jpg',
+      fileSize: 1024 * 1024 * 50, // 50 MB
+      thumbnailUrl: 'https://example.com/thumb.jpg',
     },
-    current_filename: '/path/to/file.mp4',
+    currentFilename: '/path/to/file.mp4',
     progress: {
       percentage: 0,
-      downloaded_bytes: 0,
-      total_bytes: 1024 * 1024 * 50,
+      downloadedBytes: 0,
+      totalBytes: 1024 * 1024 * 50,
       speed: 0,
       eta: 0,
     },
-    created_at: '2025-01-01T10:00:00Z',
+    createdAt: '2025-01-01T10:00:00Z',
   }
 
   beforeEach(() => {
@@ -200,10 +200,10 @@ describe('QueueCard', () => {
   describe('Rendering', () => {
     it('renders with minimal download data', () => {
       const minimalDownload: DownloadStatus = {
-        download_id: 'test-123',
+        downloadId: 'test-123',
         status: 'queued',
         message: '',
-        created_at: '2025-01-01T10:00:00Z',
+        createdAt: '2025-01-01T10:00:00Z',
       }
 
       render(<QueueCard download={minimalDownload} />, { wrapper: createWrapper() })
@@ -395,7 +395,7 @@ describe('QueueCard', () => {
       const completedDownload = {
         ...mockDownload,
         status: 'completed' as const,
-        current_filename: null,
+        currentFilename: null,
       }
 
       render(<QueueCard download={completedDownload} />, { wrapper: createWrapper() })
@@ -428,7 +428,7 @@ describe('QueueCard', () => {
       const completedDownload = {
         ...mockDownload,
         status: 'completed' as const,
-        current_filename: null,
+        currentFilename: null,
       }
 
       render(<QueueCard download={completedDownload} />, { wrapper: createWrapper() })
@@ -668,8 +668,8 @@ describe('QueueCard', () => {
     })
 
     it('supports multiple cards in a list', () => {
-      const download1 = { ...mockDownload, download_id: 'download-1' }
-      const download2 = { ...mockDownload, download_id: 'download-2' }
+      const download1 = { ...mockDownload, downloadId: 'download-1' }
+      const download2 = { ...mockDownload, downloadId: 'download-2' }
 
       const { container } = render(
         <>

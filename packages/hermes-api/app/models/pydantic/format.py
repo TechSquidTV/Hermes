@@ -4,10 +4,12 @@ Pydantic models for format information.
 
 from typing import List
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+
+from app.models.base import CamelCaseModel
 
 
-class FormatInfo(BaseModel):
+class FormatInfo(CamelCaseModel):
     """Information about supported formats and quality options."""
 
     model_config = ConfigDict(
