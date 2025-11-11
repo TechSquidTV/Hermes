@@ -79,6 +79,7 @@ const navigationData = {
       icon: Shield,
       items: [
         { title: 'Users', url: '/admin/users' },
+        { title: 'Settings', url: '/admin/settings' },
       ],
     },
   ],
