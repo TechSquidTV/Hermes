@@ -29,7 +29,8 @@
     "format:check": "cd packages/hermes-api && uv run black --check --diff app/ tests/ && uv run isort --check-only --diff app/ tests/",
     "pre-check:api": "cd packages/hermes-api && uv run black --check app/ tests/ && uv run isort --check-only app/ tests/ && uv run ruff check app/ tests/ && uv run python -m mypy --explicit-package-bases app/ tests/ && uv run pytest",
     "pre-check:app": "pnpm --filter hermes-app lint &&pnpm --filter hermes-app build && pnpm --filter hermes-app type-check && pnpm --filter hermes-app test",
-    "update:all": "pnpm update --recursive && cd packages/hermes-api && uv lock --upgrade && uv sync"
+    "update:all": "pnpm update --recursive && cd packages/hermes-api && uv lock --upgrade && uv sync",
+    "generate:routes": "pnpm --filter hermes-app generate:routes"
   },
   "devDependencies": {
     "shadcn": "^3.5.0"

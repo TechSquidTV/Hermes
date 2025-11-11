@@ -24,7 +24,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "knip": "knip",
-    "generate:types": "openapi-typescript http://localhost:8000/openapi.json -o ./src/types/api.generated.ts"
+    "generate:types": "openapi-typescript http://localhost:8000/openapi.json -o ./src/types/api.generated.ts",
+    "generate:routes": "tsr generate"
   },
   "devDependencies": {
     "@codecov/vite-plugin": "^1.9.1",
@@ -32,6 +33,7 @@
     "@tailwindcss/postcss": "^4.1.16",
     "@tanstack/react-query-devtools": "^5.90.2",
     "@tanstack/react-router-devtools": "^1.134.4",
+    "@tanstack/router-cli": "^1.134.20",
     "@tanstack/router-plugin": "^1.134.6",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
