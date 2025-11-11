@@ -124,7 +124,7 @@ function SignupPage() {
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Signup Disabled</AlertTitle>
               <AlertDescription>
-                Public account registration is currently disabled. Please contact your administrator to create an account for you.
+                User registration is currently disabled. Please contact your administrator for access.
               </AlertDescription>
             </Alert>
           )}

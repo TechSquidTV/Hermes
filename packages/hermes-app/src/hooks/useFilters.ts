@@ -121,16 +121,16 @@ export function useFilteredDownloads<T extends DownloadStatus>(
 
       switch (filters.sortBy) {
         case 'date': {
-          // Use created_at timestamp for proper chronological sorting
-          aValue = new Date(a.created_at).getTime()
-          bValue = new Date(b.created_at).getTime()
+          // Use createdAt timestamp for proper chronological sorting
+          aValue = new Date(a.createdAt).getTime()
+          bValue = new Date(b.createdAt).getTime()
           break
         }
         case 'size': {
           const aResult = isDownloadResult(a.result) ? a.result : undefined
           const bResult = isDownloadResult(b.result) ? b.result : undefined
-          aValue = aResult?.file_size || 0
-          bValue = bResult?.file_size || 0
+          aValue = aResult?.fileSize || 0
+          bValue = bResult?.fileSize || 0
           break
         }
         case 'title': {

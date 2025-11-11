@@ -85,13 +85,13 @@ export function UrlInput() {
       const data = await startDownload.mutateAsync({
         url,
         format,
-        download_subtitles: false,
-        download_thumbnail: false,
+        downloadSubtitles: false,
+        downloadThumbnail: false,
       })
 
       // Track the download ID for the home page using event-driven system
-      if (data?.download_id) {
-        taskTracker.addTask(data.download_id)
+      if (data?.downloadId) {
+        taskTracker.addTask(data.downloadId)
       }
     } catch (_error) {
       // Error is handled by the mutation

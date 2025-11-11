@@ -44,7 +44,7 @@ export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewPr
   const [isBatchDownloading, setIsBatchDownloading] = useState(false)
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 })
 
-  const isPlaylist = !!(info.playlist_count && info.playlist_count > 0)
+  const isPlaylist = !!(info.playlistCount && info.playlistCount > 0)
 
   // Initialize all videos as selected
   useEffect(() => {
@@ -129,8 +129,8 @@ export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewPr
           const response = await apiClient.startBatchDownload({
             urls: batches[i],
             format: selectedFormat || 'best',
-            download_subtitles: false,
-            download_thumbnail: false,
+            downloadSubtitles: false,
+            downloadThumbnail: false,
             priority: 'normal',
           })
           
@@ -237,9 +237,9 @@ export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewPr
               <CardTitle className="text-lg leading-tight line-clamp-2 flex-1">
                 {info.title}
               </CardTitle>
-              {info.webpage_url && (
+              {info.webpageUrl && (
                 <a
-                  href={info.webpage_url}
+                  href={info.webpageUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
@@ -256,10 +256,10 @@ export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewPr
                   {info.uploader}
                 </div>
               )}
-              {info.upload_date && (
+              {info.uploadDate && (
                 <div className="flex items-center gap-1">
                   <Calendar className="h-4 w-4" />
-                  {formatDate(info.upload_date)}
+                  {formatDate(info.uploadDate)}
                 </div>
               )}
             </div>
@@ -273,7 +273,7 @@ export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewPr
             {isPlaylist ? (
               <div className="flex items-center gap-1">
                 <List className="h-4 w-4" />
-                <span>{info.playlist_count} videos</span>
+                <span>{info.playlistCount} videos</span>
               </div>
             ) : (
               <div className="flex items-center gap-1">
@@ -284,7 +284,7 @@ export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewPr
             {!isPlaylist && (
               <div className="flex items-center gap-1">
                 <Eye className="h-4 w-4" />
-                {info.view_count?.toLocaleString() || 'N/A'}
+                {info.viewCount?.toLocaleString() || 'N/A'}
               </div>
             )}
           </div>
@@ -311,7 +311,7 @@ export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewPr
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium">
-                    {selectedVideos.size} of {info.playlist_count} videos selected
+                    {selectedVideos.size} of {info.playlistCount} videos selected
                   </span>
                 </div>
                 <div className="flex items-center gap-2">

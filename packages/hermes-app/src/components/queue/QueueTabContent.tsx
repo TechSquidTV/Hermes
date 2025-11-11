@@ -56,18 +56,18 @@ export function QueueTabContent({
         totalCount={queueData?.items?.length || 0}
         selectedItems={bulkOperations.getSelectedItems(
           queueData?.items?.map((item: components["schemas"]["DownloadStatus"]) => ({
-            id: item.download_id,
-            title: String(item.result?.title || item.download_id),
-            filePath: item.current_filename || undefined,
+            id: item.downloadId,
+            title: String(item.result?.title || item.downloadId),
+            filePath: item.currentFilename || undefined,
             status: item.status
           })) || []
         )}
         onSelectAll={() => {
           if (queueData?.items) {
             bulkOperations.selectAll(queueData.items.map((item: components["schemas"]["DownloadStatus"]) => ({
-              id: item.download_id,
-              title: String(item.result?.title || item.download_id),
-              filePath: item.current_filename || undefined,
+              id: item.downloadId,
+              title: String(item.result?.title || item.downloadId),
+              filePath: item.currentFilename || undefined,
               status: item.status
             })))
           }
@@ -75,9 +75,9 @@ export function QueueTabContent({
         onDeselectAll={bulkOperations.deselectAll}
         onBulkDelete={() => bulkOperations.bulkDelete(
           queueData?.items?.map((item: components["schemas"]["DownloadStatus"]) => ({
-            id: item.download_id,
-            title: String(item.result?.title || item.download_id),
-            filePath: item.current_filename || undefined,
+            id: item.downloadId,
+            title: String(item.result?.title || item.downloadId),
+            filePath: item.currentFilename || undefined,
             status: item.status
           })) || []
         )}
@@ -98,9 +98,9 @@ export function QueueTabContent({
             onToggleSelect={bulkOperations.toggleItem}
             onSelectAll={(items) => bulkOperations.selectAll(
               items.map(item => ({
-                id: item.download_id,
-                title: String(item.result?.title || item.download_id),
-                filePath: item.current_filename || undefined,
+                id: item.downloadId,
+                title: String(item.result?.title || item.downloadId),
+                filePath: item.currentFilename || undefined,
                 status: item.status
               }))
             )}
