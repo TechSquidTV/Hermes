@@ -5,10 +5,12 @@ Pydantic models for download-related API requests and responses.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
+
+from app.models.base import CamelCaseModel
 
 
-class DownloadRequest(BaseModel):
+class DownloadRequest(CamelCaseModel):
     """Request model for starting a download."""
 
     url: str = Field(
@@ -79,7 +81,7 @@ class DownloadRequest(BaseModel):
         return v
 
 
-class DownloadResult(BaseModel):
+class DownloadResult(CamelCaseModel):
     """Final video information when download is completed."""
 
     url: Optional[str] = Field(None, description="Original video URL")
@@ -93,7 +95,7 @@ class DownloadResult(BaseModel):
     description: Optional[str] = Field(None, description="Video description")
 
 
-class DownloadProgress(BaseModel):
+class DownloadProgress(CamelCaseModel):
     """Download progress information."""
 
     percentage: Optional[float] = Field(None, description="Download percentage (0-100)")
@@ -110,7 +112,7 @@ class DownloadProgress(BaseModel):
     )
 
 
-class DownloadResponse(BaseModel):
+class DownloadResponse(CamelCaseModel):
     """Response model for download initiation."""
 
     download_id: str = Field(..., description="Unique identifier for this download")
@@ -121,7 +123,7 @@ class DownloadResponse(BaseModel):
     )
 
 
-class DownloadStatus(BaseModel):
+class DownloadStatus(CamelCaseModel):
     """Response model for download status."""
 
     download_id: str = Field(..., description="Unique download identifier")
@@ -140,7 +142,7 @@ class DownloadStatus(BaseModel):
     created_at: datetime = Field(..., description="Timestamp when download was created")
 
 
-class CancelResponse(BaseModel):
+class CancelResponse(CamelCaseModel):
     """Response model for download cancellation."""
 
     download_id: str = Field(..., description="Download identifier that was cancelled")
@@ -148,7 +150,7 @@ class CancelResponse(BaseModel):
     message: str = Field(..., description="Cancellation result message")
 
 
-class BatchDownloadRequest(BaseModel):
+class BatchDownloadRequest(CamelCaseModel):
     """Request model for batch downloads."""
 
     urls: List[str] = Field(
@@ -183,7 +185,7 @@ class BatchDownloadRequest(BaseModel):
         return v
 
 
-class BatchDownloadResponse(BaseModel):
+class BatchDownloadResponse(CamelCaseModel):
     """Response model for batch download initiation."""
 
     batch_id: str = Field(..., description="Unique identifier for the batch download")
@@ -194,7 +196,7 @@ class BatchDownloadResponse(BaseModel):
     downloads: List[str] = Field(..., description="List of individual download IDs")
 
 
-class DownloadQueue(BaseModel):
+class DownloadQueue(CamelCaseModel):
     """Response model for download queue information."""
 
     total_items: int = Field(..., description="Total number of items in queue")
@@ -207,7 +209,7 @@ class DownloadQueue(BaseModel):
     )
 
 
-class CleanupOrphanedResponse(BaseModel):
+class CleanupOrphanedResponse(CamelCaseModel):
     """Response model for cleanup orphaned downloads."""
 
     orphaned_count: int = Field(..., description="Number of orphaned downloads found")

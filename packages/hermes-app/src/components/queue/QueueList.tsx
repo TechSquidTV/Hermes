@@ -157,7 +157,7 @@ export function QueueList({
   }
 
   // Update BulkOperations props with actual data
-  const allSelected = filteredItems.length > 0 && filteredItems.every((item: DownloadStatus) => selectedItems.has(item.download_id))
+  const allSelected = filteredItems.length > 0 && filteredItems.every((item: DownloadStatus) => selectedItems.has(item.downloadId))
 
   return (
     <div className="space-y-3">
@@ -190,10 +190,10 @@ export function QueueList({
 
       {filteredItems.map((download: DownloadStatus) => (
         <QueueCard
-          key={download.download_id}
+          key={download.downloadId}
           download={download}
           isSelectable={isSelectable}
-          isSelected={selectedItems.has(download.download_id)}
+          isSelected={selectedItems.has(download.downloadId)}
           onToggleSelect={onToggleSelect}
         />
       ))}

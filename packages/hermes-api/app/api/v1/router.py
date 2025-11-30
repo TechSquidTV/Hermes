@@ -5,6 +5,7 @@ Main API router for v1 endpoints.
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
+    admin,
     auth,
     cleanup,
     config,
@@ -19,6 +20,7 @@ from app.api.v1.endpoints import (
     stats,
     storage,
     timeline,
+    users,
 )
 
 # Create the main API router
@@ -67,6 +69,11 @@ api_router.include_router(
     tags=["authentication"],
 )
 
+api_router.include_router(
+    admin.router,
+    tags=["admin"],
+)
+
 # New endpoints
 api_router.include_router(
     history.router,
@@ -102,4 +109,9 @@ api_router.include_router(
     events.router,
     prefix="/events",
     tags=["events"],
+)
+
+api_router.include_router(
+    users.router,
+    tags=["users"],
 )

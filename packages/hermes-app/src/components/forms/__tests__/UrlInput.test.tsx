@@ -188,7 +188,7 @@ describe('UrlInput Component', () => {
       vi.mocked(apiClient.apiClient.getVideoInfo).mockResolvedValue({
         id: 'test-video-id',
         title: 'Test Video',
-        webpage_url: 'https://youtube.com/watch?v=test',
+        webpageUrl: 'https://youtube.com/watch?v=test',
         extractor: 'youtube',
         formats: [],
       })
@@ -369,7 +369,7 @@ describe('UrlInput Component', () => {
         () => new Promise(resolve => setTimeout(() => resolve({
           id: 'test-id',
           title: 'Test',
-          webpage_url: 'https://example.com',
+          webpageUrl: 'https://example.com',
           extractor: 'generic',
           formats: []
         }), 100))
@@ -394,7 +394,7 @@ describe('UrlInput Component', () => {
         () => new Promise(resolve => setTimeout(() => resolve({
           id: 'test-id',
           title: 'Test',
-          webpage_url: 'https://example.com',
+          webpageUrl: 'https://example.com',
           extractor: 'generic',
           formats: []
         }), 100))

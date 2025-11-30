@@ -33,10 +33,10 @@ export function useDeleteFiles() {
   return useMutation({
     mutationFn: (filePaths: string[]) => apiClient.deleteFiles(filePaths),
     onSuccess: (data) => {
-      if (data.deleted_files > 0) {
-        toast.success(`Files deleted! Freed ${(data.total_freed_space / 1024 / 1024).toFixed(2)} MB`)
-      } else if (data.failed_deletions && data.failed_deletions.length > 0) {
-        toast.error(`Failed to delete file: ${data.failed_deletions[0]}`)
+      if (data.deletedFiles > 0) {
+        toast.success(`Files deleted! Freed ${(data.totalFreedSpace / 1024 / 1024).toFixed(2)} MB`)
+      } else if (data.failedDeletions && data.failedDeletions.length > 0) {
+        toast.error(`Failed to delete file: ${data.failedDeletions[0]}`)
       } else {
         toast.warning('File was not found or already deleted')
       }

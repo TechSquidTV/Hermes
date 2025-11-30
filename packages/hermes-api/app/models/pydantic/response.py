@@ -5,10 +5,12 @@ Common Pydantic response models for API responses.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from app.models.base import CamelCaseModel
 
 
-class HealthResponse(BaseModel):
+class HealthResponse(CamelCaseModel):
     """Response model for health check."""
 
     status: str = Field(..., description="Health status")
@@ -17,7 +19,7 @@ class HealthResponse(BaseModel):
     environment: str = Field(..., description="Current environment")
 
 
-class FormatDetail(BaseModel):
+class FormatDetail(CamelCaseModel):
     """Detailed format information."""
 
     format_id: Optional[str] = Field(None, description="Format identifier")
@@ -31,7 +33,7 @@ class FormatDetail(BaseModel):
     format_note: Optional[str] = Field(None, description="Format description")
 
 
-class ThumbnailDetail(BaseModel):
+class ThumbnailDetail(CamelCaseModel):
     """Detailed thumbnail information."""
 
     url: str = Field(..., description="Thumbnail URL")
@@ -40,7 +42,7 @@ class ThumbnailDetail(BaseModel):
     resolution: Optional[str] = Field(None, description="Thumbnail resolution")
 
 
-class SubtitleDetail(BaseModel):
+class SubtitleDetail(CamelCaseModel):
     """Detailed subtitle information."""
 
     url: str = Field(..., description="Subtitle URL")
@@ -48,7 +50,7 @@ class SubtitleDetail(BaseModel):
     lang: Optional[str] = Field(None, description="Language code")
 
 
-class PlaylistEntry(BaseModel):
+class PlaylistEntry(CamelCaseModel):
     """Playlist entry information."""
 
     id: str = Field(..., description="Video identifier")
@@ -59,7 +61,7 @@ class PlaylistEntry(BaseModel):
     uploader: Optional[str] = Field(None, description="Uploader name")
 
 
-class VideoInfo(BaseModel):
+class VideoInfo(CamelCaseModel):
     """Response model for video information."""
 
     id: str = Field(..., description="Video unique identifier")
@@ -93,7 +95,7 @@ class VideoInfo(BaseModel):
     )
 
 
-class Error(BaseModel):
+class Error(CamelCaseModel):
     """Error response model."""
 
     code: str = Field(..., description="Error code")
@@ -103,13 +105,13 @@ class Error(BaseModel):
     )
 
 
-class ErrorResponse(BaseModel):
+class ErrorResponse(CamelCaseModel):
     """Standard error response."""
 
     error: Error
 
 
-class PaginationParams(BaseModel):
+class PaginationParams(CamelCaseModel):
     """Common pagination parameters."""
 
     limit: int = Field(
@@ -118,7 +120,7 @@ class PaginationParams(BaseModel):
     offset: int = Field(default=0, ge=0, description="Number of items to skip")
 
 
-class SortParams(BaseModel):
+class SortParams(CamelCaseModel):
     """Common sorting parameters."""
 
     sort_by: Optional[str] = Field(None, description="Field to sort by")

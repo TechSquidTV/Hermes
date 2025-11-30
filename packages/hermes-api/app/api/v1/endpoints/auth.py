@@ -8,7 +8,7 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user_from_token
@@ -29,6 +29,8 @@ from app.db.repositories import (
     UserRepository,
 )
 from app.db.session import get_database_session
+from app.models.base import CamelCaseModel
+from app.services.system_settings_service import system_settings_service
 
 # Rate limiting setup (placeholder for now)
 # In production, you would use a proper rate limiting library like slowapi
@@ -109,43 +111,35 @@ class UserLogin(BaseModel):
     password: str
 
 
-class TokenResponse(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+class TokenResponse(CamelCaseModel):
+    """Token response with automatic camelCase conversion."""
 
-    access_token: str = Field(
-        ..., alias="accessToken", serialization_alias="accessToken"
-    )
-    refresh_token: str = Field(
-        ..., alias="refreshToken", serialization_alias="refreshToken"
-    )
-    token_type: str = Field(
-        default="bearer", alias="tokenType", serialization_alias="tokenType"
-    )
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
 
 
-class UserResponse(BaseModel):
+class UserResponse(CamelCaseModel):
+    """User information response model with automatic camelCase conversion."""
+
     id: str
     username: str
     email: str
     avatar: str | None
+    is_active: bool = True
+    is_admin: bool = False
     preferences: dict | None = None
     created_at: str
-    last_login: str | None
+    last_login: str | None = None
 
 
-class AuthResponse(BaseModel):
-    access_token: str = Field(
-        ..., alias="accessToken", serialization_alias="accessToken"
-    )
-    refresh_token: str = Field(
-        ..., alias="refreshToken", serialization_alias="refreshToken"
-    )
-    token_type: str = Field(
-        default="bearer", alias="tokenType", serialization_alias="tokenType"
-    )
+class AuthResponse(CamelCaseModel):
+    """Authentication response with user and tokens."""
+
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
     user: UserResponse
-
-    model_config = ConfigDict(populate_by_name=True)
 
 
 @router.post("/login", response_model=AuthResponse)
@@ -208,6 +202,8 @@ async def login(
                 username=user.username,
                 email=user.email,
                 avatar=user.avatar,
+                is_active=user.is_active,
+                is_admin=user.is_admin,
                 preferences=user.preferences,
                 created_at=user.created_at.isoformat() if user.created_at else None,
                 last_login=user.last_login.isoformat() if user.last_login else None,
@@ -238,19 +234,50 @@ async def signup(
     try:
         repos = get_repositories_from_session(db_session)
 
-        # Check if username already exists
-        existing_user = await repos["users"].get_by_username(user_data.username)
-        if existing_user:
+        # Check if any users exist
+        user_count = await repos["users"].count()
+        is_first_user = user_count == 0
+
+        # If users exist and public signup is disabled, reject
+        allow_public_signup = await system_settings_service.get_allow_public_signup()
+        if not is_first_user and not allow_public_signup:
+            logger.warning(
+                "Signup attempt rejected - public signup disabled",
+                username=user_data.username,
+            )
             raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT, detail="Username already exists"
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Public signup is disabled. Contact your administrator to create an account.",
+            )
+
+        # Check if username or email already exists
+        # Use generic message to prevent user enumeration
+        existing_user = await repos["users"].get_by_username(user_data.username)
+        existing_email = await repos["users"].get_by_email(user_data.email)
+
+        if existing_user or existing_email:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Unable to create account with the provided credentials",
             )
 
         # Create new user
+        # First user automatically becomes admin
         user = await repos["users"].create(
             username=user_data.username,
             email=user_data.email,
             password_hash=get_password_hash(user_data.password),
+            is_admin=is_first_user,
         )
+
+        # Log admin creation for security audit
+        if is_first_user:
+            logger.info(
+                "First user created and granted admin privileges",
+                username=user.username,
+                user_id=user.id,
+                security_event="first_user_admin_created",
+            )
 
         # Create tokens
         access_token = create_access_token(
@@ -271,6 +298,8 @@ async def signup(
                 username=user.username,
                 email=user.email,
                 avatar=user.avatar,
+                is_active=user.is_active,
+                is_admin=user.is_admin,
                 preferences=user.preferences,
                 created_at=user.created_at.isoformat() if user.created_at else None,
                 last_login=user.last_login.isoformat() if user.last_login else None,
@@ -403,7 +432,13 @@ async def get_current_user(
     current_user: dict = Depends(get_current_user_from_token),
 ) -> UserResponse:
     """Get current authenticated user information."""
-    return UserResponse(**current_user)
+    logger.info(f"[/me] current_user dict: {current_user}")
+    user_response = UserResponse(**current_user)
+    logger.info(f"[/me] UserResponse object: {user_response.model_dump()}")
+    logger.info(
+        f"[/me] UserResponse JSON (aliased): {user_response.model_dump(by_alias=True)}"
+    )
+    return user_response
 
 
 @router.patch("/profile", response_model=UserResponse)
@@ -456,6 +491,8 @@ async def update_profile(
             username=user.username,
             email=user.email,
             avatar=user.avatar,
+            is_active=user.is_active,
+            is_admin=user.is_admin,
             preferences=user.preferences,
             created_at=user.created_at.isoformat() if user.created_at else None,
             last_login=user.last_login.isoformat() if user.last_login else None,
@@ -471,18 +508,24 @@ async def update_profile(
         )
 
 
-class PasswordChange(BaseModel):
+class PasswordChange(CamelCaseModel):
+    """Password change request with automatic camelCase conversion."""
+
     current_password: str
     new_password: str = Field(..., min_length=8)
 
 
-class ApiKeyCreate(BaseModel):
+class ApiKeyCreate(CamelCaseModel):
+    """API key creation request with automatic camelCase conversion."""
+
     name: str = Field(..., min_length=1, max_length=100, description="API key name")
     permissions: list[str] = Field(default_factory=list)
     expires_at: datetime | None = None
 
 
-class ApiKeyResponse(BaseModel):
+class ApiKeyResponse(CamelCaseModel):
+    """API key response with automatic camelCase conversion."""
+
     id: str
     name: str
     key: str  # Only returned on creation, not on list
@@ -493,10 +536,10 @@ class ApiKeyResponse(BaseModel):
     last_used: str | None
     expires_at: str | None
 
-    model_config = ConfigDict(from_attributes=True)
 
+class ApiKeyListResponse(CamelCaseModel):
+    """API key list response with automatic camelCase conversion."""
 
-class ApiKeyListResponse(BaseModel):
     id: str
     name: str
     permissions: list[str]
@@ -505,8 +548,6 @@ class ApiKeyListResponse(BaseModel):
     created_at: str
     last_used: str | None
     expires_at: str | None
-
-    model_config = ConfigDict(from_attributes=True)
 
 
 @router.post("/change-password")

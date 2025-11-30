@@ -1,7 +1,7 @@
 import importlib.metadata
 import json
 import re
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import Field
 from pydantic_settings import (
@@ -116,6 +116,24 @@ class Settings(BaseSettings):
     enable_rate_limiting: bool = Field(default=True)
     max_login_attempts: int = Field(default=5)
     login_attempt_window_minutes: int = Field(default=15)
+
+    # Signup Control Settings
+    allow_public_signup: bool = Field(
+        default=True,
+        description="Allow public user registration. When False, only admins can create users.",
+    )
+    initial_admin_username: Optional[str] = Field(
+        default=None,
+        description="Username for initial admin account (created on first startup if no users exist)",
+    )
+    initial_admin_email: Optional[str] = Field(
+        default=None,
+        description="Email for initial admin account (created on first startup if no users exist)",
+    )
+    initial_admin_password: Optional[str] = Field(
+        default=None,
+        description="Password for initial admin account (created on first startup if no users exist)",
+    )
 
     # CORS Settings
     # Default includes common development ports and example domains

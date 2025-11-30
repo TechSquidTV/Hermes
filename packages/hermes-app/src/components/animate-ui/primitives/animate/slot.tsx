@@ -36,11 +36,24 @@ type SlotProps<T extends HTMLElement = HTMLElement> = {
 //   };
 // }
 
+// List of props that should be filtered out before passing to DOM elements
+const FILTERED_PROPS = new Set([
+  'activeClassName',
+  'inactiveClassName',
+  'activeStyle',
+  'inactiveStyle',
+]);
+
 function mergeProps<T extends HTMLElement>(
   childProps: AnyProps,
   slotProps: DOMMotionProps<T>,
 ): AnyProps {
   const merged: AnyProps = { ...childProps, ...slotProps };
+
+  // Filter out non-DOM props
+  FILTERED_PROPS.forEach((prop) => {
+    delete merged[prop];
+  });
 
   if (childProps.className || slotProps.className) {
     merged.className = cn(

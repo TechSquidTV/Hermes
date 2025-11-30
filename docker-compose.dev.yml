@@ -57,9 +57,9 @@ services:
       - HERMES_REDIS_URL=${HERMES_REDIS_URL:-redis://redis:6379}
       - HERMES_ALLOWED_ORIGINS=["http://localhost:5173","http://localhost:3000","http://localhost:8000"]
     volumes:
-      - ./packages/hermes-api/downloads:/app/downloads
-      - ./packages/hermes-api/temp:/app/temp
-      - ./packages/hermes-api/data:/app/data
+      - ./data/downloads:/app/downloads
+      - ./data/temp:/app/temp
+      - ./data/data:/app/data
       # Mount source code for hot reload
       - ./packages/hermes-api/app:/app/app
     networks:
@@ -90,9 +90,9 @@ services:
       - HERMES_DEBUG=true
       - HERMES_REDIS_URL=${HERMES_REDIS_URL:-redis://redis:6379}
     volumes:
-      - ./packages/hermes-api/downloads:/app/downloads
-      - ./packages/hermes-api/temp:/app/temp
-      - ./packages/hermes-api/data:/app/data
+      - ./data/downloads:/app/downloads
+      - ./data/temp:/app/temp
+      - ./data/data:/app/data
       # Mount source code for hot reload
       - ./packages/hermes-api/app:/app/app
     networks:
