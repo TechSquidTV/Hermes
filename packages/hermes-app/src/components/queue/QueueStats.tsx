@@ -31,9 +31,9 @@ export function QueueStats() {
     )
   }
 
-  const totalDownloads = stats?.successful_downloads || 0
-  const successRate = stats?.success_rate || 0
-  const totalSize = stats?.total_bandwidth_used || 0
+  const totalDownloads = stats?.successfulDownloads || 0
+  const successRate = stats?.successRate || 0
+  const totalSize = stats?.totalBandwidthUsed || 0
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -66,7 +66,7 @@ export function QueueStats() {
 
       <StatsCard
         title="Avg Download Time"
-        value={stats?.average_download_time ? `${Math.round(stats.average_download_time)}s` : 'N/A'}
+        value={stats?.averageDownloadTime ? `${Math.round(stats.averageDownloadTime)}s` : 'N/A'}
         icon={TrendingUp}
         variant="default"
         size="default"

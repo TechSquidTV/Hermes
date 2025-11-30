@@ -44,20 +44,20 @@ describe('DownloadProgressTracker', () => {
     it('displays progress bar for downloading status', () => {
       vi.spyOn(useDownloadProgressSSEModule, 'useDownloadProgressSSE').mockReturnValue({
         data: {
-          download_id: mockDownloadId,
+          downloadId: mockDownloadId,
           status: 'downloading',
           progress: {
             percentage: 45,
-            downloaded_bytes: 450000000,
-            total_bytes: 1000000000,
+            downloadedBytes: 450000000,
+            totalBytes: 1000000000,
             speed: 5000000,
             eta: 110,
           },
           result: null,
-          current_filename: null,
+          currentFilename: null,
           message: '',
           error: null,
-          created_at: '2025-01-01T10:00:00Z',
+          createdAt: '2025-01-01T10:00:00Z',
         },
         isConnected: true,
         isReconnecting: false,
@@ -84,14 +84,14 @@ describe('DownloadProgressTracker', () => {
       const mockUseSSE = vi.spyOn(useDownloadProgressSSEModule, 'useDownloadProgressSSE')
       mockUseSSE.mockReturnValue({
         data: {
-          download_id: mockDownloadId,
+          downloadId: mockDownloadId,
           status: 'downloading',
           progress: { percentage: 50 },
           result: null,
-          current_filename: null,
+          currentFilename: null,
           message: '',
           error: null,
-          created_at: '2025-01-01T10:00:00Z',
+          createdAt: '2025-01-01T10:00:00Z',
         },
         isConnected: true,
         isReconnecting: false,
@@ -112,14 +112,14 @@ describe('DownloadProgressTracker', () => {
       // Simulate progress going backwards (shouldn't happen but test the protection)
       mockUseSSE.mockReturnValue({
         data: {
-          download_id: mockDownloadId,
+          downloadId: mockDownloadId,
           status: 'downloading',
           progress: { percentage: 45 }, // Lower!
           result: null,
-          current_filename: null,
+          currentFilename: null,
           message: '',
           error: null,
-          created_at: '2025-01-01T10:00:00Z',
+          createdAt: '2025-01-01T10:00:00Z',
         },
         isConnected: true,
         isReconnecting: false,
@@ -139,7 +139,7 @@ describe('DownloadProgressTracker', () => {
     it('displays download speed and ETA when available', () => {
       vi.spyOn(useDownloadProgressSSEModule, 'useDownloadProgressSSE').mockReturnValue({
         data: {
-          download_id: mockDownloadId,
+          downloadId: mockDownloadId,
           status: 'downloading',
           progress: {
             percentage: 45,
@@ -147,10 +147,10 @@ describe('DownloadProgressTracker', () => {
             eta: 120, // 2 minutes
           },
           result: null,
-          current_filename: null,
+          currentFilename: null,
           message: '',
           error: null,
-          created_at: '2025-01-01T10:00:00Z',
+          createdAt: '2025-01-01T10:00:00Z',
         },
         isConnected: true,
         isReconnecting: false,
@@ -179,14 +179,14 @@ describe('DownloadProgressTracker', () => {
     it('shows 0% progress for queued status', () => {
       vi.spyOn(useDownloadProgressSSEModule, 'useDownloadProgressSSE').mockReturnValue({
         data: {
-          download_id: mockDownloadId,
+          downloadId: mockDownloadId,
           status: 'queued',
           progress: null,
           result: null,
-          current_filename: null,
+          currentFilename: null,
           message: '',
           error: null,
-          created_at: '2025-01-01T10:00:00Z',
+          createdAt: '2025-01-01T10:00:00Z',
         },
         isConnected: true,
         isReconnecting: false,
@@ -209,14 +209,14 @@ describe('DownloadProgressTracker', () => {
     it('shows processing indicator without specific progress', () => {
       vi.spyOn(useDownloadProgressSSEModule, 'useDownloadProgressSSE').mockReturnValue({
         data: {
-          download_id: mockDownloadId,
+          downloadId: mockDownloadId,
           status: 'processing',
           progress: null,
           result: null,
-          current_filename: null,
+          currentFilename: null,
           message: '',
           error: null,
-          created_at: '2025-01-01T10:00:00Z',
+          createdAt: '2025-01-01T10:00:00Z',
         },
         isConnected: true,
         isReconnecting: false,
@@ -239,14 +239,14 @@ describe('DownloadProgressTracker', () => {
     it('shows 100% progress for completed status', () => {
       vi.spyOn(useDownloadProgressSSEModule, 'useDownloadProgressSSE').mockReturnValue({
         data: {
-          download_id: mockDownloadId,
+          downloadId: mockDownloadId,
           status: 'completed',
           progress: { percentage: 100 },
           result: { title: 'Test Video', url: 'https://example.com' },
-          current_filename: '/path/to/file.mp4',
+          currentFilename: '/path/to/file.mp4',
           message: 'Download completed',
           error: null,
-          created_at: '2025-01-01T10:00:00Z',
+          createdAt: '2025-01-01T10:00:00Z',
         },
         isConnected: false, // Connection closed after completion
         isReconnecting: false,
@@ -277,14 +277,14 @@ describe('DownloadProgressTracker', () => {
     it('handles failed status without showing progress', () => {
       vi.spyOn(useDownloadProgressSSEModule, 'useDownloadProgressSSE').mockReturnValue({
         data: {
-          download_id: mockDownloadId,
+          downloadId: mockDownloadId,
           status: 'failed',
           progress: null,
           result: null,
-          current_filename: null,
+          currentFilename: null,
           message: 'Download failed',
           error: 'Network timeout',
-          created_at: '2025-01-01T10:00:00Z',
+          createdAt: '2025-01-01T10:00:00Z',
         },
         isConnected: false,
         isReconnecting: false,
@@ -307,14 +307,14 @@ describe('DownloadProgressTracker', () => {
     it('shows connection status when enabled', () => {
       vi.spyOn(useDownloadProgressSSEModule, 'useDownloadProgressSSE').mockReturnValue({
         data: {
-          download_id: mockDownloadId,
+          downloadId: mockDownloadId,
           status: 'downloading',
           progress: { percentage: 45 },
           result: null,
-          current_filename: null,
+          currentFilename: null,
           message: '',
           error: null,
-          created_at: '2025-01-01T10:00:00Z',
+          createdAt: '2025-01-01T10:00:00Z',
         },
         isConnected: true,
         isReconnecting: false,
@@ -340,14 +340,14 @@ describe('DownloadProgressTracker', () => {
     it('hides connection status when disabled', () => {
       vi.spyOn(useDownloadProgressSSEModule, 'useDownloadProgressSSE').mockReturnValue({
         data: {
-          download_id: mockDownloadId,
+          downloadId: mockDownloadId,
           status: 'downloading',
           progress: { percentage: 45 },
           result: null,
-          current_filename: null,
+          currentFilename: null,
           message: '',
           error: null,
-          created_at: '2025-01-01T10:00:00Z',
+          createdAt: '2025-01-01T10:00:00Z',
         },
         isConnected: true,
         isReconnecting: false,
@@ -374,14 +374,14 @@ describe('DownloadProgressTracker', () => {
     it('supports small size variant', () => {
       vi.spyOn(useDownloadProgressSSEModule, 'useDownloadProgressSSE').mockReturnValue({
         data: {
-          download_id: mockDownloadId,
+          downloadId: mockDownloadId,
           status: 'downloading',
           progress: { percentage: 45 },
           result: null,
-          current_filename: null,
+          currentFilename: null,
           message: '',
           error: null,
-          created_at: '2025-01-01T10:00:00Z',
+          createdAt: '2025-01-01T10:00:00Z',
         },
         isConnected: true,
         isReconnecting: false,
@@ -405,14 +405,14 @@ describe('DownloadProgressTracker', () => {
     it('supports large size variant', () => {
       vi.spyOn(useDownloadProgressSSEModule, 'useDownloadProgressSSE').mockReturnValue({
         data: {
-          download_id: mockDownloadId,
+          downloadId: mockDownloadId,
           status: 'downloading',
           progress: { percentage: 45 },
           result: null,
-          current_filename: null,
+          currentFilename: null,
           message: '',
           error: null,
-          created_at: '2025-01-01T10:00:00Z',
+          createdAt: '2025-01-01T10:00:00Z',
         },
         isConnected: true,
         isReconnecting: false,
@@ -438,20 +438,20 @@ describe('DownloadProgressTracker', () => {
     it('shows details when enabled', () => {
       vi.spyOn(useDownloadProgressSSEModule, 'useDownloadProgressSSE').mockReturnValue({
         data: {
-          download_id: mockDownloadId,
+          downloadId: mockDownloadId,
           status: 'downloading',
           progress: {
             percentage: 45,
-            downloaded_bytes: 450000000,
-            total_bytes: 1000000000,
+            downloadedBytes: 450000000,
+            totalBytes: 1000000000,
             speed: 5000000,
             eta: 110,
           },
           result: null,
-          current_filename: null,
+          currentFilename: null,
           message: '',
           error: null,
-          created_at: '2025-01-01T10:00:00Z',
+          createdAt: '2025-01-01T10:00:00Z',
         },
         isConnected: true,
         isReconnecting: false,
@@ -476,14 +476,14 @@ describe('DownloadProgressTracker', () => {
     it('hides details when disabled', () => {
       vi.spyOn(useDownloadProgressSSEModule, 'useDownloadProgressSSE').mockReturnValue({
         data: {
-          download_id: mockDownloadId,
+          downloadId: mockDownloadId,
           status: 'downloading',
           progress: { percentage: 45 },
           result: null,
-          current_filename: null,
+          currentFilename: null,
           message: '',
           error: null,
-          created_at: '2025-01-01T10:00:00Z',
+          createdAt: '2025-01-01T10:00:00Z',
         },
         isConnected: true,
         isReconnecting: false,

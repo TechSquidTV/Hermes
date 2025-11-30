@@ -2,6 +2,7 @@
 node_modules/
 .pnpm-debug.log*
 .venv/
+.pnpm-store
 
 # Build outputs
 dist/

@@ -172,8 +172,8 @@ export function ApiKeySettings() {
                   <div className="flex-1 space-y-2">
                     <div className="flex items-center gap-2">
                       <h4 className="font-medium">{apiKey.name}</h4>
-                      <Badge variant={apiKey.is_active ? "default" : "secondary"}>
-                        {apiKey.is_active ? 'Active' : 'Inactive'}
+                      <Badge variant={apiKey.isActive ? "default" : "secondary"}>
+                        {apiKey.isActive ? 'Active' : 'Inactive'}
                       </Badge>
                       <Badge variant="outline">
                         {apiKey.permissions.join(', ') || 'No permissions'}
@@ -182,12 +182,12 @@ export function ApiKeySettings() {
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
                       <div className="flex items-center gap-1">
                         <Clock className="h-3 w-3" />
-                        Created: {new Date(apiKey.created_at).toLocaleDateString()}
+                        Created: {new Date(apiKey.createdAt).toLocaleDateString()}
                       </div>
-                      {apiKey.last_used && (
+                      {apiKey.lastUsed && (
                         <div className="flex items-center gap-1">
                           <Eye className="h-3 w-3" />
-                          Last used: {new Date(apiKey.last_used).toLocaleDateString()}
+                          Last used: {new Date(apiKey.lastUsed).toLocaleDateString()}
                         </div>
                       )}
                     </div>

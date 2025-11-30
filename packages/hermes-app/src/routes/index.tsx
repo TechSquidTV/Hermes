@@ -156,9 +156,9 @@ function TrackedTask({ downloadId, onRemove, isDismissing }: TrackedTaskProps) {
           />
         )}
 
-        {isCompleted && hasDownloadResult(task.result) && task.result.file_size && (
+        {isCompleted && hasDownloadResult(task.result) && task.result.fileSize && (
           <div className="text-xs text-muted-foreground mt-1">
-            <span>{(Number(task.result.file_size) / 1024 / 1024).toFixed(2)} MB</span>
+            <span>{(Number(task.result.fileSize) / 1024 / 1024).toFixed(2)} MB</span>
           </div>
         )}
 
@@ -175,7 +175,7 @@ function TrackedTask({ downloadId, onRemove, isDismissing }: TrackedTaskProps) {
           <Button
             size="sm"
             onClick={() => handleDownloadFile(
-              task.current_filename,
+              task.currentFilename,
               hasDownloadResult(task.result) ? (task.result.title ?? 'download') : 'download',
               downloadId
             )}

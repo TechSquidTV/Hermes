@@ -5,10 +5,12 @@ Pydantic models for file-related API requests and responses.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from app.models.base import CamelCaseModel
 
 
-class DownloadedFile(BaseModel):
+class DownloadedFile(CamelCaseModel):
     """Model for downloaded file information."""
 
     filename: str = Field(..., description="Original filename")
@@ -23,7 +25,7 @@ class DownloadedFile(BaseModel):
     )
 
 
-class FileList(BaseModel):
+class FileList(CamelCaseModel):
     """Response model for file listing."""
 
     total_files: int = Field(..., description="Total number of files found")
@@ -31,7 +33,7 @@ class FileList(BaseModel):
     files: List[DownloadedFile] = Field(..., description="List of downloaded files")
 
 
-class DeleteFilesRequest(BaseModel):
+class DeleteFilesRequest(CamelCaseModel):
     """Request model for file deletion."""
 
     files: List[str] = Field(
@@ -42,7 +44,7 @@ class DeleteFilesRequest(BaseModel):
     )
 
 
-class DeleteFilesResponse(BaseModel):
+class DeleteFilesResponse(CamelCaseModel):
     """Response model for file deletion."""
 
     deleted_files: int = Field(..., description="Number of files successfully deleted")
