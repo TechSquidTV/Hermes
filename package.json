@@ -33,7 +33,7 @@
     "generate:routes": "pnpm --filter hermes-app generate:routes"
   },
   "devDependencies": {
-    "shadcn": "^3.5.0"
+    "shadcn": "^3.6.2"
   },
   "engines": {
     "node": ">=22.0.0",
