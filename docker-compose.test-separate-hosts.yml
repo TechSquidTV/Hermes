@@ -43,6 +43,7 @@ services:
       - "3001:80"
     environment:
       - VITE_API_BASE_URL=http://localhost:8001/api/v1
+    volumes: !override []
 
   redis:
     extends:
@@ -57,5 +58,4 @@ networks:
     driver: bridge
 
 volumes:
-  app_dist:
   redis_test_data:
