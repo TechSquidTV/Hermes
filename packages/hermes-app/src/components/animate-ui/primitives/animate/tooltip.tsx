@@ -273,7 +273,9 @@ function TooltipOverlay() {
   });
 
   React.useEffect(() => {
+    // Keep the last tooltip mounted long enough for AnimatePresence to play exit.
     if (currentTooltip) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRendered({ data: currentTooltip, open: true });
     } else {
       setRendered((p) => (p.data ? { ...p, open: false } : p));

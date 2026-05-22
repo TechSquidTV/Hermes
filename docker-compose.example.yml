@@ -13,7 +13,7 @@
 services:
   # Caddy reverse proxy - handles routing and SSL
   proxy:
-    image: caddy:2-alpine
+    image: caddy:2.11-alpine
     container_name: hermes-proxy
     restart: unless-stopped
     ports:
@@ -115,7 +115,7 @@ services:
       hermes-api:
         condition: service_healthy
     # Run celery directly from venv to avoid uv run re-installing dev dependencies
-    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=1 --hostname=hermes-worker@%h
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=1 --hostname=hermes-worker@%h --queues=hermes.downloads,hermes.cleanup,hermes.default
     healthcheck:
       test: ["CMD", "celery", "-A", "app.tasks.celery_app", "inspect", "ping"]
       interval: 30s
@@ -125,7 +125,7 @@ services:
 
   # Redis for caching and task queue
   redis:
-    image: redis:7-alpine
+    image: redis:8-alpine
     container_name: hermes-redis
     restart: unless-stopped
     volumes:

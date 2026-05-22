@@ -1,10 +1,10 @@
 # Hermes App Development Dockerfile - Runs Vite dev server with hot reload
-FROM node:22-alpine
+FROM node:24-alpine
 
 # Install pnpm
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@10.19.0 --activate
 
 # Set working directory
 WORKDIR /app
@@ -31,4 +31,3 @@ EXPOSE 5173
 
 # Start Vite dev server with host binding for Docker
 CMD ["pnpm", "dev", "--host", "0.0.0.0"]
-
