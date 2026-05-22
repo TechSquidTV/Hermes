@@ -16,6 +16,7 @@ services:
       file: docker-compose.yml
       service: api
     container_name: hermes-api-test
+    env_file: !override []
     ports: !override
       - "8001:8000"
     environment:
@@ -29,6 +30,7 @@ services:
       file: docker-compose.yml
       service: celery_worker
     container_name: hermes-worker-test
+    env_file: !override []
     environment:
       - HERMES_SECRET_KEY=${HERMES_SECRET_KEY:-test-secret-key-for-development-only}
       - HERMES_REDIS_URL=redis://redis:6379
