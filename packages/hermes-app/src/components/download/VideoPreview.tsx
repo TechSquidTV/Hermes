@@ -29,6 +29,7 @@ import { apiClient } from '@/services/api/client'
 import { toast } from 'sonner'
 import { cn, formatDate } from '@/lib/utils'
 import { useQueryClient } from '@tanstack/react-query'
+import { taskTracker } from '@/lib/taskTracking'
 
 interface VideoPreviewProps {
   info: VideoInfo
@@ -153,9 +154,7 @@ export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewPr
           
           // Track download IDs on home page (same as single download behavior)
           if (response?.downloads && Array.isArray(response.downloads)) {
-            const trackedTasks = JSON.parse(sessionStorage.getItem('homePageTasks') || '[]')
-            trackedTasks.push(...response.downloads)
-            sessionStorage.setItem('homePageTasks', JSON.stringify(trackedTasks))
+            response.downloads.forEach((downloadId) => taskTracker.addTask(downloadId))
           }
           
           successfulBatches++
