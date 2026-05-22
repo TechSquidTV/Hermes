@@ -22,10 +22,11 @@ export default defineConfig(() => {
       alias: {
         '@': path.resolve(__dirname, './src'),
       },
-      dedupe: ['react', 'react-dom', 'react/jsx-runtime', 'framer-motion'],
+      dedupe: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime', 'framer-motion'],
     },
     optimizeDeps: {
-      include: ['react', 'react-dom', 'react/jsx-runtime', 'framer-motion'],
+      include: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime', 'framer-motion'],
+      needsInterop: ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
       extensions: ['.js', '.jsx', '.ts', '.tsx', '.mjs'],
     },
     build: {

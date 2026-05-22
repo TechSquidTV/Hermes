@@ -1,4 +1,5 @@
-import { Navigate, useLocation } from '@tanstack/react-router'
+import { useEffect } from 'react'
+import { useLocation, useNavigate } from '@tanstack/react-router'
 import { useAuth } from '@/contexts/AuthContext'
 import { Loader2 } from 'lucide-react'
 
@@ -10,6 +11,35 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children, requireAuth = true }: ProtectedRouteProps) {
   const { isAuthenticated, isLoading } = useAuth()
   const location = useLocation()
+  const navigate = useNavigate()
+  const isAuthRoute = location.pathname.startsWith('/auth')
+  const shouldRedirectToLogin = requireAuth && !isAuthenticated && !isAuthRoute
+  const shouldRedirectToDashboard = !requireAuth && isAuthenticated
+
+  useEffect(() => {
+    if (isLoading) {
+      return
+    }
+
+    if (shouldRedirectToLogin) {
+      navigate({
+        to: '/auth/login',
+        search: { redirect: location.pathname },
+        replace: true,
+      })
+      return
+    }
+
+    if (shouldRedirectToDashboard) {
+      navigate({ to: '/', replace: true })
+    }
+  }, [
+    isLoading,
+    location.pathname,
+    navigate,
+    shouldRedirectToDashboard,
+    shouldRedirectToLogin,
+  ])
 
   if (isLoading) {
     return (
@@ -19,21 +49,9 @@ export function ProtectedRoute({ children, requireAuth = true }: ProtectedRouteP
     )
   }
 
-  if (requireAuth && !isAuthenticated) {
-    // Redirect to login with return URL
-    return <Navigate to="/auth/login" search={{ redirect: location.pathname }} />
-  }
-
-  if (!requireAuth && isAuthenticated) {
-    // Redirect authenticated users away from auth pages
-    return <Navigate to="/" />
+  if (shouldRedirectToLogin || shouldRedirectToDashboard) {
+    return null
   }
 
   return <>{children}</>
 }
-
-
-
-
-
-
