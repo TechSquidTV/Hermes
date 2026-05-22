@@ -249,22 +249,8 @@ volumes:
 
 Test separate hosts locally without DNS:
 
-```yaml
-# docker-compose.test-separate-hosts.yml
-services:
-  api:
-    # ... api config ...
-    ports:
-      - "8001:8000"
-    environment:
-      - HERMES_ALLOWED_ORIGINS=http://localhost:3001
-
-  app:
-    # ... app config ...
-    ports:
-      - "3001:80"
-    environment:
-      - VITE_API_BASE_URL=http://localhost:8001/api/v1
+```bash
+docker compose -f docker-compose.test-separate-hosts.yml up --build
 ```
 
 Access:
@@ -1047,61 +1033,8 @@ VITE_API_BASE_URL=https://api.hermes.example.com/api/v1
 
 ### Example 3: Local Testing Separate Hosts
 
-```yaml
-# docker-compose.test-separate-hosts.yml
-services:
-  redis:
-    image: redis:7-alpine
-    container_name: hermes-redis-test
-    command: redis-server --appendonly yes
+`docker-compose.test-separate-hosts.yml` is a small wrapper around the default source-build services. It exposes the app and API directly, sets CORS for the app origin, and points the app runtime config at the direct API origin.
 
-  api:
-    build:
-      context: ./packages/hermes-api
-      dockerfile: Dockerfile
-    container_name: hermes-api-test
-    environment:
-      - HERMES_SECRET_KEY=test-secret-key
-      - HERMES_REDIS_URL=redis://redis:6379
-      - HERMES_ALLOWED_ORIGINS=http://localhost:3001
-    volumes:
-      - ./downloads:/app/downloads
-      - ./data:/app/data
-    ports:
-      - "8001:8000"
-    depends_on:
-      - redis
-
-  celery_worker:
-    build:
-      context: ./packages/hermes-api
-      dockerfile: Dockerfile
-    container_name: hermes-worker-test
-    environment:
-      - HERMES_SECRET_KEY=test-secret-key
-      - HERMES_REDIS_URL=redis://redis:6379
-    volumes:
-      - ./downloads:/app/downloads
-      - ./data:/app/data
-    depends_on:
-      - redis
-      - api
-    command: celery -A app.worker worker --loglevel=info
-
-  app:
-    build:
-      context: .
-      dockerfile: packages/hermes-app/Dockerfile
-    container_name: hermes-app-test
-    environment:
-      - VITE_API_BASE_URL=http://localhost:8001/api/v1
-    ports:
-      - "3001:80"
-    depends_on:
-      - api
-```
-
-**Usage:**
 ```bash
 docker compose -f docker-compose.test-separate-hosts.yml up --build
 
