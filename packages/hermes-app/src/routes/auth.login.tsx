@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -10,13 +10,29 @@ import { Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 import { HermesLogoLight } from '@/components/hermes-logo'
+import { configService } from '@/services/config'
 
 function LoginPage() {
   const [identifier, setIdentifier] = useState('') // Can be username or email
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [allowPublicSignup, setAllowPublicSignup] = useState(true)
   const { login } = useAuth()
   const navigate = useNavigate()
+
+  useEffect(() => {
+    const checkSignupStatus = async () => {
+      try {
+        const config = await configService.getPublicConfig()
+        setAllowPublicSignup(config.allowPublicSignup)
+      } catch (error) {
+        console.error('[Login] Failed to fetch public config:', error)
+        setAllowPublicSignup(true)
+      }
+    }
+
+    checkSignupStatus()
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -103,26 +119,30 @@ function LoginPage() {
           </form>
         </CardContent>
         <CardFooter className="flex flex-col space-y-4">
-          <div className="relative w-full">
-            <div className="absolute inset-0 flex items-center">
-              <Separator />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">
-                Or
-              </span>
-            </div>
-          </div>
-          <div className="text-center text-sm text-muted-foreground">
-            Don&apos;t have an account?{' '}
-            <Button
-              variant="link"
-              className="px-0 font-normal"
-              onClick={() => navigate({ to: '/auth/signup' })}
-            >
-              Sign up
-            </Button>
-          </div>
+          {allowPublicSignup && (
+            <>
+              <div className="relative w-full">
+                <div className="absolute inset-0 flex items-center">
+                  <Separator />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">
+                    Or
+                  </span>
+                </div>
+              </div>
+              <div className="text-center text-sm text-muted-foreground">
+                Don&apos;t have an account?{' '}
+                <Button
+                  variant="link"
+                  className="px-0 font-normal"
+                  onClick={() => navigate({ to: '/auth/signup' })}
+                >
+                  Sign up
+                </Button>
+              </div>
+            </>
+          )}
         </CardFooter>
       </Card>
     </div>
