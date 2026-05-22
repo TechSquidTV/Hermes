@@ -24,7 +24,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "knip": "knip",
-    "generate:types": "openapi-typescript http://localhost:8000/openapi.json -o ./src/types/api.generated.ts",
+    "generate:types": "node ./scripts/generate-openapi-types.mjs",
     "generate:routes": "tsr generate"
   },
   "devDependencies": {

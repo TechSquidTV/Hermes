@@ -4,7 +4,7 @@ Pydantic models for download history and statistics.
 
 from datetime import date as date_type
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import Field
 
@@ -33,6 +33,22 @@ class DailyStats(CamelCaseModel):
     downloads: int = Field(..., description="Number of downloads")
     success_rate: float = Field(..., description="Success rate (0.0 to 1.0)")
     total_size: int = Field(0, description="Total bytes downloaded")
+
+
+class TimelineSummary(CamelCaseModel):
+    """Summary statistics for timeline analytics."""
+
+    total_downloads: int = Field(..., description="Total downloads in the period")
+    success_rate: float = Field(..., description="Success rate (0.0 to 1.0)")
+    total_size: int = Field(..., description="Total bytes downloaded")
+    avg_daily_downloads: float = Field(..., description="Average downloads per day")
+    trend: Literal["increasing", "decreasing", "stable"] = Field(
+        ..., description="Download trend over the period"
+    )
+    peak_day: Optional[str] = Field(None, description="Date with the most downloads")
+    peak_downloads: int = Field(..., description="Downloads on the peak day")
+    period: str = Field(..., description="Requested period")
+    days_count: int = Field(..., description="Number of days represented")
 
 
 class PopularExtractor(CamelCaseModel):

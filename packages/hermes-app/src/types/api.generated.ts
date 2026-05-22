@@ -1880,6 +1880,40 @@ export interface components {
             totalFreedSpace: number;
         };
         /**
+         * DetailedHealthResponse
+         * @description Detailed API health status including dependencies.
+         */
+        DetailedHealthResponse: {
+            /**
+             * Status
+             * @description Health status
+             */
+            status: string;
+            /**
+             * Timestamp
+             * Format: date-time
+             * @description Response timestamp
+             */
+            timestamp: string;
+            /**
+             * Version
+             * @description API version
+             */
+            version: string;
+            /**
+             * Environment
+             * @description Current environment
+             */
+            environment: string;
+            /**
+             * Dependencies
+             * @description Health status by dependency name
+             */
+            dependencies?: {
+                [key: string]: components["schemas"]["HealthDependency"];
+            };
+        };
+        /**
          * DownloadHistory
          * @description Complete download history with statistics.
          */
@@ -2457,6 +2491,54 @@ export interface components {
             detail?: components["schemas"]["ValidationError"][];
         };
         /**
+         * HealthDependency
+         * @description Health status for an external dependency.
+         */
+        HealthDependency: {
+            /**
+             * Status
+             * @description Dependency status
+             */
+            status: string;
+            /**
+             * Message
+             * @description Dependency status message
+             */
+            message: string;
+            /**
+             * Responsetimems
+             * @description Dependency response time in milliseconds
+             */
+            responseTimeMs?: number | null;
+        };
+        /**
+         * HealthResponse
+         * @description Response model for health check.
+         */
+        HealthResponse: {
+            /**
+             * Status
+             * @description Health status
+             */
+            status: string;
+            /**
+             * Timestamp
+             * Format: date-time
+             * @description Response timestamp
+             */
+            timestamp: string;
+            /**
+             * Version
+             * @description API version
+             */
+            version: string;
+            /**
+             * Environment
+             * @description Current environment
+             */
+            environment: string;
+        };
+        /**
          * HistoryItem
          * @description Individual history record.
          */
@@ -2740,6 +2822,58 @@ export interface components {
             resolution?: string | null;
         };
         /**
+         * TimelineSummary
+         * @description Summary statistics for timeline analytics.
+         */
+        TimelineSummary: {
+            /**
+             * Totaldownloads
+             * @description Total downloads in the period
+             */
+            totalDownloads: number;
+            /**
+             * Successrate
+             * @description Success rate (0.0 to 1.0)
+             */
+            successRate: number;
+            /**
+             * Totalsize
+             * @description Total bytes downloaded
+             */
+            totalSize: number;
+            /**
+             * Avgdailydownloads
+             * @description Average downloads per day
+             */
+            avgDailyDownloads: number;
+            /**
+             * Trend
+             * @description Download trend over the period
+             * @enum {string}
+             */
+            trend: "increasing" | "decreasing" | "stable";
+            /**
+             * Peakday
+             * @description Date with the most downloads
+             */
+            peakDay?: string | null;
+            /**
+             * Peakdownloads
+             * @description Downloads on the peak day
+             */
+            peakDownloads: number;
+            /**
+             * Period
+             * @description Requested period
+             */
+            period: string;
+            /**
+             * Dayscount
+             * @description Number of days represented
+             */
+            daysCount: number;
+        };
+        /**
          * TokenResponse
          * @description Token response with automatic camelCase conversion.
          */
@@ -2879,6 +3013,10 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+            /** Input */
+            input?: unknown;
+            /** Context */
+            ctx?: Record<string, never>;
         };
         /**
          * VideoInfo
@@ -2992,7 +3130,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["HealthResponse"];
                 };
             };
         };
@@ -3012,7 +3150,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DetailedHealthResponse"];
                 };
             };
         };
@@ -3934,9 +4072,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["TimelineSummary"];
                 };
             };
             /** @description Validation Error */

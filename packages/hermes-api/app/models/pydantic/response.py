@@ -19,6 +19,24 @@ class HealthResponse(CamelCaseModel):
     environment: str = Field(..., description="Current environment")
 
 
+class HealthDependency(CamelCaseModel):
+    """Health status for an external dependency."""
+
+    status: str = Field(..., description="Dependency status")
+    message: str = Field(..., description="Dependency status message")
+    response_time_ms: Optional[float] = Field(
+        None, description="Dependency response time in milliseconds"
+    )
+
+
+class DetailedHealthResponse(HealthResponse):
+    """Detailed API health status including dependencies."""
+
+    dependencies: Dict[str, HealthDependency] = Field(
+        default_factory=dict, description="Health status by dependency name"
+    )
+
+
 class FormatDetail(CamelCaseModel):
     """Detailed format information."""
 

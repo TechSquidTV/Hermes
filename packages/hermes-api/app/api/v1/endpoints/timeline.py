@@ -14,7 +14,7 @@ from app.core.logging import get_logger
 from app.core.security import get_current_api_key
 from app.db.models import DownloadHistory as DownloadHistoryModel
 from app.db.session import get_database_session
-from app.models.pydantic.history import DailyStats
+from app.models.pydantic.history import DailyStats, TimelineSummary
 
 router = APIRouter(prefix="/timeline", tags=["timeline"])
 logger = get_logger(__name__)
@@ -126,7 +126,7 @@ async def get_timeline_stats(
         )
 
 
-@router.get("/summary", response_model=dict)
+@router.get("/summary", response_model=TimelineSummary)
 async def get_timeline_summary(
     period: str = Query("week", description="Time period (day, week, month, year)"),
     start_date: Optional[date_type] = Query(
@@ -148,20 +148,24 @@ async def get_timeline_summary(
             period=period,
             start_date=start_date,
             end_date=end_date,
+            extractor=None,
+            status=None,
             db_session=db_session,
             api_key=api_key,
         )
 
         if not daily_stats:
-            return {
-                "total_downloads": 0,
-                "success_rate": 0.0,
-                "total_size": 0,
-                "avg_daily_downloads": 0,
-                "trend": "stable",
-                "peak_day": None,
-                "period": period,
-            }
+            return TimelineSummary(
+                total_downloads=0,
+                success_rate=0.0,
+                total_size=0,
+                avg_daily_downloads=0,
+                trend="stable",
+                peak_day=None,
+                peak_downloads=0,
+                period=period,
+                days_count=0,
+            )
 
         # Calculate summary statistics
         total_downloads = sum(stat.downloads for stat in daily_stats)
@@ -196,17 +200,17 @@ async def get_timeline_summary(
         else:
             trend = "stable"
 
-        return {
-            "total_downloads": total_downloads,
-            "success_rate": round(success_rate, 3),
-            "total_size": total_size,
-            "avg_daily_downloads": round(avg_daily_downloads, 2),
-            "trend": trend,
-            "peak_day": peak_day.date.isoformat() if peak_day else None,
-            "peak_downloads": peak_day.downloads if peak_day else 0,
-            "period": period,
-            "days_count": len(daily_stats),
-        }
+        return TimelineSummary(
+            total_downloads=total_downloads,
+            success_rate=round(success_rate, 3),
+            total_size=total_size,
+            avg_daily_downloads=round(avg_daily_downloads, 2),
+            trend=trend,
+            peak_day=peak_day.date.isoformat() if peak_day else None,
+            peak_downloads=peak_day.downloads if peak_day else 0,
+            period=period,
+            days_count=len(daily_stats),
+        )
 
     except Exception as e:
         logger.error("Failed to get timeline summary", error=str(e))
