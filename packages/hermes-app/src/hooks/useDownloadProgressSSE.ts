@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSSE } from './useSSE';
-import { apiClient } from '@/services/api/client';
+import { useSSEToken } from './useSSEToken';
 import { getApiBaseUrl } from '@/lib/config';
 import type { components } from '@/types/api.generated';
 
@@ -32,38 +32,11 @@ type DownloadStatus = components["schemas"]["DownloadStatus"];
  */
 export function useDownloadProgressSSE(downloadId: string) {
   const queryClient = useQueryClient();
-  const [sseToken, setSSEToken] = useState<string | null>(null);
-  const [tokenError, setTokenError] = useState<Error | null>(null);
-
-  // Fetch SSE token on mount
-  useEffect(() => {
-    let mounted = true;
-
-    async function fetchSSEToken() {
-      try {
-        const response = await apiClient.createSSEToken({
-          scope: `download:${downloadId}`,
-          ttl: 600, // 10 minutes - enough for most downloads
-        });
-
-        if (mounted) {
-          setSSEToken(response.token);
-          setTokenError(null);
-        }
-      } catch (err) {
-        console.error('Failed to fetch SSE token:', err);
-        if (mounted) {
-          setTokenError(err instanceof Error ? err : new Error('Failed to fetch SSE token'));
-        }
-      }
-    }
-
-    fetchSSEToken();
-
-    return () => {
-      mounted = false;
-    };
-  }, [downloadId]);
+  const { token: sseToken, error: tokenError } = useSSEToken(
+    `download:${downloadId}`,
+    600,
+    'Failed to fetch SSE token:'
+  );
 
   // Build SSE URL with ephemeral token
   const sseUrl = useMemo(() => {
