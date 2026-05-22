@@ -4,6 +4,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { apiClient } from '../api/client'
+import { TokenStorage } from '@/utils/tokenStorage'
 
 // Mock fetch
 global.fetch = vi.fn()
@@ -121,6 +122,62 @@ describe('ApiClient - API Key Methods', () => {
       } as Response)
 
       await expect(apiClient.getApiKeys()).rejects.toThrow('403: Access denied')
+    })
+
+    it('should retry 401 responses with the refreshed access token', async () => {
+      const mockApiKeys = [
+        {
+          id: '1',
+          name: 'Test Key',
+          permissions: ['read'],
+          rate_limit: 60,
+          is_active: true,
+          created_at: '2025-01-01T00:00:00Z',
+          last_used: null,
+          expires_at: null,
+        },
+      ]
+
+      vi.spyOn(TokenStorage, 'getAccessToken').mockReturnValue('fresh-token')
+      vi.spyOn(TokenStorage, 'getRefreshToken').mockReturnValue('refresh-token')
+      vi.spyOn(TokenStorage, 'setAccessToken').mockImplementation(() => {})
+      vi.spyOn(TokenStorage, 'setRefreshToken').mockImplementation(() => {})
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          statusText: 'Unauthorized',
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            accessToken: 'fresh-token',
+            refreshToken: 'fresh-refresh-token',
+            tokenType: 'bearer',
+          }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockApiKeys,
+        } as Response)
+
+      const result = await apiClient.request<typeof mockApiKeys>('/auth/api-keys', {
+        headers: {
+          Authorization: 'Bearer expired-token',
+        },
+      })
+
+      expect(result).toEqual(mockApiKeys)
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        3,
+        '/api/v1/auth/api-keys',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: 'Bearer fresh-token',
+          }),
+        })
+      )
     })
   })
 

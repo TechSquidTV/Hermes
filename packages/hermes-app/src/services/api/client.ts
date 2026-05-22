@@ -126,8 +126,8 @@ class ApiClient {
         // Retry request with new token
         const newHeaders = await this.getAuthHeaders()
         fetchOptions.headers = {
-          ...newHeaders,
           ...fetchOptions.headers,
+          ...newHeaders,
         }
 
         const retryResponse = await fetch(url, fetchOptions)
@@ -138,8 +138,7 @@ class ApiClient {
         return retryResponse.json()
       } catch (refreshError) {
         // Refresh failed, redirect to login
-        localStorage.removeItem('accessToken')
-        localStorage.removeItem('refreshToken')
+        TokenStorage.clearTokens()
         window.location.href = '/auth/login'
         throw this.handleAuthError(refreshError)
       }
