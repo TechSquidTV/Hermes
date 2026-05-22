@@ -12,6 +12,8 @@ import { QueueCard } from '../QueueCard'
 import type { DownloadStatus } from '@/types'
 import { toast } from 'sonner'
 
+const mockCancelDownloadMutate = vi.hoisted(() => vi.fn())
+
 // Mock dependencies
 vi.mock('sonner', () => ({
   toast: {
@@ -24,6 +26,10 @@ vi.mock('sonner', () => ({
 vi.mock('@/hooks/useDownloadActions', () => ({
   useDownloadFile: () => ({
     mutate: vi.fn(),
+    isPending: false,
+  }),
+  useCancelDownload: () => ({
+    mutate: mockCancelDownloadMutate,
     isPending: false,
   }),
 }))
@@ -451,7 +457,7 @@ describe('QueueCard', () => {
       expect(toast.info).toHaveBeenCalledWith('Retry functionality coming soon!')
     })
 
-    it('shows toast when cancel button clicked', async () => {
+    it('cancels download when cancel button clicked', async () => {
       const user = userEvent.setup()
       const downloadingDownload = { ...mockDownload, status: 'downloading' as const }
 
@@ -460,7 +466,7 @@ describe('QueueCard', () => {
       const cancelButton = screen.getByTitle('Cancel Download')
       await user.click(cancelButton)
 
-      expect(toast.info).toHaveBeenCalledWith('Cancel functionality coming soon!')
+      expect(mockCancelDownloadMutate).toHaveBeenCalledWith('test-123')
     })
   })
 
