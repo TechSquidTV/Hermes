@@ -99,3 +99,31 @@ class TestOpenAPISchema:
                 f"Found {len(errors)} snake_case fields in OpenAPI schema:\n  - {error_list}{more_msg}\n\n"
                 f"All API fields should use camelCase. Use CamelCaseModel base class."
             )
+
+    @pytest.mark.asyncio
+    async def test_standard_error_responses_use_error_response_schema(self):
+        """Common HTTP errors should document the runtime ErrorResponse wrapper."""
+        from app.main import STANDARD_ERROR_RESPONSES, app
+
+        schema = app.openapi()
+        schemas = schema.get("components", {}).get("schemas", {})
+        assert "Error" in schemas
+        assert "ErrorResponse" in schemas
+
+        error_ref = {"$ref": "#/components/schemas/Error"}
+        error_response_ref = {"$ref": "#/components/schemas/ErrorResponse"}
+
+        assert schemas["ErrorResponse"]["properties"]["error"] == error_ref
+        assert "additionalProperties" not in schemas["Error"]["properties"]["details"]
+
+        auth_me_responses = schema["paths"]["/api/v1/auth/me"]["get"]["responses"]
+        for status_code in STANDARD_ERROR_RESPONSES:
+            response = auth_me_responses[str(status_code)]
+            assert (
+                response["content"]["application/json"]["schema"] == error_response_ref
+            )
+
+        info_responses = schema["paths"]["/api/v1/info/"]["get"]["responses"]
+        assert info_responses["422"]["content"]["application/json"]["schema"] == {
+            "$ref": "#/components/schemas/HTTPValidationError"
+        }

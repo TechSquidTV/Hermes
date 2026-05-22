@@ -12,10 +12,21 @@ from fastapi.responses import JSONResponse
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.logging import setup_logging
+from app.models.pydantic.response import ErrorResponse
 
 # Setup logging
 logger = logging.getLogger(__name__)
 setup_logging()
+
+STANDARD_ERROR_RESPONSES = {
+    400: {"model": ErrorResponse, "description": "Bad Request"},
+    401: {"model": ErrorResponse, "description": "Unauthorized"},
+    403: {"model": ErrorResponse, "description": "Forbidden"},
+    404: {"model": ErrorResponse, "description": "Not Found"},
+    409: {"model": ErrorResponse, "description": "Conflict"},
+    429: {"model": ErrorResponse, "description": "Too Many Requests"},
+    500: {"model": ErrorResponse, "description": "Internal Server Error"},
+}
 
 
 async def initialize_admin_user() -> None:
@@ -163,6 +174,7 @@ def create_application() -> FastAPI:
         version=settings.api_version,
         debug=settings.debug,
         lifespan=lifespan,
+        responses=STANDARD_ERROR_RESPONSES,
     )
 
     # CORS middleware with enhanced security
