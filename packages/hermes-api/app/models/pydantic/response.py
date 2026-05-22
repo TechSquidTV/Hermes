@@ -118,9 +118,7 @@ class Error(CamelCaseModel):
 
     code: str = Field(..., description="Error code")
     message: str = Field(..., description="Human-readable error message")
-    details: Optional[Dict[str, Any]] = Field(
-        None, description="Additional error details"
-    )
+    details: Optional[Any] = Field(None, description="Additional error details")
 
 
 class ErrorResponse(CamelCaseModel):
