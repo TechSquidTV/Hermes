@@ -81,7 +81,14 @@ export function QueueTabContent({
             status: item.status
           })) || []
         )}
-        onBulkCancel={() => {}} // TODO: Implement bulk cancel
+        onBulkCancel={() => bulkOperations.bulkCancel(
+          queueData?.items?.map((item: components["schemas"]["DownloadStatus"]) => ({
+            id: item.downloadId,
+            title: String(item.result?.title || item.downloadId),
+            filePath: item.currentFilename || undefined,
+            status: item.status
+          })) || []
+        )}
         isProcessing={bulkOperations.isProcessing}
       />
 

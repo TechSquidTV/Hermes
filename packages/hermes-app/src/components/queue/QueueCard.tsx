@@ -10,7 +10,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '@/services/api/client'
 import { toast } from 'sonner'
-import { useDownloadFile } from '@/hooks/useDownloadActions'
+import { useCancelDownload, useDownloadFile } from '@/hooks/useDownloadActions'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { DownloadProgress } from '@/components/ui/download-progress'
 import { DownloadProgressTracker } from '@/components/download/DownloadProgressTracker'
@@ -38,6 +38,7 @@ export function QueueCard({ download, isSelectable = false, isSelected = false, 
   const { isOpen, title, description, confirmText, cancelText, variant, showConfirmation, hideConfirmation, confirm } = useConfirmation()
   const [isDismissing, setIsDismissing] = useState(false)
   const downloadFile = useDownloadFile()
+  const cancelDownload = useCancelDownload()
 
   // Delete mutation
   const deleteMutation = useMutation({
@@ -255,15 +256,20 @@ export function QueueCard({ download, isSelectable = false, isSelected = false, 
             </Button>
           )}
 
-          {(download.status === 'downloading' || download.status === 'queued') && (
+          {(download.status === 'downloading' || download.status === 'processing' || download.status === 'queued') && (
             <Button
               variant="ghost"
               size="icon"
               className="h-8 w-8 text-muted-foreground hover:text-destructive"
               title="Cancel Download"
-              onClick={() => toast.info('Cancel functionality coming soon!')}
+              onClick={() => cancelDownload.mutate(download.downloadId)}
+              disabled={cancelDownload.isPending}
             >
-              <X className="h-4 w-4" />
+              {cancelDownload.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <X className="h-4 w-4" />
+              )}
             </Button>
           )}
         </div>
@@ -282,4 +288,3 @@ export function QueueCard({ download, isSelectable = false, isSelected = false, 
     </Blur>
   )
 }
-

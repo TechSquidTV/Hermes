@@ -23,13 +23,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const userData = await authService.getCurrentUser()
           setUser(userData)
           console.log('[AuthContext] Token validated successfully:', userData.username)
+        } else if (TokenStorage.getRefreshToken()) {
+          await authService.refreshToken()
+          const userData = await authService.getCurrentUser()
+          setUser(userData)
+          console.log('[AuthContext] Token refreshed and validated successfully')
         } else {
           console.log('[AuthContext] No token found, user not authenticated')
         }
       } catch (error) {
         console.error('[AuthContext] Token validation failed:', error)
-        // Clear invalid tokens
-        TokenStorage.clearTokens()
         setUser(null)
 
         // Attempt token refresh if 401 error
@@ -42,7 +45,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             console.log('[AuthContext] Token refreshed and validated successfully')
           } catch (refreshError) {
             console.error('[AuthContext] Token refresh failed:', refreshError)
+            TokenStorage.clearTokens()
           }
+        } else {
+          TokenStorage.clearTokens()
         }
       } finally {
         setIsValidating(false)

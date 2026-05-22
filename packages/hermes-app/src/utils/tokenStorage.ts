@@ -50,7 +50,7 @@ export class TokenStorage {
       if (expiryTime) {
         const isExpired = Date.now() > parseInt(expiryTime)
         if (isExpired) {
-          this.clearTokens()
+          this.clearAccessToken()
           return null
         }
       }
@@ -94,6 +94,19 @@ export class TokenStorage {
    * Clear all tokens
    */
   static clearTokens(): void {
+    this.clearAccessToken()
+
+    try {
+      localStorage.removeItem(this.REFRESH_TOKEN_KEY)
+    } catch (error) {
+      console.warn('[TokenStorage] Failed to clear refresh token:', error)
+    }
+  }
+
+  /**
+   * Clear only the short-lived access token and its client expiry marker.
+   */
+  static clearAccessToken(): void {
     try {
       sessionStorage.removeItem(this.ACCESS_TOKEN_KEY)
     } catch (error) {
@@ -102,7 +115,6 @@ export class TokenStorage {
 
     try {
       localStorage.removeItem(this.ACCESS_TOKEN_KEY)
-      localStorage.removeItem(this.REFRESH_TOKEN_KEY)
       localStorage.removeItem(this.TOKEN_EXPIRY_KEY)
     } catch (error) {
       console.warn('[TokenStorage] Failed to clear localStorage:', error)

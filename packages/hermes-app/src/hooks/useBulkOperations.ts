@@ -1,5 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useDeleteFiles } from './useDownloadActions'
+import { apiClient } from '@/services/api/client'
+import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
 interface BulkOperationItem {
@@ -18,6 +20,7 @@ export function useBulkOperations(options: UseBulkOperationsOptions = {}) {
   const { onSuccess, onError } = options
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
   const [isProcessing, setIsProcessing] = useState(false)
+  const queryClient = useQueryClient()
 
   const deleteMutation = useDeleteFiles()
 
@@ -98,6 +101,41 @@ export function useBulkOperations(options: UseBulkOperationsOptions = {}) {
     toast.info('Bulk retry coming soon!')
   }, [selectedItems])
 
+  const bulkCancel = useCallback(async (items: BulkOperationItem[]) => {
+    const selectedItemIds = Array.from(selectedItems)
+    if (selectedItemIds.length === 0) {
+      toast.error('No items selected')
+      return
+    }
+
+    const cancellableItems = items.filter(item =>
+      selectedItemIds.includes(item.id) &&
+      (item.status === 'queued' || item.status === 'downloading' || item.status === 'processing')
+    )
+
+    if (cancellableItems.length === 0) {
+      toast.error('No cancellable downloads found in selection')
+      return
+    }
+
+    setIsProcessing(true)
+
+    try {
+      await Promise.all(cancellableItems.map(item => apiClient.cancelDownload(item.id)))
+      toast.success(`Cancelled ${cancellableItems.length} download${cancellableItems.length !== 1 ? 's' : ''}`)
+      deselectAll()
+      queryClient.invalidateQueries({ queryKey: ['queue'], exact: false })
+      queryClient.invalidateQueries({ queryKey: ['queueStats'], exact: false })
+      queryClient.invalidateQueries({ queryKey: ['recentDownloadsQueue'], exact: false })
+      onSuccess?.()
+    } catch (error) {
+      toast.error(`Failed to cancel downloads: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      onError?.(error as Error)
+    } finally {
+      setIsProcessing(false)
+    }
+  }, [selectedItems, deselectAll, queryClient, onSuccess, onError])
+
   const getSelectedItems = useCallback((items: BulkOperationItem[]) => {
     const selectedIds = Array.from(selectedItems)
     return items.filter(item => selectedIds.includes(item.id))
@@ -117,6 +155,7 @@ export function useBulkOperations(options: UseBulkOperationsOptions = {}) {
 
     // Bulk operations
     bulkDelete,
+    bulkCancel,
     bulkRetry,
 
     // Utilities

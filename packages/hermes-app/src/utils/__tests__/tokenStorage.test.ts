@@ -33,7 +33,11 @@ describe('TokenStorage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorageMock.getItem.mockReturnValue(null)
+    localStorageMock.setItem.mockImplementation(() => undefined)
+    localStorageMock.removeItem.mockImplementation(() => undefined)
     sessionStorageMock.getItem.mockReturnValue(null)
+    sessionStorageMock.setItem.mockImplementation(() => undefined)
+    sessionStorageMock.removeItem.mockImplementation(() => undefined)
   })
 
   describe('setAccessToken', () => {
@@ -140,7 +144,7 @@ describe('TokenStorage', () => {
       expect(result).toBeNull()
     })
 
-    it('should clear expired tokens', () => {
+    it('should clear only expired access token data', () => {
       const expiredTime = Date.now() - 1000 // 1 second ago
       localStorageMock.getItem
         .mockReturnValueOnce('test-token') // token
@@ -149,9 +153,10 @@ describe('TokenStorage', () => {
       const result = TokenStorage.getAccessToken()
 
       expect(result).toBeNull()
+      expect(sessionStorageMock.removeItem).toHaveBeenCalledWith('hermes_access_token')
       expect(localStorageMock.removeItem).toHaveBeenCalledWith('hermes_access_token')
-      expect(localStorageMock.removeItem).toHaveBeenCalledWith('hermes_refresh_token')
       expect(localStorageMock.removeItem).toHaveBeenCalledWith('hermes_token_expiry')
+      expect(localStorageMock.removeItem).not.toHaveBeenCalledWith('hermes_refresh_token')
     })
 
     it('should handle storage errors and fall back gracefully', () => {
@@ -286,6 +291,17 @@ describe('TokenStorage', () => {
       expect(() => {
         TokenStorage.clearTokens()
       }).not.toThrow()
+    })
+  })
+
+  describe('clearAccessToken', () => {
+    it('should clear access token data without clearing refresh token', () => {
+      TokenStorage.clearAccessToken()
+
+      expect(sessionStorageMock.removeItem).toHaveBeenCalledWith('hermes_access_token')
+      expect(localStorageMock.removeItem).toHaveBeenCalledWith('hermes_access_token')
+      expect(localStorageMock.removeItem).toHaveBeenCalledWith('hermes_token_expiry')
+      expect(localStorageMock.removeItem).not.toHaveBeenCalledWith('hermes_refresh_token')
     })
   })
 
