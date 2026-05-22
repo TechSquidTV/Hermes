@@ -1,4 +1,4 @@
-import { createRootRoute, Outlet } from '@tanstack/react-router'
+import { createRootRoute, Outlet, useLocation } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { AppLayout } from '@/components/layout/AppLayout'
@@ -11,6 +11,8 @@ function RootLayout() {
   useKeyboardShortcuts(globalShortcuts)
 
   const { isValidating } = useAuth()
+  const location = useLocation()
+  const isAuthRoute = location.pathname.startsWith('/auth')
   
   // Apply theme from user preferences (fetched from database)
   // This ensures the correct theme is applied on every page load
@@ -30,9 +32,18 @@ function RootLayout() {
 
   return (
     <>
-      <AppLayout>
-        <Outlet />
-      </AppLayout>
+      {isAuthRoute ? (
+        <>
+          <div className="grain-overlay"></div>
+          <main className="flex min-h-screen items-center justify-center bg-background text-foreground">
+            <Outlet />
+          </main>
+        </>
+      ) : (
+        <AppLayout>
+          <Outlet />
+        </AppLayout>
+      )}
       {import.meta.env.DEV && (
         <>
           <TanStackRouterDevtools />
@@ -46,4 +57,3 @@ function RootLayout() {
 export const Route = createRootRoute({
   component: RootLayout,
 })
-
