@@ -216,7 +216,7 @@ class TestProfileManagement:
             "/api/v1/auth/profile", json={"name": "Updated Name"}
         )
 
-        assert response.status_code == 403  # Forbidden
+        assert response.status_code == 401
 
     @pytest.mark.asyncio
     async def test_change_password_success(
@@ -306,7 +306,7 @@ class TestProfileManagement:
             json={"current_password": "oldpass123", "new_password": "newpass123"},
         )
 
-        assert response.status_code == 403  # Forbidden
+        assert response.status_code == 401
 
 
 class TestApiKeyManagement:
@@ -359,7 +359,7 @@ class TestApiKeyManagement:
             "/api/v1/auth/api-keys", json={"name": "Test Key", "permissions": ["read"]}
         )
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     @pytest.mark.asyncio
     async def test_create_api_key_validation(
@@ -425,7 +425,7 @@ class TestApiKeyManagement:
         app.dependency_overrides.clear()
 
         response = await client.get("/api/v1/auth/api-keys")
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     @pytest.mark.asyncio
     async def test_revoke_api_key_success(
@@ -479,7 +479,7 @@ class TestApiKeyManagement:
         app.dependency_overrides.clear()
 
         response = await client.delete("/api/v1/auth/api-keys/some-id")
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 class TestApiKeyAuthentication:

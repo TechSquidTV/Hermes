@@ -1,5 +1,5 @@
 # Multi-stage Dockerfile for Hermes API
-FROM python:3.12-slim AS builder
+FROM python:3.13-slim AS builder
 
 # Install system dependencies for building
 RUN apt-get update && apt-get install -y \
@@ -19,7 +19,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-install-project --no-dev
 
 # Production stage - use distroless for smaller size
-FROM python:3.12-slim
+FROM python:3.13-slim
 
 # Build args for configurable UID/GID (defaults to 1000)
 # Override at build time: docker build --build-arg USER_UID=$(id -u) --build-arg USER_GID=$(id -g)

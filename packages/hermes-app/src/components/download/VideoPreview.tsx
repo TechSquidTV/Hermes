@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -21,6 +21,10 @@ import type { components } from '@/types/api.generated'
 
 type VideoInfo = components["schemas"]["VideoInfo"]
 type PlaylistEntry = components["schemas"]["PlaylistEntry"]
+type PlaylistSelectionState = {
+  key: string
+  selectedVideos: Set<string>
+}
 import { apiClient } from '@/services/api/client'
 import { toast } from 'sonner'
 import { cn, formatDate } from '@/lib/utils'
@@ -38,20 +42,30 @@ export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewPr
   const queryClient = useQueryClient()
   
   // Playlist-specific state
-  const [selectedVideos, setSelectedVideos] = useState<Set<string>>(new Set())
   const [visibleCount, setVisibleCount] = useState(10)
   const [searchQuery, setSearchQuery] = useState('')
   const [isBatchDownloading, setIsBatchDownloading] = useState(false)
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 })
 
   const isPlaylist = !!(info.playlistCount && info.playlistCount > 0)
+  const playlistVideoIds = useMemo(
+    () => (isPlaylist && info.entries ? info.entries.map(e => e.id) : []),
+    [isPlaylist, info.entries]
+  )
+  const playlistKey = playlistVideoIds.join('\0')
+  const [selectionState, setSelectionState] = useState<PlaylistSelectionState>(() => ({
+    key: playlistKey,
+    selectedVideos: new Set<string>(playlistVideoIds),
+  }))
 
-  // Initialize all videos as selected
-  useEffect(() => {
-    if (isPlaylist && info.entries) {
-      setSelectedVideos(new Set<string>(info.entries.map(e => e.id)))
-    }
-  }, [isPlaylist, info.entries])
+  const selectedVideos =
+    selectionState.key === playlistKey
+      ? selectionState.selectedVideos
+      : new Set<string>(playlistVideoIds)
+
+  const setSelectedVideos = (selectedVideos: Set<string>) => {
+    setSelectionState({ key: playlistKey, selectedVideos })
+  }
 
   const formatDuration = (seconds?: number | null) => {
     if (!seconds) return 'N/A'
@@ -120,6 +134,7 @@ export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewPr
       
       // Queue all batches
       let successfulBatches = 0
+      let successfulVideoCount = 0
       for (let i = 0; i < batches.length; i++) {
         try {
           setBatchProgress({ current: i + 1, total: batches.length })
@@ -144,6 +159,7 @@ export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewPr
           }
           
           successfulBatches++
+          successfulVideoCount += batches[i].length
           
           // Small delay between batches to avoid overwhelming the server
           if (i < batches.length - 1) {
@@ -167,9 +183,8 @@ export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewPr
       }
       
       if (successfulBatches > 0) {
-        const totalQueued = successfulBatches * (batches[0]?.length || 0)
         toast.success(
-          `Successfully queued ${totalQueued} video${totalQueued !== 1 ? 's' : ''} ` +
+          `Successfully queued ${successfulVideoCount} video${successfulVideoCount !== 1 ? 's' : ''} ` +
           `in ${successfulBatches} batch${successfulBatches !== 1 ? 'es' : ''}`
         )
         
@@ -539,4 +554,3 @@ export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewPr
     </Card>
   )
 }
-

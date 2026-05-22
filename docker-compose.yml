@@ -10,7 +10,7 @@
 services:
   # Caddy reverse proxy - handles routing and SSL
   proxy:
-    image: caddy:2-alpine
+    image: caddy:2.11-alpine
     container_name: hermes-proxy
     restart: unless-stopped
     ports:
@@ -140,7 +140,7 @@ services:
 
   # Redis for caching and task queue
   redis:
-    image: redis:7-alpine
+    image: redis:8-alpine
     container_name: hermes-redis
     restart: unless-stopped
     volumes:

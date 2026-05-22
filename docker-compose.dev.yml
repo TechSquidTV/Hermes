@@ -102,7 +102,7 @@ services:
         condition: service_healthy
       api:
         condition: service_healthy
-    command: uv run celery -A app.tasks.celery_app worker --loglevel=debug --concurrency=1 --hostname=hermes-worker@%h
+    command: uv run celery -A app.tasks.celery_app worker --loglevel=debug --concurrency=1 --hostname=hermes-worker@%h --queues=hermes.downloads,hermes.cleanup,hermes.default
     healthcheck:
       test: ["CMD", "celery", "-A", "app.tasks.celery_app", "inspect", "ping"]
       interval: 30s
@@ -112,7 +112,7 @@ services:
 
   # Redis for caching and task queue
   redis:
-    image: redis:7-alpine
+    image: redis:8-alpine
     container_name: hermes-redis-dev
     restart: unless-stopped
     ports:
@@ -136,4 +136,3 @@ networks:
 
 volumes:
   redis_data_dev:    # Separate Redis data for development
-
