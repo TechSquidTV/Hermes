@@ -45,10 +45,14 @@ export function BulkOperations({
     })
   }
 
+  const cancellableCount = selectedItems.filter(item =>
+    item.status === 'queued' || item.status === 'downloading' || item.status === 'processing'
+  ).length
+
   const handleBulkCancel = () => {
     showConfirmation({
       title: 'Cancel Multiple Downloads',
-      description: `Are you sure you want to cancel ${selectedCount} selected downloads?`,
+      description: `Are you sure you want to cancel ${cancellableCount} selected ${cancellableCount === 1 ? 'download' : 'downloads'}?`,
       confirmText: 'Cancel Downloads',
       cancelText: 'Keep Downloads',
       variant: 'destructive',
@@ -59,10 +63,6 @@ export function BulkOperations({
   if (selectedCount === 0) {
     return null
   }
-
-  const hasCancellableItems = selectedItems.some(item =>
-    item.status === 'queued' || item.status === 'downloading' || item.status === 'processing'
-  )
 
   return (
     <>
@@ -100,7 +100,7 @@ export function BulkOperations({
             </div>
 
             <div className="flex items-center gap-2">
-              {hasCancellableItems && (
+              {cancellableCount > 0 && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -109,7 +109,7 @@ export function BulkOperations({
                   className="text-orange-600 hover:text-orange-700"
                 >
                   <X className="h-4 w-4 mr-1" />
-                  Cancel ({selectedCount})
+                  Cancel ({cancellableCount})
                 </Button>
               )}
 
