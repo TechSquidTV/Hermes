@@ -387,7 +387,11 @@ class ApiClient {
       throw new Error(`Token refresh failed: ${errorData.detail || response.statusText}`)
     }
 
-    return response.json()
+    const tokenResponse = await response.json()
+    TokenStorage.setAccessToken(tokenResponse.accessToken, 15)
+    TokenStorage.setRefreshToken(tokenResponse.refreshToken)
+
+    return tokenResponse
   }
 
   // Delete downloaded files

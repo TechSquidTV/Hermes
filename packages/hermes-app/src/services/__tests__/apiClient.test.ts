@@ -138,10 +138,13 @@ describe('ApiClient - API Key Methods', () => {
         },
       ]
 
-      vi.spyOn(TokenStorage, 'getAccessToken').mockReturnValue('fresh-token')
+      const getAccessTokenSpy = vi
+        .spyOn(TokenStorage, 'getAccessToken')
+        .mockReturnValueOnce('expired-token')
+        .mockReturnValueOnce('fresh-token')
       vi.spyOn(TokenStorage, 'getRefreshToken').mockReturnValue('refresh-token')
-      vi.spyOn(TokenStorage, 'setAccessToken').mockImplementation(() => {})
-      vi.spyOn(TokenStorage, 'setRefreshToken').mockImplementation(() => {})
+      const setAccessTokenSpy = vi.spyOn(TokenStorage, 'setAccessToken').mockImplementation(() => {})
+      const setRefreshTokenSpy = vi.spyOn(TokenStorage, 'setRefreshToken').mockImplementation(() => {})
 
       mockFetch
         .mockResolvedValueOnce({
@@ -169,6 +172,9 @@ describe('ApiClient - API Key Methods', () => {
       })
 
       expect(result).toEqual(mockApiKeys)
+      expect(setAccessTokenSpy).toHaveBeenCalledWith('fresh-token', 15)
+      expect(setRefreshTokenSpy).toHaveBeenCalledWith('fresh-refresh-token')
+      expect(getAccessTokenSpy).toHaveBeenCalledTimes(2)
       expect(mockFetch).toHaveBeenNthCalledWith(
         3,
         '/api/v1/auth/api-keys',
