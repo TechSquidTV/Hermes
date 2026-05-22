@@ -16,7 +16,6 @@
     "noEmit": true,
 
     /* Path mapping */
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     },

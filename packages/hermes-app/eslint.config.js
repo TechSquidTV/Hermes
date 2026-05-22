@@ -1,6 +1,5 @@
 import js from '@eslint/js'
 import tseslint from 'typescript-eslint'
-import reactPlugin from 'eslint-plugin-react'
 import reactHooksPlugin from 'eslint-plugin-react-hooks'
 import reactRefreshPlugin from 'eslint-plugin-react-refresh'
 
@@ -38,24 +37,14 @@ export default tseslint.config(
   //   },
   // },
 
-  // React plugin settings
+  // React hooks and refresh rules
   {
     files: ['**/*.{ts,tsx}'],
     plugins: {
-      react: reactPlugin,
       'react-hooks': reactHooksPlugin,
       'react-refresh': reactRefreshPlugin,
     },
-    settings: {
-      react: {
-        version: 'detect',
-      },
-    },
     rules: {
-      // React recommended rules
-      ...reactPlugin.configs.recommended.rules,
-      ...reactPlugin.configs['jsx-runtime'].rules,
-
       // React Hooks rules (including React compiler rules)
       ...reactHooksPlugin.configs['recommended-latest'].rules,
 
@@ -67,10 +56,6 @@ export default tseslint.config(
         'warn',
         { allowConstantExport: true },
       ],
-
-      // React overrides
-      'react/prop-types': 'off', // TypeScript handles this
-      'react/react-in-jsx-scope': 'off', // Not needed in React 17+
 
       // TypeScript overrides
       '@typescript-eslint/no-unused-vars': [
@@ -106,6 +91,14 @@ export default tseslint.config(
     },
   },
 
+  // TanStack file routes intentionally export Route objects next to components.
+  {
+    files: ['src/routes/**'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
+
   // Less strict rules for UI components (shadcn/ui style)
   {
     files: ['**/components/ui/**', '**/components/animate-ui/**'],
@@ -125,4 +118,3 @@ export default tseslint.config(
     },
   }
 )
-

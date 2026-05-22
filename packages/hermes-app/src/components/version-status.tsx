@@ -19,6 +19,8 @@ interface VersionStatusProps {
 
 export function VersionStatus({ className }: VersionStatusProps) {
   const { state: sidebarState } = useSidebar()
+  const isMountedRef = React.useRef(false)
+  const requestIdRef = React.useRef(0)
   const [versionInfo, setVersionInfo] = React.useState<{
     app: { current: string; latest: string | null; status: VersionStatus }
     api: { current: string; latest: string | null; status: VersionStatus }
@@ -27,7 +29,13 @@ export function VersionStatus({ className }: VersionStatusProps) {
   const [error, setError] = React.useState<string | null>(null)
 
   const fetchVersionInfo = React.useCallback(async () => {
+    const requestId = requestIdRef.current + 1
+    requestIdRef.current = requestId
+    const isLatestRequest = () => isMountedRef.current && requestId === requestIdRef.current
+
     try {
+      if (!isMountedRef.current) return
+
       setIsLoading(true)
       setError(null)
 
@@ -38,41 +46,54 @@ export function VersionStatus({ className }: VersionStatusProps) {
       // Fetch GitHub tag info
       const info = await githubService.getVersionInfo(CURRENT_APP_VERSION, apiVersion)
 
-      setVersionInfo({
-        app: {
-          current: CURRENT_APP_VERSION,
-          latest: info.latest.app,
-          status: info.status.app
-        },
-        api: {
-          current: apiVersion,
-          latest: info.latest.api,
-          status: info.status.api
-        }
-      })
+      if (isLatestRequest()) {
+        setVersionInfo({
+          app: {
+            current: CURRENT_APP_VERSION,
+            latest: info.latest.app,
+            status: info.status.app
+          },
+          api: {
+            current: apiVersion,
+            latest: info.latest.api,
+            status: info.status.api
+          }
+        })
+      }
     } catch (err) {
       console.error('Failed to fetch version info:', err)
-      setError(err instanceof Error ? err.message : 'Failed to check for updates')
-      // Set fallback version info
-      setVersionInfo({
-        app: {
-          current: CURRENT_APP_VERSION,
-          latest: null,
-          status: 'unknown'
-        },
-        api: {
-          current: 'unknown',
-          latest: null,
-          status: 'unknown'
-        }
-      })
+      if (isLatestRequest()) {
+        setError(err instanceof Error ? err.message : 'Failed to check for updates')
+        // Set fallback version info
+        setVersionInfo({
+          app: {
+            current: CURRENT_APP_VERSION,
+            latest: null,
+            status: 'unknown'
+          },
+          api: {
+            current: 'unknown',
+            latest: null,
+            status: 'unknown'
+          }
+        })
+      }
     } finally {
-      setIsLoading(false)
+      if (isLatestRequest()) {
+        setIsLoading(false)
+      }
     }
   }, [])
 
   React.useEffect(() => {
-    fetchVersionInfo()
+    isMountedRef.current = true
+    // Initial load shares the same refresh path used by the button handlers.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchVersionInfo()
+
+    return () => {
+      isMountedRef.current = false
+    }
   }, [fetchVersionInfo])
 
   const getStatusIcon = (status: VersionStatus) => {

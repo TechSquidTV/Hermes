@@ -1,10 +1,10 @@
 # Hermes App Dockerfile - Static Build Only
-FROM node:22-alpine AS base
+FROM node:24-alpine AS base
 
 # Install pnpm with specific version for reproducibility
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@10.19.0 --activate
 
 # Install dependencies only when needed - optimized caching
 FROM base AS deps
@@ -34,7 +34,7 @@ COPY packages/hermes-app/src ./src
 RUN pnpm run build
 
 # Production image - nginx serving static files with runtime config
-FROM nginx:alpine AS runner
+FROM nginx:1.29-alpine AS runner
 
 # Copy built static files from builder
 COPY --from=builder /app/dist /usr/share/nginx/html

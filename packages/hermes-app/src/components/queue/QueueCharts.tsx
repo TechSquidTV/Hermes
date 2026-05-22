@@ -262,7 +262,10 @@ export function QueueCharts() {
                         cx="50%"
                         cy="50%"
                         labelLine={false}
-                        label={({ name, percentage }) => `${name} (${percentage}%)`}
+                        label={({ payload }) => {
+                          const item = payload as { name?: string; percentage?: number }
+                          return `${item.name ?? ''} (${item.percentage ?? 0}%)`
+                        }}
                         outerRadius={80}
                         fill="#8884d8"
                         dataKey="value"
@@ -326,4 +329,3 @@ export function QueueCharts() {
     </div>
   )
 }
-

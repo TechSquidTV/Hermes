@@ -57,7 +57,35 @@ export function AdminUsersPage() {
   }
 
   useEffect(() => {
-    loadUsers()
+    let isMounted = true
+
+    const loadInitialUsers = async () => {
+      try {
+        if (isMounted) {
+          setLoading(true)
+        }
+        const data = await adminService.listUsers()
+        if (isMounted) {
+          setUsers(data)
+        }
+      } catch (error) {
+        if (isMounted) {
+          toast.error('Failed to load users', {
+            description: error instanceof Error ? error.message : 'Unknown error',
+          })
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false)
+        }
+      }
+    }
+
+    void loadInitialUsers()
+
+    return () => {
+      isMounted = false
+    }
   }, [])
 
   const handleCreateUser = async () => {

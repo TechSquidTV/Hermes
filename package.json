@@ -33,7 +33,14 @@
     "generate:routes": "pnpm --filter hermes-app generate:routes"
   },
   "devDependencies": {
-    "shadcn": "^3.5.0"
+    "shadcn": "^4.8.0"
+  },
+  "pnpm": {
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "openapi-typescript>typescript": "^6.0.0"
+      }
+    }
   },
   "engines": {
     "node": ">=22.0.0",

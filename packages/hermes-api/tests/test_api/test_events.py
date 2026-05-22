@@ -248,12 +248,15 @@ class TestSSEEndpointTokenAuth:
     ):
         """Test that token scope must match download_id."""
         import json
+        from datetime import datetime, timedelta, timezone
 
         # Mock Redis to return token with wrong scope
         token_data = {
             "scope": "download:abc-123",
             "user_id": "user123",
-            "expires_at": "2025-12-31T23:59:59Z",
+            "expires_at": (
+                datetime.now(timezone.utc) + timedelta(minutes=5)
+            ).isoformat(),
             "permissions": ["read"],
         }
         mock_redis_for_sse.get = AsyncMock(return_value=json.dumps(token_data))
@@ -284,12 +287,15 @@ class TestSSEEndpointTokenAuth:
     ):
         """Test that queue endpoint requires queue-scoped token."""
         import json
+        from datetime import datetime, timedelta, timezone
 
         # Mock Redis to return token with download scope (wrong scope)
         token_data = {
             "scope": "download:test-123",
             "user_id": "user123",
-            "expires_at": "2025-12-31T23:59:59Z",
+            "expires_at": (
+                datetime.now(timezone.utc) + timedelta(minutes=5)
+            ).isoformat(),
             "permissions": ["read"],
         }
         mock_redis_for_sse.get = AsyncMock(return_value=json.dumps(token_data))
@@ -314,12 +320,15 @@ class TestSSEStreamingFunctionality:
     ):
         """Test connecting to /events/stream with valid SSE token."""
         import json
+        from datetime import datetime, timedelta, timezone
 
         # Mock valid token in Redis
         token_data = {
             "scope": "queue",
             "user_id": "user123",
-            "expires_at": "2025-12-31T23:59:59Z",
+            "expires_at": (
+                datetime.now(timezone.utc) + timedelta(minutes=5)
+            ).isoformat(),
             "permissions": ["read"],
         }
         mock_redis_for_sse.get = AsyncMock(return_value=json.dumps(token_data))
