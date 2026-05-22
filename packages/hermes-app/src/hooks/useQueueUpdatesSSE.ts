@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSSE } from './useSSE';
-import { apiClient } from '@/services/api/client';
+import { useSSEToken } from './useSSEToken';
 import { getApiBaseUrl } from '@/lib/config';
 
 export interface QueueUpdate {
@@ -34,38 +34,11 @@ export interface QueueUpdate {
  */
 export function useQueueUpdatesSSE() {
   const queryClient = useQueryClient();
-  const [sseToken, setSSEToken] = useState<string | null>(null);
-  const [tokenError, setTokenError] = useState<Error | null>(null);
-
-  // Fetch SSE token on mount
-  useEffect(() => {
-    let mounted = true;
-
-    async function fetchSSEToken() {
-      try {
-        const response = await apiClient.createSSEToken({
-          scope: 'queue',
-          ttl: 600, // 10 minutes
-        });
-
-        if (mounted) {
-          setSSEToken(response.token);
-          setTokenError(null);
-        }
-      } catch (err) {
-        console.error('Failed to fetch SSE token for queue:', err);
-        if (mounted) {
-          setTokenError(err instanceof Error ? err : new Error('Failed to fetch SSE token'));
-        }
-      }
-    }
-
-    fetchSSEToken();
-
-    return () => {
-      mounted = false;
-    };
-  }, []); // Only fetch once on mount
+  const { token: sseToken, error: tokenError } = useSSEToken(
+    'queue',
+    600,
+    'Failed to fetch SSE token for queue:'
+  );
 
   // Build SSE URL with ephemeral token
   const sseUrl = useMemo(() => {
