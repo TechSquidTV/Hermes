@@ -116,6 +116,44 @@ class TestAuthentication:
         assert response.status_code in [403, 307]
 
     @pytest.mark.asyncio
+    async def test_invalid_long_api_key_is_rejected(self, client: AsyncClient):
+        """Test long bearer strings are not accepted unless they match a stored key."""
+        from app.main import app
+
+        app.dependency_overrides.clear()
+
+        response = await client.get(
+            "/api/v1/queue/",
+            headers={"Authorization": "Bearer definitely-not-a-real-api-key-123456"},
+        )
+
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_database_api_key_authenticates(
+        self, client: AsyncClient, test_user, auth_token
+    ):
+        """Test database-backed API keys are validated by the shared dependency."""
+        from app.main import app
+
+        app.dependency_overrides.clear()
+
+        create_response = await client.post(
+            "/api/v1/auth/api-keys",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={"name": "Shared Dependency Key", "permissions": ["read"]},
+        )
+        assert create_response.status_code == 200
+
+        api_key = create_response.json()["key"]
+        response = await client.get(
+            "/api/v1/queue/",
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+
+        assert response.status_code != 401
+
+    @pytest.mark.asyncio
     async def test_rate_limiting_login(self, client: AsyncClient):
         """Test rate limiting on login endpoint."""
         # Clear any auth overrides for this test

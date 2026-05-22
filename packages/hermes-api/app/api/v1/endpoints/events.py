@@ -11,7 +11,8 @@ from sse_starlette.sse import EventSourceResponse
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.security import (
-    get_current_api_key,
+    AuthPrincipal,
+    get_current_principal,
     get_current_sse_token,
     validate_sse_token,
 )
@@ -309,7 +310,7 @@ async def stats_events(
 @router.post("/token", response_model=SSETokenResponse)
 async def create_sse_token(
     request: CreateSSETokenRequest = Body(...),
-    api_key: str = Depends(get_current_api_key),
+    principal: AuthPrincipal = Depends(get_current_principal),
     db_session: AsyncSession = Depends(get_database_session),
 ):
     """
@@ -360,17 +361,7 @@ async def create_sse_token(
     - `queue` - Queue updates
     - `system` - System notifications
     """
-    # Extract user_id from api_key
-    user_id = None
-    if api_key.startswith("user:"):
-        user_id = api_key.split(":", 1)[1]
-    elif api_key.startswith("db_api_key:"):
-        # For database API keys, we'd need to look up the user
-        # For now, use the API key as identifier
-        user_id = api_key
-    else:
-        # For configured API keys, use the key as identifier
-        user_id = f"api_key:{api_key[:8]}"
+    user_id = principal.user_id or principal.subject
 
     # Validate scope format
     scope = request.scope

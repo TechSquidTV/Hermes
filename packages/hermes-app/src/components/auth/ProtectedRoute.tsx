@@ -8,10 +8,10 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, requireAuth = true }: ProtectedRouteProps) {
-  const { isAuthenticated, isLoading } = useAuth()
+  const { isAuthenticated, isLoading, isValidating } = useAuth()
   const location = useLocation()
 
-  if (isLoading) {
+  if (isLoading || isValidating) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -31,7 +31,6 @@ export function ProtectedRoute({ children, requireAuth = true }: ProtectedRouteP
 
   return <>{children}</>
 }
-
 
 
 
