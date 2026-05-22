@@ -22,7 +22,6 @@ export class TokenStorage {
         localStorage.setItem(this.TOKEN_EXPIRY_KEY, expiryTime.toString())
       }
 
-      console.log('[TokenStorage] Access token stored securely')
     } catch (error) {
       console.warn('[TokenStorage] SessionStorage failed, falling back to localStorage:', error)
       try {
@@ -42,10 +41,7 @@ export class TokenStorage {
       const token = sessionStorage.getItem(this.ACCESS_TOKEN_KEY) ||
                    localStorage.getItem(this.ACCESS_TOKEN_KEY)
 
-      console.log('[TokenStorage] getAccessToken - token found:', !!token, 'source:', token ? (sessionStorage.getItem(this.ACCESS_TOKEN_KEY) ? 'sessionStorage' : 'localStorage') : 'none')
-
       if (!token) {
-        console.log('[TokenStorage] getAccessToken - no token found')
         return null
       }
 
@@ -53,15 +49,12 @@ export class TokenStorage {
       const expiryTime = localStorage.getItem(this.TOKEN_EXPIRY_KEY)
       if (expiryTime) {
         const isExpired = Date.now() > parseInt(expiryTime)
-        console.log('[TokenStorage] getAccessToken - expiry check:', { expiryTime: new Date(parseInt(expiryTime)), isExpired })
         if (isExpired) {
           this.clearAccessToken()
-          console.log('[TokenStorage] Token expired, cleared automatically')
           return null
         }
       }
 
-      console.log('[TokenStorage] getAccessToken - returning valid token, length:', token.length, 'preview:', token.substring(0, 20) + '...')
       return token
     } catch (error) {
       console.warn('[TokenStorage] Error retrieving token:', error)
@@ -80,7 +73,6 @@ export class TokenStorage {
     try {
       // Use localStorage for refresh tokens (longer persistence)
       localStorage.setItem(this.REFRESH_TOKEN_KEY, token)
-      console.log('[TokenStorage] Refresh token stored')
     } catch (error) {
       console.warn('[TokenStorage] Failed to store refresh token:', error)
     }
@@ -109,8 +101,6 @@ export class TokenStorage {
     } catch (error) {
       console.warn('[TokenStorage] Failed to clear refresh token:', error)
     }
-
-    console.log('[TokenStorage] All tokens cleared')
   }
 
   /**

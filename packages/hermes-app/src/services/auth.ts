@@ -9,7 +9,6 @@ class AuthService {
 
   constructor() {
     this.baseURL = getApiBaseUrl()
-    console.log(`[AuthService] Using API base URL: ${this.baseURL}`)
   }
 
   public getBaseURL(): string {
@@ -115,16 +114,12 @@ class AuthService {
   async getCurrentUser(): Promise<User> {
     try {
       const headers = await this.getAuthHeaders()
-      console.log('[AuthService] getCurrentUser - headers:', headers)
-      console.log('[AuthService] getCurrentUser - URL:', `${this.baseURL}/auth/me`)
       
       const response = await fetch(`${this.baseURL}/auth/me`, {
         method: 'GET',
         headers,
       })
 
-      console.log('[AuthService] getCurrentUser - response status:', response.status)
-      
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ detail: 'Failed to get user data' }))
         console.error('[AuthService] getCurrentUser - error response:', errorData)
@@ -132,7 +127,6 @@ class AuthService {
       }
 
       const userData = await response.json()
-      console.log('[AuthService] getCurrentUser - success:', userData.username)
       return userData
     } catch (error) {
       console.error('[AuthService] getCurrentUser failed:', error)
@@ -142,10 +136,6 @@ class AuthService {
 
   private async getAuthHeaders(): Promise<Record<string, string>> {
     const token = TokenStorage.getAccessToken()
-    console.log('[AuthService] getAuthHeaders - token exists:', !!token, 'token length:', token?.length || 0)
-    if (token) {
-      console.log('[AuthService] getAuthHeaders - token preview:', token.substring(0, 20) + '...')
-    }
     
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
