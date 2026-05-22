@@ -51,8 +51,8 @@ export function QueueCharts() {
   const chartData = timelineData?.map(item => ({
     date: new Date(item.date).toLocaleDateString(),
     downloads: item.downloads,
-    successRate: Math.round(item.success_rate * 100),
-    totalSize: Math.round(item.total_size / 1024 / 1024), // Convert to MB
+    successRate: Math.round(item.successRate * 100),
+    totalSize: Math.round(item.totalSize / 1024 / 1024), // Convert to MB
   })) || []
 
   // Transform stats data for extractor pie chart
@@ -108,7 +108,7 @@ export function QueueCharts() {
               <CardTitle className="text-sm font-medium text-muted-foreground">Total Downloads</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{timelineSummary.total_downloads}</div>
+              <div className="text-2xl font-bold">{timelineSummary.totalDownloads}</div>
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 {timelineSummary.trend === 'increasing' ? (
                   <TrendingUp className="h-3 w-3 text-green-500" />
@@ -117,7 +117,7 @@ export function QueueCharts() {
                 ) : (
                   <Activity className="h-3 w-3 text-gray-500" />
                 )}
-                {timelineSummary.trend} over {timelineSummary.days_count} days
+                {timelineSummary.trend} over {timelineSummary.daysCount} days
               </div>
             </CardContent>
           </Card>
@@ -127,9 +127,9 @@ export function QueueCharts() {
               <CardTitle className="text-sm font-medium text-muted-foreground">Success Rate</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{Math.round(timelineSummary.success_rate * 100)}%</div>
+              <div className="text-2xl font-bold">{Math.round(timelineSummary.successRate * 100)}%</div>
               <div className="text-xs text-muted-foreground">
-                {timelineSummary.total_downloads} downloads
+                {timelineSummary.totalDownloads} downloads
               </div>
             </CardContent>
           </Card>
@@ -139,7 +139,7 @@ export function QueueCharts() {
               <CardTitle className="text-sm font-medium text-muted-foreground">Daily Average</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{timelineSummary.avg_daily_downloads}</div>
+              <div className="text-2xl font-bold">{timelineSummary.avgDailyDownloads}</div>
               <div className="text-xs text-muted-foreground">
                 downloads per day
               </div>
@@ -151,9 +151,9 @@ export function QueueCharts() {
               <CardTitle className="text-sm font-medium text-muted-foreground">Peak Day</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{timelineSummary.peak_downloads}</div>
+              <div className="text-2xl font-bold">{timelineSummary.peakDownloads}</div>
               <div className="text-xs text-muted-foreground">
-                {timelineSummary.peak_day ? new Date(timelineSummary.peak_day).toLocaleDateString() : 'No data'}
+                {timelineSummary.peakDay ? new Date(timelineSummary.peakDay).toLocaleDateString() : 'No data'}
               </div>
             </CardContent>
           </Card>

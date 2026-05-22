@@ -3,33 +3,9 @@
 import type { components } from '@/types/api.generated'
 
 type VideoInfo = components["schemas"]["VideoInfo"]
-
-// Define types for API responses that aren't in the schema
-interface HealthResponse {
-  status: string
-  timestamp: string
-  version: string
-  environment: string
-}
-
-interface DailyStats {
-  date: string
-  downloads: number
-  success_rate: number
-  total_size: number
-}
-
-interface TimelineSummary {
-  total_downloads: number
-  success_rate: number
-  total_size: number
-  avg_daily_downloads: number
-  trend: string
-  peak_day: string | null
-  peak_downloads: number
-  period: string
-  days_count: number
-}
+type HealthResponse = components["schemas"]["HealthResponse"]
+type DailyStats = components["schemas"]["DailyStats"]
+type TimelineSummary = components["schemas"]["TimelineSummary"]
 type DownloadRequest = components["schemas"]["DownloadRequest"]
 type DownloadResponse = components["schemas"]["DownloadResponse"]
 type DownloadStatus = components["schemas"]["DownloadStatus"]
@@ -189,7 +165,7 @@ class ApiClient {
 
   // Download management
   async startDownload(request: DownloadRequest): Promise<DownloadResponse> {
-    return this.request<DownloadResponse>('/download', {
+    return this.request<DownloadResponse>('/download/', {
       method: 'POST',
       body: JSON.stringify(request),
     })
@@ -311,11 +287,11 @@ class ApiClient {
 
   // Storage management
   async getStorageInfo(): Promise<StorageInfo> {
-    return this.request<StorageInfo>('/storage')
+    return this.request<StorageInfo>('/storage/')
   }
 
   async cleanupDownloads(request: CleanupRequest): Promise<CleanupResponse> {
-    return this.request<CleanupResponse>('/cleanup', {
+    return this.request<CleanupResponse>('/cleanup/', {
       method: 'POST',
       body: JSON.stringify(request),
     })
@@ -323,7 +299,7 @@ class ApiClient {
 
   // Formats
   async getAvailableFormats(): Promise<FormatInfo> {
-    return this.request<FormatInfo>('/formats')
+    return this.request<FormatInfo>('/formats/')
   }
 
   // Configuration

@@ -29,3 +29,6 @@ class TestHealth:
         assert "dependencies" in data
         assert "database" in data["dependencies"]
         assert "redis" in data["dependencies"]
+        assert "response_time_ms" not in data["dependencies"]["database"]
+        if "responseTimeMs" in data["dependencies"]["database"]:
+            assert isinstance(data["dependencies"]["database"]["responseTimeMs"], float)

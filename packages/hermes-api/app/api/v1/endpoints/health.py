@@ -11,12 +11,12 @@ from sqlalchemy import text
 
 from app.core.config import settings
 from app.db.base import engine
-from app.models.pydantic.response import HealthResponse
+from app.models.pydantic.response import DetailedHealthResponse, HealthResponse
 
 router = APIRouter()
 
 
-@router.get("/")
+@router.get("/", response_model=HealthResponse)
 async def get_health():
     """Get API health status."""
     return HealthResponse(
@@ -27,12 +27,12 @@ async def get_health():
     )
 
 
-@router.get("/detailed")
+@router.get("/detailed", response_model=DetailedHealthResponse)
 async def get_detailed_health():
     """Get detailed health information including dependencies."""
     health_info = {
         "status": "healthy",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(timezone.utc),
         "version": settings.api_version,
         "environment": "development" if settings.debug else "production",
         "dependencies": {},
