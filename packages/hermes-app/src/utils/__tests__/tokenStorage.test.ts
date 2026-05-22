@@ -196,7 +196,9 @@ describe('TokenStorage', () => {
     })
 
     it('should return token when expiry is exactly now', () => {
-      const nowTime = Date.now()
+      const nowTime = 1_700_000_000_000
+      const dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(nowTime)
+
       localStorageMock.getItem
         .mockReturnValueOnce('test-token')
         .mockReturnValueOnce(nowTime.toString())
@@ -205,6 +207,7 @@ describe('TokenStorage', () => {
 
       // Token is NOT expired when Date.now() === expiry time (requires Date.now() > expiry to be expired)
       expect(result).toBe('test-token')
+      dateNowSpy.mockRestore()
     })
   })
 
