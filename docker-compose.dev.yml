@@ -5,7 +5,8 @@
 #
 # Services:
 #   - Frontend: http://localhost:5173 (Vite dev server with hot reload)
-#   - API: http://localhost:8000 (with auto-reload on code changes)
+#   - API: http://localhost:5173/api/v1 (proxied to the API container)
+#   - Direct API: http://localhost:8000 (exposed for debugging)
 #   - Redis: localhost:6379 (exposed for debugging)
 
 services:
@@ -28,8 +29,9 @@ services:
     networks:
       - hermes-network
     environment:
-      # API URL for browser (uses localhost since API is exposed on port 8000)
-      - VITE_API_BASE_URL=http://localhost:8000/api/v1
+      # Keep browser traffic on the Vite origin; Vite proxies /api to the API container.
+      - VITE_API_BASE_URL=/api/v1
+      - HERMES_DEV_API_TARGET=http://api:8000
     depends_on:
       api:
         condition: service_healthy
@@ -48,6 +50,7 @@ services:
     container_name: hermes-api-dev
     restart: unless-stopped
     ports:
+      # Expose direct API access for debugging; browser traffic normally uses the app proxy.
       - "${API_PORT:-8000}:8000"
     env_file:
       - .env
