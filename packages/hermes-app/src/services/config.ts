@@ -6,6 +6,11 @@ export interface PublicConfig {
   allowPublicSignup: boolean
 }
 
+interface PublicConfigResponse {
+  allowPublicSignup?: boolean
+  allow_public_signup?: boolean
+}
+
 class ConfigService {
   private baseURL: string
 
@@ -29,11 +34,10 @@ class ConfigService {
         throw new Error(`HTTP ${response.status}: ${errorData.detail || response.statusText}`)
       }
 
-      const data = await response.json()
+      const data = await response.json() as PublicConfigResponse
 
-      // Convert snake_case to camelCase
       return {
-        allowPublicSignup: data.allow_public_signup,
+        allowPublicSignup: data.allowPublicSignup ?? data.allow_public_signup ?? true,
       }
     } catch (error) {
       console.error('[ConfigService] Failed to fetch public config:', error)
