@@ -42,7 +42,7 @@ class TestSSETokenEndpoint:
     async def test_create_token_requires_auth(self, client: AsyncClient):
         """Test that token creation requires authentication."""
         # Clear auth override to test actual auth
-        from app.core.security import get_current_api_key
+        from app.core.security import get_current_principal
         from app.main import app
 
         # Override with a function that raises 401
@@ -51,7 +51,7 @@ class TestSSETokenEndpoint:
 
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
-        app.dependency_overrides[get_current_api_key] = mock_no_auth
+        app.dependency_overrides[get_current_principal] = mock_no_auth
 
         response = await client.post(
             "/api/v1/events/token", json={"scope": "queue", "ttl": 600}

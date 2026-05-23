@@ -65,14 +65,26 @@ async def db_session(setup_test_database) -> AsyncGenerator[AsyncSession, None]:
 @pytest_asyncio.fixture
 async def client(setup_test_database) -> AsyncGenerator[AsyncClient, None]:
     """Create an async HTTP client for testing with auth mocked."""
-    from app.core.security import get_current_api_key
+    from app.core.security import (
+        AuthPrincipal,
+        get_current_api_key,
+        get_current_principal,
+    )
     from app.main import app
 
     # Override authentication dependency for testing
     async def mock_get_api_key():
         return "test-api-key"
 
+    async def mock_get_principal():
+        return AuthPrincipal(
+            kind="api_key",
+            subject="test-api-key",
+            permissions=["admin"],
+        )
+
     app.dependency_overrides[get_current_api_key] = mock_get_api_key
+    app.dependency_overrides[get_current_principal] = mock_get_principal
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:

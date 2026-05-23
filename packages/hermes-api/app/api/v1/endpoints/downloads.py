@@ -2,11 +2,11 @@
 Download management endpoints.
 """
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
-from app.core.security import get_current_api_key, validate_database_api_key
+from app.core.security import get_current_api_key
 from app.db.repositories import DownloadRepository
 from app.db.session import get_database_session
 from app.models.pydantic.download import (
@@ -86,18 +86,6 @@ async def start_download(
         DownloadResponse: Download ID and initial status
     """
     try:
-        # Validate database API keys
-        if api_key.startswith("db_api_key:"):
-            validated_key = await validate_database_api_key(
-                api_key.replace("db_api_key:", ""), db_session
-            )
-            if not validated_key:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid or inactive API key",
-                )
-            api_key = validated_key
-
         logger.info(
             "Starting download",
             url=download_request.url[:50] + "...",

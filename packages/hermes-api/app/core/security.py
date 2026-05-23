@@ -4,8 +4,9 @@ Security utilities for API authentication and authorization.
 
 import hashlib
 import secrets
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 import bcrypt
 import jwt
@@ -15,7 +16,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.db.repositories import ApiKeyRepository
+from app.db.repositories import (
+    ApiKeyRepository,
+    TokenBlacklistRepository,
+    UserRepository,
+)
+from app.db.session import get_database_session
 
 logger = get_logger(__name__)
 
@@ -24,6 +30,56 @@ security = HTTPBearer()
 
 # Optional HTTP Bearer for SSE endpoints (doesn't raise error if missing)
 optional_security = HTTPBearer(auto_error=False)
+
+
+@dataclass(frozen=True)
+class AuthPrincipal:
+    """Authenticated caller resolved from a JWT, configured API key, or DB API key."""
+
+    kind: Literal["user", "api_key"]
+    subject: str
+    user_id: Optional[str] = None
+    username: Optional[str] = None
+    email: Optional[str] = None
+    avatar: Optional[str] = None
+    is_admin: bool = False
+    preferences: Optional[dict] = None
+    created_at: Optional[str] = None
+    last_login: Optional[str] = None
+    token_id: Optional[str] = None
+    api_key_id: Optional[str] = None
+    api_key_name: Optional[str] = None
+    permissions: list[str] = field(default_factory=list)
+
+    @property
+    def legacy_identifier(self) -> str:
+        """Stable string for routes that only need to know auth succeeded."""
+        if self.kind == "user" and self.user_id:
+            return f"user:{self.user_id}"
+        if self.api_key_id:
+            return f"db_api_key:{self.api_key_id}"
+        return self.subject
+
+    def as_user_dict(self) -> dict:
+        """Return the historical user dict shape used by auth/admin endpoints."""
+        if self.kind != "user" or not self.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User authentication required",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        return {
+            "id": self.user_id,
+            "username": self.username,
+            "email": self.email,
+            "avatar": self.avatar,
+            "is_admin": self.is_admin,
+            "preferences": self.preferences,
+            "created_at": self.created_at,
+            "last_login": self.last_login,
+            "token_id": self.token_id,
+        }
 
 
 def create_api_key() -> str:
@@ -129,45 +185,161 @@ def verify_token(token: str) -> Optional[dict]:
         return None
 
 
-async def validate_database_api_key(
-    api_key: str, db_session: AsyncSession
-) -> Optional[str]:
-    """Validate a database API key and return the API key if valid."""
-    try:
-        api_key_repo = ApiKeyRepository(db_session)
-        db_api_key = await api_key_repo.get_by_key_hash(hash_api_key(api_key))
+async def _principal_from_jwt(
+    token: str, db_session: AsyncSession
+) -> Optional[AuthPrincipal]:
+    """Validate a JWT and resolve it to an active user principal."""
+    payload = verify_token(token)
+    if not payload:
+        return None
 
-        if db_api_key:
-            # Check if API key is active
-            if not db_api_key.is_active:
-                logger.warning(f"Inactive API key used: {db_api_key.id}")
-                return None
+    username: str = payload.get("sub")
+    user_id: str = payload.get("user_id")
+    token_id: str = payload.get("jti")
 
-            # Check if API key has expired
-            if (
-                db_api_key.expires_at
-                and datetime.now(timezone.utc) > db_api_key.expires_at
-            ):
-                logger.warning(f"Expired API key used: {db_api_key.id}")
-                return None
+    if not username or not user_id:
+        logger.warning("Missing username or user_id in token payload")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-            # Update last used timestamp
-            await api_key_repo.update_last_used(db_api_key.id)
-
-            logger.info(
-                f"Valid database API key used: {db_api_key.id} for user {db_api_key.user_id}"
+    if token_id:
+        token_blacklist_repo = TokenBlacklistRepository(db_session)
+        if await token_blacklist_repo.is_blacklisted(token_id):
+            logger.warning(f"Token is blacklisted: {token_id}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has been revoked",
+                headers={"WWW-Authenticate": "Bearer"},
             )
-            return api_key
 
-    except Exception as e:
-        logger.warning(f"Database API key validation error: {str(e)}")
+    user_repo = UserRepository(db_session)
+    user = await user_repo.get_by_id(user_id)
+    if not user:
+        logger.warning(f"User not found for user_id: {user_id}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-    return None
+    if not user.is_active:
+        logger.warning(f"User account disabled: {user_id}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User account is disabled",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return AuthPrincipal(
+        kind="user",
+        subject=f"user:{user.id}",
+        user_id=user.id,
+        username=user.username,
+        email=user.email,
+        avatar=user.avatar,
+        is_admin=user.is_admin,
+        preferences=user.preferences,
+        created_at=user.created_at.isoformat() if user.created_at else None,
+        last_login=user.last_login.isoformat() if user.last_login else None,
+        token_id=token_id,
+    )
+
+
+async def _principal_from_api_key(
+    api_key: str, db_session: AsyncSession
+) -> Optional[AuthPrincipal]:
+    """Validate configured and database-backed API keys."""
+    for configured_key in settings.api_keys:
+        if verify_api_key(api_key, hash_api_key(configured_key)):
+            return AuthPrincipal(
+                kind="api_key",
+                subject=f"configured_api_key:{hash_api_key(configured_key)[:12]}",
+                permissions=["admin"],
+            )
+
+    api_key_repo = ApiKeyRepository(db_session)
+    db_api_key = await api_key_repo.get_by_key_hash(hash_api_key(api_key))
+    if not db_api_key:
+        return None
+
+    if not db_api_key.is_active:
+        logger.warning(f"Inactive API key used: {db_api_key.id}")
+        return None
+
+    if db_api_key.expires_at and datetime.now(timezone.utc) > db_api_key.expires_at:
+        logger.warning(f"Expired API key used: {db_api_key.id}")
+        return None
+
+    await api_key_repo.update_last_used(db_api_key.id)
+
+    return AuthPrincipal(
+        kind="api_key",
+        subject=f"db_api_key:{db_api_key.id}",
+        user_id=db_api_key.user_id,
+        api_key_id=db_api_key.id,
+        api_key_name=db_api_key.name,
+        permissions=db_api_key.permissions or [],
+    )
+
+
+async def get_current_principal(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db_session: AsyncSession = Depends(get_database_session),
+) -> AuthPrincipal:
+    """Resolve the current authenticated caller from a bearer JWT or API key."""
+    if credentials is None:
+        logger.warning("No authorization credentials provided")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authorization required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token = credentials.credentials
+
+    if credentials.scheme.lower() == "bearer":
+        jwt_principal = await _principal_from_jwt(token, db_session)
+        if jwt_principal:
+            return jwt_principal
+
+    api_key_principal = await _principal_from_api_key(token, db_session)
+    if api_key_principal:
+        return api_key_principal
+
+    logger.warning(
+        "Invalid bearer credential provided", key_hash=hash_api_key(token)[:8]
+    )
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid authentication credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+async def get_current_principal_optional(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
+    token: Optional[str] = Query(None),
+    db_session: AsyncSession = Depends(get_database_session),
+) -> Optional[AuthPrincipal]:
+    """Resolve an optional authenticated caller from a header or query token."""
+    auth_token = credentials.credentials if credentials else token
+    if not auth_token:
+        return None
+
+    jwt_principal = await _principal_from_jwt(auth_token, db_session)
+    if jwt_principal:
+        return jwt_principal
+
+    return await _principal_from_api_key(auth_token, db_session)
 
 
 async def get_current_api_key_optional(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
     token: Optional[str] = Query(None),
+    db_session: AsyncSession = Depends(get_database_session),
 ) -> Optional[str]:
     """
     Extract and validate API key from Authorization header or query param.
@@ -182,100 +354,17 @@ async def get_current_api_key_optional(
     Returns:
         Validated API key/user marker or None if no auth provided
     """
-    # Try Authorization header first
-    auth_token = None
-    if credentials:
-        auth_token = credentials.credentials
-    # Fall back to query param (for EventSource SSE connections)
-    elif token:
-        auth_token = token
-    else:
-        return None
-
-    # Validate token (JWT or API key)
-    payload = verify_token(auth_token)
-    if payload:
-        user_id = payload.get("user_id")
-        if user_id:
-            logger.info(f"Accepting user token for user_id: {user_id}")
-            return f"user:{user_id}"
-
-        api_key = payload.get("api_key")
-        if api_key:
-            return api_key
-
-    # Check configured API keys
-    for configured_key in settings.api_keys:
-        if verify_api_key(auth_token, hash_api_key(configured_key)):
-            return configured_key
-
-    # Check database API keys
-    if len(auth_token) >= 32:
-        logger.info(f"Database API key provided, length: {len(auth_token)}")
-        return f"db_api_key:{auth_token}"
-
-    return None
+    principal = await get_current_principal_optional(credentials, token, db_session)
+    return principal.legacy_identifier if principal else None
 
 
 async def get_current_api_key(
     credentials: HTTPAuthorizationCredentials = Depends(security),
+    db_session: AsyncSession = Depends(get_database_session),
 ) -> str:
     """Extract and validate API key from Authorization header."""
-    if credentials is None:
-        logger.warning("No authorization credentials provided")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authorization required",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # Check if it's a Bearer token (JWT)
-    if credentials.scheme.lower() == "bearer":
-        payload = verify_token(credentials.credentials)
-        logger.info(
-            f"JWT verification result: {payload is not None}",
-            payload_keys=list(payload.keys()) if payload else None,
-        )
-        if payload:
-            # If it's a valid JWT (user token), allow access
-            user_id = payload.get("user_id")
-            logger.info(f"User ID from payload: {user_id}")
-            if user_id:
-                # Valid user token, return a special marker
-                logger.info(f"Accepting user token for user_id: {user_id}")
-                return f"user:{user_id}"
-
-            # Check for API key in JWT
-            api_key = payload.get("api_key")
-            if api_key:
-                return api_key
-
-    # Otherwise treat as API key directly
-    api_key = credentials.credentials
-
-    # First, validate against configured API keys (legacy support)
-    for configured_key in settings.api_keys:
-        if verify_api_key(api_key, hash_api_key(configured_key)):
-            return configured_key
-
-    # Then validate against database-stored API keys
-    # Note: Database validation will be handled by the endpoint dependencies
-    # since get_current_api_key cannot access the database session directly
-    try:
-        # Basic format validation
-        if len(api_key) >= 32:  # Basic validation that it looks like an API key
-            logger.info(f"Database API key provided, length: {len(api_key)}")
-            # Return a special marker that endpoints will validate against the database
-            return f"db_api_key:{api_key}"
-    except Exception as e:
-        logger.warning(f"API key validation error: {str(e)}")
-
-    logger.warning("Invalid API key provided", key_hash=hash_api_key(api_key)[:8])
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid API key",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+    principal = await get_current_principal(credentials, db_session)
+    return principal.legacy_identifier
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:

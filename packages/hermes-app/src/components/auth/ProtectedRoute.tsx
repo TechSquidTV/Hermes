@@ -9,7 +9,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, requireAuth = true }: ProtectedRouteProps) {
-  const { isAuthenticated, isLoading } = useAuth()
+  const { isAuthenticated, isLoading, isValidating } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const isAuthRoute = location.pathname.startsWith('/auth')
@@ -17,7 +17,7 @@ export function ProtectedRoute({ children, requireAuth = true }: ProtectedRouteP
   const shouldRedirectToDashboard = !requireAuth && isAuthenticated
 
   useEffect(() => {
-    if (isLoading) {
+    if (isLoading || isValidating) {
       return
     }
 
@@ -35,13 +35,14 @@ export function ProtectedRoute({ children, requireAuth = true }: ProtectedRouteP
     }
   }, [
     isLoading,
+    isValidating,
     location.pathname,
     navigate,
     shouldRedirectToDashboard,
     shouldRedirectToLogin,
   ])
 
-  if (isLoading) {
+  if (isLoading || isValidating) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
