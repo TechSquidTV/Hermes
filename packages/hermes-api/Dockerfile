@@ -20,7 +20,7 @@ RUN uv sync --frozen --no-install-project --no-dev
 
 FROM node:24-slim AS node-runtime
 
-# Production stage - use distroless for smaller size
+# Production stage - use Python slim base image
 FROM python:3.13-slim
 
 # Build args for configurable UID/GID (defaults to 1000)

@@ -38,7 +38,10 @@ def reset_fake_youtube_dl():
 
 @pytest.mark.asyncio
 async def test_extract_info_enables_node_js_runtime():
-    service = YTDLPService()
+    with patch(
+        "app.services.yt_dlp_service.shutil.which", return_value="/usr/bin/node"
+    ):
+        service = YTDLPService()
 
     with patch("app.services.yt_dlp_service.yt_dlp.YoutubeDL", FakeYoutubeDL):
         result = await service.extract_info("https://example.com/video")
@@ -50,7 +53,10 @@ async def test_extract_info_enables_node_js_runtime():
 
 @pytest.mark.asyncio
 async def test_download_video_enables_node_js_runtime(tmp_path):
-    service = YTDLPService()
+    with patch(
+        "app.services.yt_dlp_service.shutil.which", return_value="/usr/bin/node"
+    ):
+        service = YTDLPService()
     output_path = tmp_path / "test-video.%(ext)s"
     downloaded_path = tmp_path / "test-video.mp4"
     downloaded_path.write_bytes(b"video")
@@ -63,4 +69,17 @@ async def test_download_video_enables_node_js_runtime(tmp_path):
 
     assert result_path == str(downloaded_path)
     assert FakeYoutubeDL.calls[0]["js_runtimes"] == {"node": {}}
+    assert "remote_components" not in FakeYoutubeDL.calls[0]
+
+
+@pytest.mark.asyncio
+async def test_extract_info_uses_yt_dlp_defaults_when_node_is_unavailable():
+    with patch("app.services.yt_dlp_service.shutil.which", return_value=None):
+        service = YTDLPService()
+
+    with patch("app.services.yt_dlp_service.yt_dlp.YoutubeDL", FakeYoutubeDL):
+        result = await service.extract_info("https://example.com/video")
+
+    assert result["title"] == "Test Video"
+    assert "js_runtimes" not in FakeYoutubeDL.calls[0]
     assert "remote_components" not in FakeYoutubeDL.calls[0]
