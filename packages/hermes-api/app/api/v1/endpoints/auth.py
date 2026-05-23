@@ -15,6 +15,7 @@ from app.api.dependencies import get_current_user_from_token
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.security import (
+    ApiKeyPermission,
     create_access_token,
     create_api_key,
     create_refresh_token,
@@ -519,7 +520,7 @@ class ApiKeyCreate(CamelCaseModel):
     """API key creation request with automatic camelCase conversion."""
 
     name: str = Field(..., min_length=1, max_length=100, description="API key name")
-    permissions: list[str] = Field(default_factory=list)
+    permissions: list[ApiKeyPermission] = Field(default_factory=list)
     expires_at: datetime | None = None
 
 
@@ -622,8 +623,9 @@ async def create_api_key_endpoint(
             user_id=current_user["id"],
             name=api_key_data.name,
             key_hash=key_hash,
-            permissions=api_key_data.permissions,
+            permissions=[permission.value for permission in api_key_data.permissions],
             rate_limit=60,  # Default rate limit
+            expires_at=api_key_data.expires_at,
         )
 
         logger.info(

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
-from app.core.security import get_current_api_key
+from app.core.security import ApiKeyPermission, AuthPrincipal, require_api_permission
 from app.db.repositories import DownloadRepository
 from app.db.session import get_database_session
 from app.models.pydantic.download import CleanupOrphanedResponse, DownloadQueue
@@ -33,7 +33,7 @@ async def get_download_queue(
     ),
     offset: int = Query(0, ge=0, description="Number of items to skip"),
     db_session: AsyncSession = Depends(get_database_session),
-    api_key: str = Depends(get_current_api_key),
+    principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.READ)),
 ) -> DownloadQueue:
     """Get the current download queue with all pending, active, and recently completed downloads."""
     try:
@@ -166,7 +166,7 @@ async def get_download_queue(
 async def cleanup_orphaned_downloads(
     dry_run: bool = False,
     db_session: AsyncSession = Depends(get_database_session),
-    api_key: str = Depends(get_current_api_key),
+    principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.WRITE)),
 ) -> CleanupOrphanedResponse:
     """
     Clean up orphaned download records where files no longer exist on disk.

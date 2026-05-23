@@ -5,7 +5,7 @@ Storage information endpoint.
 from fastapi import APIRouter, Depends
 
 from app.core.logging import get_logger
-from app.core.security import get_current_api_key
+from app.core.security import ApiKeyPermission, AuthPrincipal, require_api_permission
 from app.models.pydantic.storage import StorageInfo
 from app.services.storage_service import StorageService
 
@@ -14,7 +14,9 @@ logger = get_logger(__name__)
 
 
 @router.get("/", response_model=StorageInfo)
-async def get_storage_info(api_key: str = Depends(get_current_api_key)):
+async def get_storage_info(
+    principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.READ)),
+):
     """
     Get storage usage information and cleanup recommendations.
 

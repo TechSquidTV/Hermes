@@ -11,9 +11,10 @@ from sse_starlette.sse import EventSourceResponse
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.security import (
+    ApiKeyPermission,
     AuthPrincipal,
-    get_current_principal,
     get_current_sse_token,
+    require_api_permission,
     validate_sse_token,
 )
 from app.db.repositories import DownloadRepository
@@ -310,7 +311,7 @@ async def stats_events(
 @router.post("/token", response_model=SSETokenResponse)
 async def create_sse_token(
     request: CreateSSETokenRequest = Body(...),
-    principal: AuthPrincipal = Depends(get_current_principal),
+    principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.READ)),
     db_session: AsyncSession = Depends(get_database_session),
 ):
     """

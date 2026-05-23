@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
-from app.core.security import get_current_api_key
+from app.core.security import ApiKeyPermission, AuthPrincipal, require_api_permission
 from app.db.repositories import DownloadFileRepository, DownloadRepository
 from app.db.session import get_database_session
 from app.models.pydantic.file import (
@@ -35,7 +35,9 @@ def get_repositories_from_session(db_session: AsyncSession):
 @router.get("/download")
 async def download_file(
     path: str = Query(..., description="File path to download"),
-    api_key: str = Depends(get_current_api_key),
+    principal: AuthPrincipal = Depends(
+        require_api_permission(ApiKeyPermission.DOWNLOAD)
+    ),
 ) -> FileResponse:
     """Download a specific file."""
     try:
@@ -77,7 +79,7 @@ async def list_downloaded_files(
     ),
     offset: int = Query(0, ge=0, description="Number of items to skip"),
     db_session: AsyncSession = Depends(get_database_session),
-    api_key: str = Depends(get_current_api_key),
+    principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.READ)),
 ) -> FileList:
     """List all files that have been downloaded and are currently stored."""
     try:
@@ -142,7 +144,7 @@ async def list_downloaded_files(
 async def delete_downloaded_files(
     request: DeleteFilesRequest,
     db_session: AsyncSession = Depends(get_database_session),
-    api_key: str = Depends(get_current_api_key),
+    principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.WRITE)),
 ) -> DeleteFilesResponse:
     """Delete one or more downloaded files from storage."""
     try:

@@ -24,7 +24,10 @@ class TestApiKeyIntegration:
         create_response = client.post(
             "/api/v1/auth/api-keys",
             headers={"Authorization": f"Bearer {auth_token}"},
-            json={"name": "Integration Test Key", "permissions": ["read", "download"]},
+            json={
+                "name": "Integration Test Key",
+                "permissions": ["read", "write", "download"],
+            },
         )
         assert create_response.status_code == 200
 
@@ -87,7 +90,7 @@ class TestApiKeyIntegration:
         create_response = client.post(
             "/api/v1/auth/api-keys",
             headers={"Authorization": f"Bearer {auth_token}"},
-            json={"name": "Auth Test Key", "permissions": ["read"]},
+            json={"name": "Auth Test Key", "permissions": ["write"]},
         )
         api_key = create_response.json()["key"]
 
