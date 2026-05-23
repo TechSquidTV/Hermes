@@ -178,7 +178,7 @@ describe('UrlInput Component', () => {
     it('displays mobile hint on small screens', () => {
       render(<UrlInput />, { wrapper: createWrapper() })
 
-      expect(screen.getByText(/💡 tap the input above/i)).toBeInTheDocument()
+      expect(screen.getByText(/tap the input above/i)).toBeInTheDocument()
     })
   })
 

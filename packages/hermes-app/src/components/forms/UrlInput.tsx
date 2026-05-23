@@ -3,7 +3,6 @@ import { useDebounce } from '@/hooks/useDebounce'
 import { useQuery } from '@tanstack/react-query'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { Loader2, Upload, Link } from 'lucide-react'
 import { apiClient } from '@/services/api/client'
 import { VideoPreview } from '@/components/download/VideoPreview'
@@ -101,61 +100,59 @@ export function UrlInput() {
   return (
     <div className="space-y-4">
       {/* Enhanced input with drag and drop */}
-      <Card className={cn(
-        "transition-all duration-200 border-2 border-dashed",
+      <div className={cn(
+        "rounded-md border-2 border-dashed p-4 transition-all duration-200",
         isDragOver
           ? "border-primary bg-primary/5 scale-[1.02]"
           : "border-muted-foreground/25 hover:border-muted-foreground/50"
       )}>
-        <CardContent className="p-4">
-          <div className="space-y-3">
-            {/* Drag and drop area */}
-            <div
-              className="relative"
-              onDragEnter={handleDragEnter}
-              onDragLeave={handleDragLeave}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-            >
-              <Input
-                ref={inputRef}
-                placeholder="Paste video URL here or drag & drop..."
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                onPaste={handlePaste}
-                className="pr-12 text-base h-12"
-              />
-              <div className="absolute right-0 top-0 h-full flex items-center pr-3">
-                {isLoading ? (
-                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                ) : (
-                  <div className="flex items-center gap-1">
-                    <Upload className="h-4 w-4 text-muted-foreground" />
-                    <Link className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Mobile-friendly paste hint */}
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>Supports YouTube, Vimeo, and many other platforms</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-xs"
-                onClick={() => inputRef.current?.focus()}
-              >
-                Focus
-              </Button>
+        <div className="space-y-3">
+          {/* Drag and drop area */}
+          <div
+            className="relative"
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+          >
+            <Input
+              ref={inputRef}
+              placeholder="Paste video URL here or drag & drop..."
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              onPaste={handlePaste}
+              className="pr-12 text-base h-12"
+            />
+            <div className="absolute right-0 top-0 h-full flex items-center pr-3">
+              {isLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              ) : (
+                <div className="flex items-center gap-1">
+                  <Upload className="h-4 w-4 text-muted-foreground" />
+                  <Link className="h-4 w-4 text-muted-foreground" />
+                </div>
+              )}
             </div>
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Mobile-friendly paste hint */}
+          <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+            <span>Supports YouTube, Vimeo, and many other platforms</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs"
+              onClick={() => inputRef.current?.focus()}
+            >
+              Focus
+            </Button>
+          </div>
+        </div>
+      </div>
 
       {/* Instructions for mobile users */}
       <div className="block sm:hidden text-center text-xs text-muted-foreground">
-        💡 Tap the input above, then paste your video URL
+        Tap the input above, then paste your video URL
       </div>
 
       {isLoading && <VideoPreviewSkeleton />}
