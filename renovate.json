@@ -1,0 +1,47 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "timezone": "America/New_York",
+  "dependencyDashboard": true,
+  "schedule": ["before 6am on monday"],
+  "prHourlyLimit": 1,
+  "prConcurrentLimit": 2,
+  "minimumReleaseAge": "3 days",
+  "rangeStrategy": "update-lockfile",
+  "semanticCommits": "enabled",
+  "semanticCommitType": "deps",
+  "semanticCommitScope": "backend",
+  "prCreation": "not-pending",
+  "enabledManagers": ["pep621", "mise"],
+  "labels": ["dependencies", "automated"],
+  "reviewers": ["kyletryon"],
+  "pep621": {
+    "managerFilePatterns": ["/(^|/)packages/hermes-api/pyproject\\.toml$/"]
+  },
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"],
+    "labels": ["dependencies", "python", "backend", "hermes-api", "automated"]
+  },
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "vulnerabilityFixStrategy": "highest"
+  },
+  "packageRules": [
+    {
+      "description": "Let the Renovate app focus Python dependency updates on yt-dlp for extractor fixes.",
+      "matchManagers": ["pep621"],
+      "matchPackageNames": ["/.*/"],
+      "enabled": false
+    },
+    {
+      "description": "Keep yt-dlp and its uv lock entry current.",
+      "matchManagers": ["pep621"],
+      "matchPackageNames": ["yt-dlp"],
+      "enabled": true,
+      "groupName": "yt-dlp",
+      "addLabels": ["python", "backend", "hermes-api", "yt-dlp"],
+      "commitMessageTopic": "yt-dlp"
+    }
+  ]
+}
