@@ -71,15 +71,7 @@ export const themes: ThemeMetadata[] = [
   },
 ]
 
-export const defaultTheme = 'hermes'
-
-// Helper to get theme metadata by ID
-export function getTheme(id: string): ThemeMetadata | undefined {
-  return themes.find((theme) => theme.id === id)
-}
-
 // Helper to validate if a theme exists
 export function isValidTheme(id: string): boolean {
   return themes.some((theme) => theme.id === id)
 }
-

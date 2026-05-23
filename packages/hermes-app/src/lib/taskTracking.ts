@@ -5,7 +5,7 @@ import { debug } from '@/lib/debug'
 const TASK_TRACKING_KEY = 'hermes_tracked_tasks' // Use localStorage
 const TASK_EVENT_KEY = 'hermes_task_event' // For cross-tab events
 
-export interface TaskEvent {
+interface TaskEvent {
   taskId: string
   action: 'added' | 'removed' | 'cleared'
   timestamp: number
