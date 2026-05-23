@@ -11,14 +11,6 @@ export interface CreateUserRequest {
   isAdmin?: boolean
 }
 
-export interface UpdateAdminStatusRequest {
-  isAdmin: boolean
-}
-
-export interface UpdateActiveStatusRequest {
-  isActive: boolean
-}
-
 class AdminService {
   private baseURL: string
 

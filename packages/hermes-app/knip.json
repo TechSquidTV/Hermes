@@ -1,0 +1,12 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreDependencies": ["openapi-typescript"],
+  "ignoreFiles": ["public/config.js", "src/themes/_template.css"],
+  "ignoreIssues": {
+    "src/components/animate-ui/components/**": ["exports", "types"],
+    "src/components/animate-ui/primitives/**": ["exports", "types"],
+    "src/components/ui/**": ["exports", "types"],
+    "src/types/api.generated.ts": ["types"],
+    "src/types/index.ts": ["types"]
+  }
+}

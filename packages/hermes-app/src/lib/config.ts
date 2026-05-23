@@ -38,18 +38,3 @@ export function getApiBaseUrl(): string {
 export function isDevelopment(): boolean {
   return import.meta.env.DEV
 }
-
-/**
- * Check if the app is running in production mode
- */
-export function isProduction(): boolean {
-  return import.meta.env.PROD
-}
-
-/**
- * Get the current environment name
- */
-export function getEnvironment(): 'development' | 'production' {
-  return import.meta.env.PROD ? 'production' : 'development'
-}
-

@@ -2,7 +2,7 @@
 
 import { getApiBaseUrl } from '@/lib/config'
 
-export interface PublicConfig {
+interface PublicConfig {
   allowPublicSignup: boolean
 }
 

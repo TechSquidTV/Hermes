@@ -6,7 +6,7 @@ const isDownloadResult = (result: unknown): result is DownloadResult => {
   return typeof result === 'object' && result !== null && ('url' in result || 'title' in result || 'extractor' in result)
 }
 
-export type ViewMode = 'active' | 'history' | 'all'
+type ViewMode = 'active' | 'history' | 'all'
 
 export interface FilterState {
   statusFilter: string

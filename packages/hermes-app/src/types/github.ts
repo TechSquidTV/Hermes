@@ -1,6 +1,6 @@
 // GitHub API Types for version checking
 
-export interface GitHubRelease {
+interface GitHubRelease {
   id: number
   tag_name: string
   target_commitish: string
@@ -39,7 +39,7 @@ export interface GitHubRelease {
   assets: GitHubAsset[]
 }
 
-export interface GitHubAsset {
+interface GitHubAsset {
   id: number
   name: string
   size: number
