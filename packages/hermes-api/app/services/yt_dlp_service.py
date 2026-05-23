@@ -22,6 +22,7 @@ class YTDLPService:
             "quiet": True,
             "no_warnings": True,
             "extract_flat": False,
+            "js_runtimes": {"node": {}},
         }
 
     async def extract_info(
