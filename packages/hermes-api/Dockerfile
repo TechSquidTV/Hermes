@@ -27,6 +27,7 @@ FROM python:3.13-slim
 # Override at build time: docker build --build-arg USER_UID=$(id -u) --build-arg USER_GID=$(id -g)
 ARG USER_UID=1000
 ARG USER_GID=1000
+ARG HERMES_BUILD_VERSION
 
 # Install only runtime dependencies
 RUN apt-get update && apt-get install -y \
@@ -68,6 +69,7 @@ USER hermes
 
 # Set environment variables for security and performance
 ENV PATH="/app/.venv/bin:$PATH" \
+    HERMES_BUILD_VERSION="${HERMES_BUILD_VERSION}" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 

@@ -20,6 +20,8 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
 # Build the application - optimized layer caching
 FROM base AS builder
 WORKDIR /app
+ARG VITE_HERMES_BUILD_VERSION
+ENV VITE_HERMES_BUILD_VERSION=${VITE_HERMES_BUILD_VERSION}
 
 # Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules

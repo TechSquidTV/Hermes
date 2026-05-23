@@ -1,5 +1,6 @@
 import importlib.metadata
 import json
+import os
 import re
 from typing import Any, Optional
 
@@ -53,7 +54,11 @@ class Settings(BaseSettings):
 
     @property
     def api_version(self) -> str:
-        """Get version from pyproject.toml or package metadata."""
+        """Get version from CI build metadata, package metadata, or pyproject.toml."""
+        build_version = os.getenv("HERMES_BUILD_VERSION", "").strip()
+        if build_version:
+            return build_version
+
         # Try to get from installed package metadata first
         try:
             return importlib.metadata.version("hermes-api")

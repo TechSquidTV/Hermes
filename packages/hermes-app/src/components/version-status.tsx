@@ -3,6 +3,7 @@ import { RefreshCw, AlertTriangle, CheckCircle, HelpCircle } from 'lucide-react'
 
 import { useSidebar } from '@/components/animate-ui/components/radix/sidebar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { formatVersion, resolveCurrentAppVersion } from '@/lib/version'
 import { apiClient } from '@/services/api/client'
 import { githubService } from '@/services/github'
 import type { VersionStatus } from '@/types/github'
@@ -11,7 +12,7 @@ import type { VersionStatus } from '@/types/github'
 import packageJson from '../../package.json'
 
 // Current versions
-const CURRENT_APP_VERSION = packageJson.version
+const CURRENT_APP_VERSION = resolveCurrentAppVersion(packageJson.version)
 
 interface VersionStatusProps {
   className?: string
@@ -105,11 +106,6 @@ export function VersionStatus({ className }: VersionStatusProps) {
       case 'unknown':
         return <HelpCircle className="size-4 text-gray-500" />
     }
-  }
-
-  const formatVersion = (version: string | null) => {
-    if (!version) return 'Unknown'
-    return version.startsWith('v') ? version : `v${version}`
   }
 
   const isPreRelease = !versionInfo?.app.latest && !versionInfo?.api.latest
