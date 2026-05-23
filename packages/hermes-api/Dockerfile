@@ -18,7 +18,9 @@ COPY pyproject.toml uv.lock ./
 # Install dependencies (fixed: added missing --no-dev flag)
 RUN uv sync --frozen --no-install-project --no-dev
 
-# Production stage - use distroless for smaller size
+FROM node:24-slim AS node-runtime
+
+# Production stage - use Python slim base image
 FROM python:3.13-slim
 
 # Build args for configurable UID/GID (defaults to 1000)
@@ -36,6 +38,7 @@ RUN apt-get update && apt-get install -y \
 # Copy uv and virtual environment from builder
 COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
 COPY --from=builder /app/.venv /app/.venv
+COPY --from=node-runtime /usr/local/bin/node /usr/local/bin/node
 
 # Set work directory
 WORKDIR /app

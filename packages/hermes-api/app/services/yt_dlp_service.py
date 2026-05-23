@@ -4,6 +4,7 @@ YoutubeDL service wrapper for async operations.
 
 import asyncio
 import os
+import shutil
 from typing import Any, Callable, Dict, Optional
 
 import yt_dlp
@@ -23,6 +24,8 @@ class YTDLPService:
             "no_warnings": True,
             "extract_flat": False,
         }
+        if shutil.which("node"):
+            self._default_opts["js_runtimes"] = {"node": {}}
 
     async def extract_info(
         self, url: str, download: bool = False, **kwargs

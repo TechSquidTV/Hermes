@@ -4,7 +4,7 @@ A production-ready video downloading API built with FastAPI, yt-dlp, and modern 
 
 ## ✨ Features
 
-- 🎥 **Video Downloads**: Download videos from YouTube and 1000+ other sites using yt-dlp
+- 🎥 **Video Downloads**: Download videos from YouTube and 1000+ other sites using yt-dlp, with bundled EJS support and Node-powered JavaScript challenge solving in Docker
 - 📦 **Batch Processing**: Queue multiple downloads for background processing
 - ⚡ **Async Architecture**: Built on FastAPI with async/await throughout
 - 🔄 **Background Tasks**: Celery-powered background job processing
@@ -26,6 +26,10 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Install dependencies
 uv sync
+
+# Optional: install Node.js 20+ for yt-dlp EJS challenge solving.
+# The Docker image already includes Node 24.
+node --version
 
 # Start Redis
 redis-server &
