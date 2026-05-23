@@ -12,6 +12,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { useDownloadFile } from '@/hooks/useDownloadActions'
 import { Blur } from '@/components/animate-ui/primitives/effects/blur'
 import { taskTracker } from '@/lib/taskTracking'
+import { apiClient } from '@/services/api/client'
+import { toast } from 'sonner'
 import type { DownloadResult } from '@/types'
 
 // Type guard to check if result has the expected download result properties
@@ -32,13 +34,27 @@ function TrackedTask({ downloadId, onRemove, isDismissing }: TrackedTaskProps) {
 
   const downloadFile = useDownloadFile()
 
-  const handleDownloadFile = (filePath: string | null | undefined, title: string, downloadId: string) => {
-    if (!filePath) {
+  const handleDownloadFile = async (filePath: string | null | undefined, title: string, downloadId: string) => {
+    let resolvedFilePath = filePath
+
+    if (!resolvedFilePath) {
+      try {
+        const status = await apiClient.getDownloadStatus(downloadId)
+        resolvedFilePath = status.currentFilename
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error'
+        toast.error(`Failed to get download file: ${message}`)
+        return
+      }
+    }
+
+    if (!resolvedFilePath) {
+      toast.error('File path is not available for this download yet.')
       return
     }
 
     downloadFile.mutate(
-      { filePath, title },
+      { filePath: resolvedFilePath, title },
       {
         onSuccess: () => {
           // Auto-dismiss task after successful download

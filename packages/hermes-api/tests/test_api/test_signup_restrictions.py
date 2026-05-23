@@ -225,10 +225,10 @@ class TestPublicConfigEndpoint:
         assert data["allowPublicSignup"] is True
 
     @pytest.mark.asyncio
-    async def test_public_config_with_signup_disabled(
-        self, client: AsyncClient, monkeypatch
+    async def test_public_config_with_signup_disabled_and_existing_user(
+        self, client: AsyncClient, monkeypatch, test_user
     ):
-        """Test public config endpoint when signup is disabled."""
+        """Test public config endpoint when signup is disabled and users exist."""
         # Clear any auth overrides for this test
         from app.main import app
 
@@ -243,6 +243,25 @@ class TestPublicConfigEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert data["allowPublicSignup"] is False
+
+    @pytest.mark.asyncio
+    async def test_public_config_allows_first_user_signup(
+        self, client: AsyncClient, monkeypatch
+    ):
+        """Test public config allows signup when no users exist."""
+        # Clear any auth overrides for this test
+        from app.main import app
+
+        app.dependency_overrides.clear()
+
+        from app.core import config
+
+        monkeypatch.setattr(config.settings, "allow_public_signup", False)
+
+        response = await client.get("/api/v1/config/public")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["allowPublicSignup"] is True
 
     @pytest.mark.asyncio
     async def test_public_config_no_auth_required(self, client: AsyncClient):

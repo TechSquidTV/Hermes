@@ -7,6 +7,49 @@ import type { components } from '@/types/api.generated';
 
 type DownloadStatus = components["schemas"]["DownloadStatus"];
 
+type RawDownloadStatus = Partial<DownloadStatus> & {
+  download_id?: string;
+  current_filename?: string | null;
+  output_path?: string | null;
+  error_message?: string | null;
+  created_at?: string;
+  result?: (DownloadStatus['result'] & {
+    file_size?: number | null;
+    thumbnail_url?: string | null;
+  }) | null;
+};
+
+function normalizeDownloadStatus(raw: RawDownloadStatus): DownloadStatus | null {
+  const downloadId = raw.downloadId ?? raw.download_id;
+
+  if (!downloadId || !raw.status) {
+    return null;
+  }
+
+  const result = raw.result
+    ? {
+        url: raw.result.url,
+        title: raw.result.title,
+        fileSize: raw.result.fileSize ?? raw.result.file_size,
+        duration: raw.result.duration,
+        thumbnailUrl: raw.result.thumbnailUrl ?? raw.result.thumbnail_url,
+        extractor: raw.result.extractor,
+        description: raw.result.description,
+      }
+    : raw.result;
+
+  return {
+    downloadId,
+    status: raw.status,
+    progress: raw.progress,
+    currentFilename: raw.currentFilename ?? raw.current_filename ?? raw.output_path ?? null,
+    message: raw.message ?? `Download ${raw.status}`,
+    error: raw.error ?? raw.error_message ?? null,
+    result,
+    createdAt: raw.createdAt ?? raw.created_at ?? new Date().toISOString(),
+  };
+}
+
 /**
  * Hook for real-time download progress updates via SSE
  *
@@ -59,23 +102,28 @@ export function useDownloadProgressSSE(downloadId: string) {
     []
   );
 
-  const { data, isConnected, error, isReconnecting, reconnectAttempts } = useSSE<DownloadStatus>(
+  const { data, isConnected, error, isReconnecting, reconnectAttempts } = useSSE<RawDownloadStatus>(
     sseUrl,
     sseOptions
   );
 
+  const normalizedData = useMemo(
+    () => data ? normalizeDownloadStatus(data as RawDownloadStatus) : null,
+    [data]
+  );
+
   // Update React Query cache when SSE data arrives
   useEffect(() => {
-    if (data && data.downloadId === downloadId) {
+    if (normalizedData && normalizedData.downloadId === downloadId) {
       queryClient.setQueryData(
         ['download', 'progress', downloadId],
-        data
+        normalizedData
       );
     }
-  }, [data, downloadId, queryClient]);
+  }, [normalizedData, downloadId, queryClient]);
 
   return {
-    data,
+    data: normalizedData,
     isConnected,
     error: tokenError || error, // Return token error if token fetch failed
     isReconnecting,
