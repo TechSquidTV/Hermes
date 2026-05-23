@@ -1,6 +1,7 @@
 // GitHub API Service for version checking
 
 import type { VersionInfo } from '@/types/github'
+import { isComparableVersion } from '@/lib/version'
 
 // GitHub Tag API response types
 interface GitHubTagRef {
@@ -103,7 +104,7 @@ class GitHubService {
   }
 
   compareVersions(currentVersion: string, latestVersion: string | null): 'up-to-date' | 'outdated' | 'unknown' {
-    if (!latestVersion) {
+    if (!latestVersion || !isComparableVersion(currentVersion) || !isComparableVersion(latestVersion)) {
       return 'unknown'
     }
 

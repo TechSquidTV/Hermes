@@ -80,6 +80,8 @@ jobs:
           push: true
           tags: ${{ steps.meta-app.outputs.tags }}
           labels: ${{ steps.meta-app.outputs.labels }}
+          build-args: |
+            VITE_HERMES_BUILD_VERSION=develop-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
@@ -101,6 +103,8 @@ jobs:
           push: true
           tags: ${{ steps.meta-api.outputs.tags }}
           labels: ${{ steps.meta-api.outputs.labels }}
+          build-args: |
+            HERMES_BUILD_VERSION=develop-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
