@@ -303,6 +303,7 @@ class ApiKeyRepository(BaseRepository):
         key_hash: str,
         permissions: List[str] = None,
         rate_limit: int = 60,
+        expires_at: datetime = None,
     ) -> ApiKey:
         """Create a new API key."""
         key_id = str(uuid.uuid4())
@@ -316,6 +317,7 @@ class ApiKeyRepository(BaseRepository):
             rate_limit=rate_limit,
             is_active=True,
             created_at=datetime.now(timezone.utc),
+            expires_at=expires_at,
         )
 
         self.session.add(api_key)

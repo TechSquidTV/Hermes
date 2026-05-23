@@ -6,6 +6,7 @@ import hashlib
 import secrets
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from enum import StrEnum
 from typing import List, Literal, Optional
 
 import bcrypt
@@ -30,6 +31,15 @@ security = HTTPBearer()
 
 # Optional HTTP Bearer for SSE endpoints (doesn't raise error if missing)
 optional_security = HTTPBearer(auto_error=False)
+
+
+class ApiKeyPermission(StrEnum):
+    """Supported permissions for database-backed API keys."""
+
+    READ = "read"
+    WRITE = "write"
+    DOWNLOAD = "download"
+    ADMIN = "admin"
 
 
 @dataclass(frozen=True)
@@ -422,6 +432,29 @@ class PermissionChecker:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Permission denied: {required_permission} required",
             )
+
+
+def require_api_permission(required_permission: ApiKeyPermission | str):
+    """FastAPI dependency factory that enforces permissions for API key callers."""
+
+    required_permission_value = (
+        required_permission.value
+        if isinstance(required_permission, ApiKeyPermission)
+        else required_permission
+    )
+
+    async def dependency(
+        principal: AuthPrincipal = Depends(get_current_principal),
+    ) -> AuthPrincipal:
+        if principal.kind == "user":
+            return principal
+
+        PermissionChecker.require_permission(
+            principal.permissions, required_permission_value
+        )
+        return principal
+
+    return dependency
 
 
 # =============================================================================

@@ -2,6 +2,8 @@
 Tests for authentication endpoints and token validation.
 """
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from httpx import AsyncClient
 
@@ -386,6 +388,46 @@ class TestApiKeyManagement:
         assert len(data["key"]) > 32  # Should be a long API key
 
     @pytest.mark.asyncio
+    async def test_create_api_key_rejects_unknown_permission(
+        self, client: AsyncClient, test_user, auth_token
+    ):
+        """Test API key creation rejects unsupported permissions."""
+        from app.main import app
+
+        app.dependency_overrides.clear()
+
+        response = await client.post(
+            "/api/v1/auth/api-keys",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={"name": "Bad Permission Key", "permissions": ["read", "export"]},
+        )
+
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_create_api_key_persists_expiration(
+        self, client: AsyncClient, test_user, auth_token
+    ):
+        """Test API key creation stores expiresAt."""
+        from app.main import app
+
+        app.dependency_overrides.clear()
+
+        expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+        response = await client.post(
+            "/api/v1/auth/api-keys",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={
+                "name": "Expiring Key",
+                "permissions": ["read"],
+                "expiresAt": expires_at.isoformat(),
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.json()["expiresAt"] is not None
+
+    @pytest.mark.asyncio
     async def test_create_api_key_no_auth(self, client: AsyncClient):
         """Test API key creation requires authentication."""
         # Clear any auth overrides for this test
@@ -569,16 +611,74 @@ class TestApiKeyAuthentication:
         )
         api_key = create_response.json()["key"]
 
-        # Test API key validation in download endpoint
+        # A read-only API key authenticates successfully but cannot write.
         response = await client.post(
-            "/api/v1/download",
+            "/api/v1/download/",
             headers={"Authorization": f"Bearer {api_key}"},
             json={"url": "https://youtube.com/watch?v=test"},
         )
 
-        # The endpoint should accept the API key (might fail for other reasons)
-        # But it should NOT fail with 401 (unauthorized)
-        assert response.status_code != 401
+        assert response.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_database_api_key_permissions_by_route(
+        self, client: AsyncClient, test_user, auth_token, tmp_path
+    ):
+        """Test read, write, and download permissions are distinct."""
+        from app.main import app
+
+        app.dependency_overrides.clear()
+
+        read_response = await client.post(
+            "/api/v1/auth/api-keys",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={"name": "Read Key", "permissions": ["read"]},
+        )
+        write_response = await client.post(
+            "/api/v1/auth/api-keys",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={"name": "Write Key", "permissions": ["write"]},
+        )
+        download_response = await client.post(
+            "/api/v1/auth/api-keys",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            json={"name": "Download Key", "permissions": ["download"]},
+        )
+
+        read_key = read_response.json()["key"]
+        write_key = write_response.json()["key"]
+        download_key = download_response.json()["key"]
+        file_path = tmp_path / "sample.txt"
+        file_path.write_text("sample")
+
+        read_allowed = await client.get(
+            "/api/v1/queue/", headers={"Authorization": f"Bearer {read_key}"}
+        )
+        read_denied_write = await client.post(
+            "/api/v1/download/",
+            headers={"Authorization": f"Bearer {read_key}"},
+            json={"url": "https://youtube.com/watch?v=test"},
+        )
+        write_denied_download = await client.get(
+            "/api/v1/files/download",
+            headers={"Authorization": f"Bearer {write_key}"},
+            params={"path": str(file_path)},
+        )
+        download_denied_read = await client.get(
+            "/api/v1/queue/",
+            headers={"Authorization": f"Bearer {download_key}"},
+        )
+        download_allowed = await client.get(
+            "/api/v1/files/download",
+            headers={"Authorization": f"Bearer {download_key}"},
+            params={"path": str(file_path)},
+        )
+
+        assert read_allowed.status_code == 200
+        assert read_denied_write.status_code == 403
+        assert write_denied_download.status_code == 403
+        assert download_denied_read.status_code == 403
+        assert download_allowed.status_code == 200
 
 
 class TestApiKeySecurity:

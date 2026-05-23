@@ -6,7 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
-from app.core.security import get_current_api_key
+from app.core.security import ApiKeyPermission, AuthPrincipal, require_api_permission
 from app.db.repositories import DownloadRepository
 from app.db.session import get_database_session
 from app.models.pydantic.download import (
@@ -37,7 +37,7 @@ def get_repositories_from_session(db_session: AsyncSession):
 async def start_download(
     download_request: DownloadRequest,  # Renamed from 'request' to avoid conflicts
     db_session: AsyncSession = Depends(get_database_session),
-    api_key: str = Depends(get_current_api_key),
+    principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.WRITE)),
 ) -> DownloadResponse:
     """
     Start a new video download.
@@ -130,7 +130,7 @@ async def start_download(
 async def get_download_status(
     download_id: str,
     db_session: AsyncSession = Depends(get_database_session),
-    api_key: str = Depends(get_current_api_key),
+    principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.READ)),
 ) -> DownloadStatus:
     """Get the status of a download."""
     try:
@@ -217,7 +217,7 @@ async def get_download_status(
 async def cancel_download(
     download_id: str,
     db_session: AsyncSession = Depends(get_database_session),
-    api_key: str = Depends(get_current_api_key),
+    principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.WRITE)),
 ) -> CancelResponse:
     """Cancel a running download."""
     try:
@@ -261,7 +261,7 @@ async def start_batch_download(
     batch_request: BatchDownloadRequest,  # Renamed from 'request' to avoid conflicts
     background_tasks: BackgroundTasks,
     db_session: AsyncSession = Depends(get_database_session),
-    api_key: str = Depends(get_current_api_key),
+    principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.WRITE)),
 ) -> BatchDownloadResponse:
     """
     Start a batch download of multiple videos.

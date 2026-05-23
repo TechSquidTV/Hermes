@@ -11,7 +11,7 @@ from sqlalchemy import Integer, and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
-from app.core.security import get_current_api_key
+from app.core.security import ApiKeyPermission, AuthPrincipal, require_api_permission
 from app.db.models import DownloadHistory as DownloadHistoryModel
 from app.db.session import get_database_session
 from app.models.pydantic.history import DailyStats, TimelineSummary
@@ -30,7 +30,7 @@ async def get_timeline_stats(
     extractor: Optional[str] = Query(None, description="Filter by extractor"),
     status: Optional[str] = Query(None, description="Filter by status"),
     db_session: AsyncSession = Depends(get_database_session),
-    api_key: str = Depends(get_current_api_key),
+    principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.READ)),
 ):
     """
     Get timeline data for charts and visualizations.
@@ -134,7 +134,7 @@ async def get_timeline_summary(
     ),
     end_date: Optional[date_type] = Query(None, description="End date (YYYY-MM-DD)"),
     db_session: AsyncSession = Depends(get_database_session),
-    api_key: str = Depends(get_current_api_key),
+    principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.READ)),
 ):
     """
     Get summary statistics for the timeline period.
@@ -151,7 +151,7 @@ async def get_timeline_summary(
             extractor=None,
             status=None,
             db_session=db_session,
-            api_key=api_key,
+            principal=principal,
         )
 
         if not daily_stats:

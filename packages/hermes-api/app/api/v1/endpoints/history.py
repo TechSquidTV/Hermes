@@ -13,7 +13,7 @@ from sqlalchemy import Integer, and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
-from app.core.security import get_current_api_key
+from app.core.security import ApiKeyPermission, AuthPrincipal, require_api_permission
 from app.db.models import DownloadHistory as DownloadHistoryModel
 from app.db.session import get_database_session
 from app.models.pydantic.history import (
@@ -113,7 +113,7 @@ async def get_download_history(
     ),
     offset: int = Query(0, ge=0, description="Number of items to skip"),
     db_session: AsyncSession = Depends(get_database_session),
-    api_key: str = Depends(get_current_api_key),
+    principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.READ)),
 ):
     """
     Get download history with statistics.
