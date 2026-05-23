@@ -328,7 +328,57 @@ describe('useDownloadProgressSSE', () => {
       const { result } = renderHook(() => useDownloadProgressSSE(mockDownloadId), { wrapper: createWrapper() })
 
       await waitFor(() => {
-        expect(result.current.data).toEqual(mockDownloadStatus)
+        expect(result.current.data).toEqual({
+          downloadId: mockDownloadId,
+          status: 'downloading',
+          progress: mockDownloadStatus.progress,
+          result: null,
+          currentFilename: null,
+          message: '',
+          error: null,
+          createdAt: expect.any(String),
+        })
+      })
+    })
+
+    it('maps completed SSE output path to current filename', async () => {
+      const mockCreateSSEToken = vi.fn().mockResolvedValue({
+        token: mockSSEToken,
+        expires_at: '2025-12-31T23:59:59Z',
+        scope: `download:${mockDownloadId}`,
+        permissions: ['read'],
+        ttl: 600,
+      })
+
+      vi.spyOn(apiClientModule, 'apiClient', 'get').mockReturnValue({
+        createSSEToken: mockCreateSSEToken,
+      } as any)
+
+      vi.spyOn(useSSEModule, 'useSSE').mockReturnValue({
+        data: {
+          download_id: mockDownloadId,
+          status: 'completed',
+          output_path: './downloads/example.mp4',
+          result: {
+            title: 'Example',
+            file_size: 1024,
+            thumbnail_url: 'https://example.com/thumb.jpg',
+          },
+        },
+        isConnected: true,
+        error: null,
+        isReconnecting: false,
+        reconnectAttempts: 0,
+        close: vi.fn(),
+        reconnect: vi.fn(),
+      })
+
+      const { result } = renderHook(() => useDownloadProgressSSE(mockDownloadId), { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(result.current.data?.currentFilename).toBe('./downloads/example.mp4')
+        expect(result.current.data?.result?.fileSize).toBe(1024)
+        expect(result.current.data?.result?.thumbnailUrl).toBe('https://example.com/thumb.jpg')
       })
     })
 
