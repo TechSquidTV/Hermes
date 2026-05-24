@@ -1,50 +1,21 @@
-# Hermes Production Stack with Caddy Reverse Proxy
+# Hermes Production Stack
 # This is the default deployment configuration for Hermes
 #
 # Quick Start:
 #   1. Copy .env.example to .env and configure your settings
-#   2. Optionally customize Caddyfile for your domain
-#   3. Run: docker compose up -d
-#   4. Access at http://localhost:3000
+#   2. Run: docker compose up -d
+#   3. Access at http://localhost:3000
 
 services:
-  # Caddy reverse proxy - handles routing and SSL
-  proxy:
-    image: caddy:2.11-alpine
-    container_name: hermes-proxy
-    restart: unless-stopped
-    ports:
-      - "${HERMES_PORT:-3000}:80"
-      - "${HERMES_HTTPS_PORT:-3443}:443"
-    volumes:
-      # User-editable configuration
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      # Caddy data persistence for certificates
-      - caddy_data:/data
-      - caddy_config:/config
-      # Mount static files from app container
-      - app_dist:/app:ro
-    networks:
-      - hermes-network
-    depends_on:
-      app:
-        condition: service_started
-      api:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 5s
-
-  # Frontend - nginx serving static files
+  # Frontend - nginx serving static files and proxying /api to the backend
   app:
     build:
       context: .
       dockerfile: packages/hermes-app/Dockerfile
     container_name: hermes-app
     restart: unless-stopped
+    ports:
+      - "${HERMES_PORT:-3000}:80"
     environment:
       # Optional: Configure API base URL at runtime
       # Examples:
@@ -52,11 +23,11 @@ services:
       #   - Separate subdomain: https://api.hermes.example.com/api/v1
       #   - Different domain: https://hermes-api.mydomain.com/api/v1
       - VITE_API_BASE_URL=${VITE_API_BASE_URL:-/api/v1}
-    volumes:
-      # Share built files with proxy via named volume
-      - app_dist:/usr/share/nginx/html
     networks:
       - hermes-network
+    depends_on:
+      api:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
       interval: 30s
@@ -76,8 +47,6 @@ services:
       #   USER_GID: ${USER_GID:-1000}
     container_name: hermes-api
     restart: unless-stopped
-    ports:
-      - "8000:8000"
     env_file:
       - .env
     environment:
@@ -160,7 +129,4 @@ networks:
     driver: bridge
 
 volumes:
-  app_dist:          # Shared volume for frontend static files
-  caddy_data:        # Caddy data persistence (certificates, etc.)
-  caddy_config:      # Caddy configuration cache
   redis_data:        # Redis data persistence

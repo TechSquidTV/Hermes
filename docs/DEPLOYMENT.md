@@ -80,12 +80,10 @@ The application includes optimized Dockerfiles for both services:
 
 ```bash
 # Build API
-cd packages/hermes-api
-docker build -f Dockerfile -t hermes-api:latest .
+docker build -f packages/hermes-api/Dockerfile -t hermes-api:latest packages/hermes-api
 
 # Build Frontend
-cd packages/hermes-app
-docker build -f Dockerfile -t hermes-app:latest .
+docker build -f packages/hermes-app/Dockerfile -t hermes-app:latest .
 ```
 
 #### Running Production Containers
@@ -106,9 +104,11 @@ docker run -d \
 docker run -d \
   --name hermes-app \
   -p 3000:80 \
-  -e VITE_API_BASE_URL=/api/v1 \
+  -e VITE_API_BASE_URL=http://localhost:8000/api/v1 \
   hermes-app:latest
 ```
+
+When using Docker Compose, leave `VITE_API_BASE_URL=/api/v1`; the frontend nginx container proxies `/api/*` to the internal API service. When running containers manually as separate host ports, use the full browser-reachable API URL as shown above.
 
 ---
 
