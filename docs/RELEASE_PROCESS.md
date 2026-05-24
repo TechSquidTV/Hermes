@@ -219,7 +219,7 @@ echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
 ```bash
 # Pull and test the released image
 docker pull ghcr.io/<your-org>/hermes-app:1.0.0
-docker run -p 3000:3000 ghcr.io/<your-org>/hermes-app:1.0.0
+docker run -p 3000:80 ghcr.io/<your-org>/hermes-app:1.0.0
 
 # Test the API
 docker pull ghcr.io/<your-org>/hermes-api:1.0.0
@@ -408,4 +408,3 @@ If you have questions about the release process:
 ---
 
 **Happy Releasing! 🎉**
-

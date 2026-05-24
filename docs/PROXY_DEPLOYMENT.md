@@ -21,7 +21,7 @@ This comprehensive guide covers deploying Hermes in various configurations, incl
 ## Overview
 
 Hermes provides a flexible deployment architecture that supports:
-- **Default**: Single domain with included Caddy reverse proxy
+- **Default**: Single domain served by the `hermes-app` nginx container
 - **Separate Subdomains**: App and API on different domains (e.g., `app.example.com` and `api.example.com`)
 - **Custom Integration**: Easy integration with existing reverse proxies (Traefik, nginx, Apache, etc.)
 
@@ -30,23 +30,23 @@ Hermes provides a flexible deployment architecture that supports:
 ## Architecture
 
 ```
-┌─────────────────┐
-│  Reverse Proxy  │ ← Your choice (Caddy, Traefik, nginx, etc.)
-└────────┬────────┘
-         │
-    ┌────┴─────────────────┬──────────────┐
-    │                      │              │
-┌───▼────┐          ┌──────▼─────┐   ┌───▼─────┐
-│  App   │          │    API     │   │  Redis  │
-│(nginx) │          │ (FastAPI)  │   │         │
-└────────┘          └────────────┘   └─────────┘
+┌──────────────┐
+│     App      │ ← Exposed web entrypoint (nginx)
+│ serves UI +  │
+│ proxies /api │
+└──────┬───────┘
+       │
+┌──────▼─────┐   ┌─────────┐
+│    API     │   │  Redis  │
+│ (FastAPI)  │   │         │
+└────────────┘   └─────────┘
 ```
 
 **Key Components:**
-- **App Container**: nginx serving static files with runtime configuration
+- **App Container**: nginx serving static files with runtime configuration and same-origin `/api` proxying
 - **API Container**: FastAPI backend with SSE support
 - **Redis**: Caching and task queue
-- **Reverse Proxy**: Routes traffic (Caddy included by default)
+- **Reverse Proxy**: Optional external TLS/domain layer in front of the app container
 
 ---
 
@@ -59,7 +59,7 @@ The simplest setup - everything served from one domain (e.g., `hermes.example.co
 #### How It Works
 - Frontend: `https://hermes.example.com/`
 - API: `https://hermes.example.com/api/v1/`
-- Reverse proxy handles routing
+- The app container serves the UI and proxies `/api/*` to the API container
 
 #### Quick Start
 
@@ -75,15 +75,11 @@ docker compose up -d
 ```yaml
 # docker-compose.yml (default)
 services:
-  proxy:
-    image: caddy:2-alpine
+  app:
+    image: ghcr.io/techsquidtv/hermes-app:latest
     ports:
       - "3000:80"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - app_dist:/app:ro
-    # Routes /api/* to api:8000
-    # Routes /* to static files
+    # Serves static UI and proxies /api/* to api:8000
 ```
 
 **Environment Variables:**
@@ -95,30 +91,12 @@ HERMES_ALLOWED_ORIGINS=http://localhost:3000,https://hermes.example.com
 
 #### Customizing for Production
 
-Edit `Caddyfile`:
+Put your reverse proxy or load balancer in front of the app container and forward traffic to `app:80`. The app container keeps `/api/*` on the same origin.
 
 ```caddy
 hermes.example.com {
     tls admin@example.com
-
-    # SSE Events - MUST come before general API handler
-    handle /api/v1/events/* {
-        reverse_proxy api:8000 {
-            flush_interval -1  # Critical for SSE
-        }
-    }
-
-    # API routes
-    handle /api/* {
-        reverse_proxy api:8000
-    }
-
-    # Frontend static files
-    handle {
-        root * /app
-        try_files {path} /index.html
-        file_server
-    }
+    reverse_proxy app:80
 }
 ```
 
@@ -165,7 +143,7 @@ This utility is used by all services (authentication, API client, SSE connection
 **Priority order:**
 1. Runtime config (`window.__RUNTIME_CONFIG__.API_BASE_URL`) - Set via Docker env
 2. Build-time env (`import.meta.env.VITE_API_BASE_URL`) - Development fallback
-3. Default (`/api/v1`) - Same-domain proxy fallback
+3. Default (`/api/v1`) - Same-domain app-container proxy fallback
 
 #### Configuration Steps
 
@@ -263,19 +241,16 @@ Access:
 
 Integrate Hermes with your existing infrastructure.
 
-#### Option A: Replace Caddy with Your Proxy
+#### Option A: Single Domain
 
-1. **Remove proxy service** from `docker-compose.yml`
-2. **Connect to your network**
-3. **Configure your proxy** (see examples below)
+1. Connect the app container to your proxy network.
+2. Point your proxy at `app:80`.
+3. Leave `VITE_API_BASE_URL=/api/v1` so the app container proxies API requests internally.
 
 ```yaml
-# docker-compose.yml - No included proxy
 services:
   app:
     image: ghcr.io/techsquidtv/hermes-app:latest
-    volumes:
-      - app_dist:/usr/share/nginx/html
     networks:
       - hermes-network
       - your-proxy-network
@@ -285,34 +260,13 @@ services:
     image: ghcr.io/techsquidtv/hermes-api:latest
     networks:
       - hermes-network
-      - your-proxy-network
-    # NO ports - accessed via your proxy
+    # Internal only - app proxies /api/* to this service
 
 networks:
   hermes-network:
     driver: bridge
   your-proxy-network:
     external: true
-```
-
-#### Option B: Keep Caddy, Proxy to Caddy
-
-Keep the default setup and point your main proxy to Caddy on port 3000.
-
-```yaml
-# Your main proxy config
-upstream hermes {
-    server hermes-proxy:80;
-}
-
-server {
-    listen 443 ssl;
-    server_name hermes.example.com;
-
-    location / {
-        proxy_pass http://hermes;
-    }
-}
 ```
 
 ---
@@ -328,34 +282,8 @@ hermes.example.com {
     # Automatic HTTPS
     tls admin@example.com
 
-    # SSE Events endpoint - MUST come first
-    handle /api/v1/events/* {
-        reverse_proxy api:8000 {
-            flush_interval -1  # Disable buffering for SSE
-        }
-    }
-
-    # API routes
-    handle /api/* {
-        reverse_proxy api:8000 {
-            header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-For {remote_host}
-            header_up X-Forwarded-Proto {scheme}
-        }
-    }
-
-    # Frontend static files
-    handle {
-        root * /app
-        try_files {path} /index.html
-        file_server
-
-        # Cache static assets
-        @static {
-            path *.js *.css *.png *.jpg *.svg *.woff *.woff2
-        }
-        header @static Cache-Control "public, max-age=31536000, immutable"
-    }
+    # The app container serves UI and proxies /api/* internally.
+    reverse_proxy app:80
 }
 ```
 
@@ -429,14 +357,9 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # Frontend static files
+    # Frontend app
     location / {
-        # Option 1: Proxy to app container
         proxy_pass http://app:80;
-
-        # Option 2: Serve directly from volume
-        # root /var/lib/docker/volumes/hermes_app_dist/_data;
-        # try_files $uri $uri/ /index.html;
     }
 }
 ```
@@ -584,7 +507,7 @@ services:
 
 1. **Add Proxy Host** in web UI
 2. **Domain**: `hermes.example.com`
-3. **Forward Hostname/IP**: `hermes-proxy` (or `app` container)
+3. **Forward Hostname/IP**: `app`
 4. **Forward Port**: `80`
 5. **Add SSL Certificate** (Let's Encrypt)
 
@@ -603,7 +526,7 @@ credentials-file: /path/to/credentials.json
 
 ingress:
   - hostname: hermes.example.com
-    service: http://hermes-proxy:80
+    service: http://app:80
   - service: http_status:404
 ```
 
@@ -637,12 +560,11 @@ ingress:
 | `HERMES_REDIS_URL` | Redis connection URL | `redis://redis:6379` | `redis://localhost:6379` | Yes |
 | `HERMES_DATABASE_URL` | Database connection URL | `sqlite+aiosqlite:///./data/hermes.db` | `sqlite+aiosqlite:///./data/hermes.db` | No |
 
-### Proxy Container
+### App Container
 
 | Variable | Description | Example | Default |
 |----------|-------------|---------|---------|
-| `HERMES_PORT` | HTTP port | `3000` | `3000` |
-| `HERMES_HTTPS_PORT` | HTTPS port | `3443` | `3443` |
+| `HERMES_PORT` | Host port mapped to the app container's port 80 | `3000` | `3000` |
 
 ---
 
@@ -656,7 +578,8 @@ ingress:
 
 **Causes:**
 1. `VITE_API_BASE_URL` not set correctly
-2. App trying to call app domain instead of API domain
+2. External reverse proxy is not forwarding `/api/*` to the app container in single-domain deployments
+3. Separate-domain deployment is still using the default `/api/v1` URL
 
 **Solution:**
 
@@ -668,17 +591,18 @@ ingress:
    Should show:
    ```javascript
    window.__RUNTIME_CONFIG__ = {
-     API_BASE_URL: "https://api.hermes.example.com/api/v1"
+     API_BASE_URL: "/api/v1"
    };
    ```
 
 2. Check browser console for actual API URL:
    ```
-   [ApiClient] Using API base URL: https://api.hermes.example.com/api/v1
+   [ApiClient] Using API base URL: /api/v1
    ```
 
-3. If showing `/api/v1` instead of full URL, environment variable is not set:
+3. For separate API domains, set a full API URL and restart the app:
    ```bash
+   VITE_API_BASE_URL=https://api.hermes.example.com/api/v1
    docker compose restart app
    ```
 
@@ -704,7 +628,7 @@ ingress:
 
 3. Verify CORS headers:
    ```bash
-   curl -I http://localhost:8000/api/v1/health/ -H "Origin: https://hermes.example.com"
+   curl -I http://localhost:3000/api/v1/health/ -H "Origin: https://hermes.example.com"
    # Should see: access-control-allow-origin: https://hermes.example.com
    ```
 
@@ -724,7 +648,7 @@ ingress:
 
 1. Test API from browser:
    ```
-   https://api.hermes.example.com/api/v1/health/
+   https://hermes.example.com/api/v1/health/
    ```
 
    Should return:
@@ -750,10 +674,10 @@ ingress:
 
 1. Verify SSE endpoint is accessible:
    ```bash
-   curl http://localhost:8000/api/v1/events/downloads/test-id
+   curl http://localhost:3000/api/v1/events/downloads/test-id
    ```
 
-2. For nginx, ensure proper configuration:
+2. The bundled app nginx already disables buffering for `/api/v1/events/`. If you add another nginx proxy in front, make sure it also does not buffer SSE:
    ```nginx
    location /api/v1/events/ {
        proxy_buffering off;
@@ -762,7 +686,7 @@ ingress:
    }
    ```
 
-3. For Caddy, ensure flush_interval is set:
+3. If you use Caddy in front, ensure `flush_interval` is set:
    ```caddy
    handle /api/v1/events/* {
        reverse_proxy api:8000 {
@@ -781,17 +705,12 @@ ingress:
 
 **Solution:**
 
-1. Verify volume mount:
-   ```bash
-   docker volume inspect hermes_app_dist
-   ```
-
-2. Check app container is running:
+1. Check app container is running:
    ```bash
    docker ps | grep hermes-app
    ```
 
-3. Test direct access to app:
+2. Test direct access to app:
    ```bash
    curl http://localhost:3000/
    ```
@@ -828,34 +747,18 @@ ingress:
 ```yaml
 # docker-compose.yml
 services:
-  proxy:
-    image: caddy:2-alpine
-    container_name: hermes-proxy
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-      - app_dist:/app:ro
-    networks:
-      - hermes-network
-    depends_on:
-      - app
-      - api
-
   app:
     image: ghcr.io/techsquidtv/hermes-app:latest
     container_name: hermes-app
     restart: unless-stopped
+    ports:
+      - "80:80"
     environment:
       - VITE_API_BASE_URL=/api/v1
-    volumes:
-      - app_dist:/usr/share/nginx/html
     networks:
       - hermes-network
+    depends_on:
+      - api
 
   api:
     image: ghcr.io/techsquidtv/hermes-api:latest
@@ -904,9 +807,6 @@ networks:
     driver: bridge
 
 volumes:
-  app_dist:
-  caddy_data:
-  caddy_config:
   redis_data:
 ```
 
@@ -917,26 +817,12 @@ HERMES_ALLOWED_ORIGINS=https://hermes.example.com
 VITE_API_BASE_URL=/api/v1
 ```
 
+Put your HTTPS reverse proxy in front of `app:80` for production TLS:
+
 ```caddy
-# Caddyfile
 hermes.example.com {
     tls admin@example.com
-
-    handle /api/v1/events/* {
-        reverse_proxy api:8000 {
-            flush_interval -1
-        }
-    }
-
-    handle /api/* {
-        reverse_proxy api:8000
-    }
-
-    handle {
-        root * /app
-        try_files {path} /index.html
-        file_server
-    }
+    reverse_proxy app:80
 }
 ```
 
@@ -1101,7 +987,6 @@ If you encounter issues not covered in this guide:
    ```bash
    docker compose logs app
    docker compose logs api
-   docker compose logs proxy
    ```
 
 2. **Verify environment:**

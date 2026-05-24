@@ -34,13 +34,13 @@ cp .env.example .env
 # Edit .env and set a secure HERMES_SECRET_KEY
 nano .env
 
-# Start all services using pre-built images (includes Caddy reverse proxy)
+# Start all services using pre-built images
 docker compose -f docker-compose.example.yml up -d
 ```
 
 **That's it!** 🎉 Your Hermes instance will be available at:
 - **Web App**: http://localhost:3000
-- **API Docs**: http://localhost:3000/api/v1/docs (via proxy)
+- **API Docs**: http://localhost:3000/api/v1/docs
 
 **For development with hot reload:**
 ```bash
@@ -66,6 +66,7 @@ Hermes offers two deployment approaches:
 - **Faster startup** - No build time required
 - **Stable releases** - Uses tested, published versions
 - **Smaller downloads** - Only pulls necessary images
+- **Version-accurate UI** - The frontend image serves its own built assets, so the running image tag controls the displayed app version
 - **File**: `docker-compose.example.yml`
 - **Public packages** - No authentication required
 
@@ -110,15 +111,11 @@ chmod -R 777 ./data ./downloads ./temp
 
 > **Note:** Directory paths depend on your docker-compose configuration. Check the `volumes` section in your compose file to see where these are mounted from. For example, `docker-compose.example.yml` might use `./services/hermes/data` instead of `./data`.
 
-### Customizing the Reverse Proxy
+### Using a Reverse Proxy
 
-The default setup uses Caddy as a reverse proxy. You can customize it by editing the `Caddyfile`:
+The default setup exposes the `hermes-app` nginx container on port 3000. That container serves the UI and proxies `/api/*` to the internal API service, so no bundled reverse proxy is required.
 
-```bash
-nano Caddyfile
-# Add your domain for automatic HTTPS, custom routing, etc.
-docker compose restart proxy
-```
+For production HTTPS, put your existing reverse proxy in front of the app container and forward traffic to port 80. Preserve the `Host` header and pass `X-Forwarded-Proto`.
 
 #### Domain Configuration Options
 
@@ -129,8 +126,6 @@ docker compose restart proxy
 **Separate Domains** (Advanced):
 - Frontend at: `hermes.example.com`
 - API at: `hermes-api.example.com`
-
-See the [Caddyfile examples](Caddyfile) for both configurations.
 
 #### Environment Configuration
 
@@ -190,14 +185,14 @@ Administrators have access to user management features:
 - **Delete users** - Permanently remove accounts
 - **Safety checks** - Cannot delete yourself or the last admin
 
-Access admin features via: **API endpoints at `/api/v1/users`** (see [API docs](http://localhost:8000/docs))
+Access admin features via: **API endpoints at `/api/v1/users`** (see [API docs](http://localhost:3000/api/v1/docs))
 
 ### Security Best Practices
 
 1. **Set a strong secret key**: Generate with `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`
 2. **Disable public signup** for non-personal deployments: `HERMES_ALLOW_PUBLIC_SIGNUP=false`
 3. **Change default credentials** if using pre-seeded admin
-4. **Use HTTPS** in production (Caddy provides automatic HTTPS)
+4. **Use HTTPS** in production with your reverse proxy or load balancer
 5. **Restrict CORS origins** to your actual domains in `.env`
 6. **Keep Hermes updated** to get the latest security patches
 
@@ -235,7 +230,7 @@ pnpm dev
 - **[Release Process](docs/RELEASE_PROCESS.md)** - Version management and release workflow
 - **[API Documentation](packages/hermes-api/README.md)** - Complete API reference and examples
 - **[Frontend Guide](packages/hermes-app/README.md)** - React app development guide
-- **[Interactive API Docs](http://localhost:8000/docs)** - Live Swagger documentation
+- **[Interactive API Docs](http://localhost:3000/api/v1/docs)** - Live Swagger documentation
 - **[docker-compose.example.yml](docker-compose.example.yml)** - Pre-built images deployment configuration
 
 ### 🔀 Branch Strategy
