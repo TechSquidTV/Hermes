@@ -3,13 +3,8 @@ import { useDeleteFiles } from './useDownloadActions'
 import { apiClient } from '@/services/api/client'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-
-interface BulkOperationItem {
-  id: string
-  title: string
-  filePath?: string
-  status: string
-}
+import { invalidateQueueQueries } from '@/lib/queryClient'
+import type { BulkOperationItem } from '@/lib/queueData'
 
 interface UseBulkOperationsOptions {
   onSuccess?: () => void
@@ -90,17 +85,6 @@ export function useBulkOperations(options: UseBulkOperationsOptions = {}) {
     }
   }, [selectedItems, deleteMutation, deselectAll, onSuccess, onError])
 
-  const bulkRetry = useCallback(async () => {
-    const selectedItemIds = Array.from(selectedItems)
-    if (selectedItemIds.length === 0) {
-      toast.error('No items selected')
-      return
-    }
-
-    // TODO: Implement bulk retry functionality
-    toast.info('Bulk retry coming soon!')
-  }, [selectedItems])
-
   const bulkCancel = useCallback(async (items: BulkOperationItem[]) => {
     const selectedItemIds = Array.from(selectedItems)
     if (selectedItemIds.length === 0) {
@@ -124,9 +108,7 @@ export function useBulkOperations(options: UseBulkOperationsOptions = {}) {
       await Promise.all(cancellableItems.map(item => apiClient.cancelDownload(item.id)))
       toast.success(`Cancelled ${cancellableItems.length} download${cancellableItems.length !== 1 ? 's' : ''}`)
       deselectAll()
-      queryClient.invalidateQueries({ queryKey: ['queue'], exact: false })
-      queryClient.invalidateQueries({ queryKey: ['queueStats'], exact: false })
-      queryClient.invalidateQueries({ queryKey: ['recentDownloadsQueue'], exact: false })
+      invalidateQueueQueries(queryClient)
       onSuccess?.()
     } catch (error) {
       toast.error(`Failed to cancel downloads: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -156,7 +138,6 @@ export function useBulkOperations(options: UseBulkOperationsOptions = {}) {
     // Bulk operations
     bulkDelete,
     bulkCancel,
-    bulkRetry,
 
     // Utilities
     getSelectedItems,

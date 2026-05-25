@@ -3,7 +3,7 @@ Timeline analytics endpoint for charts and data visualization.
 """
 
 from datetime import date as date_type
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -15,6 +15,7 @@ from app.core.security import ApiKeyPermission, AuthPrincipal, require_api_permi
 from app.db.models import DownloadHistory as DownloadHistoryModel
 from app.db.session import get_database_session
 from app.models.pydantic.history import DailyStats, TimelineSummary
+from app.utils.time_periods import get_period_delta
 
 router = APIRouter(prefix="/timeline", tags=["timeline"])
 logger = get_logger(__name__)
@@ -63,13 +64,7 @@ async def get_timeline_stats(
         else:
             # Use period-based calculation
             now = datetime.now(timezone.utc)
-            period_map = {
-                "day": timedelta(days=1),
-                "week": timedelta(days=7),
-                "month": timedelta(days=30),
-                "year": timedelta(days=365),
-            }
-            start_datetime = now - period_map.get(period, timedelta(days=7))
+            start_datetime = now - get_period_delta(period)
             date_filters = [DownloadHistoryModel.completed_at >= start_datetime]
 
         # Build additional filters

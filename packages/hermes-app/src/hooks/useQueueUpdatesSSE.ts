@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useSSE } from './useSSE';
 import { useSSEToken } from './useSSEToken';
 import { getApiBaseUrl } from '@/lib/config';
+import { invalidateQueueQueries } from '@/lib/queryClient';
 
 export interface QueueUpdate {
   action: 'added' | 'removed' | 'status_changed';
@@ -69,10 +70,7 @@ export function useQueueUpdatesSSE() {
   // Invalidate queue queries when updates arrive
   useEffect(() => {
     if (data) {
-      // Invalidate all queue-related queries
-      queryClient.invalidateQueries({ queryKey: ['queue'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['queueStats'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['recentDownloadsQueue'], exact: false });
+      invalidateQueueQueries(queryClient);
 
       // Optionally, update specific download in cache
       if (data.download_id) {

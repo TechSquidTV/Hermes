@@ -1,5 +1,3 @@
-import { useQuery } from '@tanstack/react-query'
-import { apiClient } from '@/services/api/client'
 import { useQueueUpdatesSSE } from '@/hooks/useQueueUpdatesSSE'
 import { QueueCard } from './QueueCard'
 import { QueueSkeleton } from './QueueSkeleton'
@@ -10,6 +8,7 @@ import { FileVideo, Clock, CheckCircle } from 'lucide-react'
 import { useMemo } from 'react'
 import { useFilteredDownloads } from '@/hooks/useFilters'
 import type { components } from '@/types/api.generated'
+import { useQueueData } from '@/hooks/useQueueData'
 
 type DownloadStatus = components["schemas"]["DownloadStatus"]
 
@@ -45,17 +44,9 @@ export function QueueList({
   const { isConnected, isReconnecting, reconnectAttempts } = useQueueUpdatesSSE();
 
   // Initial data load
-  const { data: queueData, isLoading, error, refetch } = useQuery({
-    queryKey: ['queue', statusFilter, viewMode],
-    queryFn: () => {
-      const status = viewMode === 'active'
-        ? (statusFilter === 'all' ? undefined : statusFilter)
-        : viewMode === 'history'
-        ? 'completed'
-        : undefined;
-      return apiClient.getDownloadQueue(status, 20, 0);
-    },
-    staleTime: Infinity, // Data stays fresh via SSE invalidation
+  const { data: queueData, isLoading, error, refetch } = useQueueData({
+    statusFilter,
+    viewMode,
   })
 
   // Use the useFilteredDownloads hook for filtering and sorting
@@ -200,4 +191,3 @@ export function QueueList({
     </div>
   )
 }
-

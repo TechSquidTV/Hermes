@@ -20,26 +20,20 @@ from app.tasks.celery_app import celery_app
 logger = get_logger(__name__)
 
 
-async def _get_repositories_for_task():
-    """Get repository instances for background tasks with proper session management."""
-    async with async_session_maker() as session:
-        return {
-            "downloads": DownloadRepository(session),
-            "download_files": DownloadFileRepository(session),
-            "token_blacklist": TokenBlacklistRepository(session),
-            "history": DownloadHistoryRepository(session),
-        }
+def _get_cleanup_repositories(session):
+    """Create cleanup task repositories for an active database session."""
+    return {
+        "downloads": DownloadRepository(session),
+        "download_files": DownloadFileRepository(session),
+        "token_blacklist": TokenBlacklistRepository(session),
+        "history": DownloadHistoryRepository(session),
+    }
 
 
 async def _get_old_downloads(days: int = 30) -> List[Dict[str, Any]]:
     """Get downloads older than specified days."""
     async with async_session_maker() as session:
-        repos = {
-            "downloads": DownloadRepository(session),
-            "download_files": DownloadFileRepository(session),
-            "token_blacklist": TokenBlacklistRepository(session),
-            "history": DownloadHistoryRepository(session),
-        }
+        repos = _get_cleanup_repositories(session)
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         # Get downloads that are completed/failed and older than cutoff
@@ -59,12 +53,7 @@ async def _cleanup_download_files(download_ids: List[str]) -> Dict[str, Any]:
     failed_files = []
 
     async with async_session_maker() as session:
-        repos = {
-            "downloads": DownloadRepository(session),
-            "download_files": DownloadFileRepository(session),
-            "token_blacklist": TokenBlacklistRepository(session),
-            "history": DownloadHistoryRepository(session),
-        }
+        repos = _get_cleanup_repositories(session)
 
         for download_id in download_ids:
             try:
@@ -167,12 +156,7 @@ async def _cleanup_old_downloads_async(
             # Just count what would be deleted
             total_files = 0
             async with async_session_maker() as session:
-                repos = {
-                    "downloads": DownloadRepository(session),
-                    "download_files": DownloadFileRepository(session),
-                    "token_blacklist": TokenBlacklistRepository(session),
-                    "history": DownloadHistoryRepository(session),
-                }
+                repos = _get_cleanup_repositories(session)
 
                 for download_id in download_ids:
                     files = await repos["download_files"].get_by_download_id(
@@ -193,12 +177,7 @@ async def _cleanup_old_downloads_async(
         # Delete download records from database
         deleted_downloads = 0
         async with async_session_maker() as session:
-            repos = {
-                "downloads": DownloadRepository(session),
-                "download_files": DownloadFileRepository(session),
-                "token_blacklist": TokenBlacklistRepository(session),
-                "history": DownloadHistoryRepository(session),
-            }
+            repos = _get_cleanup_repositories(session)
 
             for download_id in download_ids:
                 try:
@@ -341,12 +320,7 @@ async def _cleanup_expired_tokens_async(dry_run: bool = False) -> Dict[str, Any]
         now = datetime.now(timezone.utc)
 
         async with async_session_maker() as session:
-            repos = {
-                "downloads": DownloadRepository(session),
-                "download_files": DownloadFileRepository(session),
-                "token_blacklist": TokenBlacklistRepository(session),
-                "history": DownloadHistoryRepository(session),
-            }
+            repos = _get_cleanup_repositories(session)
 
             if dry_run:
                 # Count expired tokens without deleting

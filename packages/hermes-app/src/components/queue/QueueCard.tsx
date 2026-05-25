@@ -20,6 +20,7 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
 import { Blur } from '@/components/animate-ui/primitives/effects/blur'
 import { useState } from 'react'
 import type { DownloadStatus, DownloadResult } from '@/types'
+import { invalidateQueueQueries } from '@/lib/queryClient'
 
 // Type guard to check if result is a proper DownloadResult
 const isDownloadResult = (result: unknown): result is DownloadResult => {
@@ -53,16 +54,7 @@ export function QueueCard({ download, isSelectable = false, isSelected = false, 
         if (data.deletedFiles > 0) {
           toast.success(`File deleted! Freed ${(data.totalFreedSpace / 1024 / 1024).toFixed(2)} MB`)
         }
-        // Invalidate all queue-related queries to ensure UI updates
-        // Invalidate queue queries with different filter combinations
-        queryClient.invalidateQueries({ queryKey: ['queue'], exact: false })
-        queryClient.invalidateQueries({ queryKey: ['queue', 'active'], exact: false })
-        queryClient.invalidateQueries({ queryKey: ['queue', 'history'], exact: false })
-        queryClient.invalidateQueries({ queryKey: ['queue', 'all'], exact: false })
-        queryClient.invalidateQueries({ queryKey: ['queueStats'], exact: false })
-        queryClient.invalidateQueries({ queryKey: ['recentDownloadsQueue'], exact: false })
-        // Also invalidate files list to keep it in sync
-        queryClient.invalidateQueries({ queryKey: ['files'], exact: false })
+        invalidateQueueQueries(queryClient, { includeFiles: true })
       }, 600) // Match animation duration
     },
     onError: (error) => {

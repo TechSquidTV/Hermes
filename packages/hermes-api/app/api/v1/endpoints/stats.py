@@ -2,7 +2,7 @@
 API statistics endpoint.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
@@ -13,6 +13,7 @@ from app.core.security import ApiKeyPermission, AuthPrincipal, require_api_permi
 from app.db.models import DownloadHistory
 from app.db.session import get_database_session
 from app.models.pydantic.stats import ApiStatistics, ErrorBreakdown, ExtractorStats
+from app.utils.time_periods import get_period_delta
 
 router = APIRouter(prefix="/stats", tags=["statistics"])
 logger = get_logger(__name__)
@@ -46,13 +47,7 @@ async def get_api_statistics(
     try:
         # Calculate time range
         now = datetime.now(timezone.utc)
-        period_map = {
-            "day": timedelta(days=1),
-            "week": timedelta(days=7),
-            "month": timedelta(days=30),
-            "year": timedelta(days=365),
-        }
-        start_time = now - period_map.get(period, timedelta(days=7))
+        start_time = now - get_period_delta(period)
 
         # Get all history records in period
         query = select(DownloadHistory).where(

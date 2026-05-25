@@ -2,10 +2,9 @@ import { Card, CardContent } from '@/components/ui/card'
 import { QueueList } from './QueueList'
 import { QueueStats } from './QueueStats'
 import { BulkOperations } from './BulkOperations'
-import { useQuery } from '@tanstack/react-query'
-import { apiClient } from '@/services/api/client'
-import type { components } from '@/types/api.generated'
 import { useBulkOperations } from '@/hooks/useBulkOperations'
+import { useQueueData } from '@/hooks/useQueueData'
+import { toBulkOperationItems } from '@/lib/queueData'
 
 import type { FilterState } from '@/hooks/useFilters'
 
@@ -33,18 +32,11 @@ export function QueueTabContent({
 
   // Get current queue data for bulk operations
   // Uses same query key as QueueList so SSE invalidation updates both
-  const { data: queueData } = useQuery({
-    queryKey: ['queue', statusFilter, viewMode],
-    queryFn: () => {
-      const status = viewMode === 'active'
-        ? (statusFilter === 'all' ? undefined : statusFilter)
-        : viewMode === 'history'
-        ? 'completed'
-        : undefined;
-      return apiClient.getDownloadQueue(status, 20, 0);
-    },
-    staleTime: Infinity, // Data stays fresh via SSE invalidation
+  const { data: queueData } = useQueueData({
+    statusFilter,
+    viewMode,
   })
+  const bulkItems = toBulkOperationItems(queueData?.items)
 
   return (
     <div className="space-y-4">
@@ -54,41 +46,13 @@ export function QueueTabContent({
       <BulkOperations
         selectedCount={bulkOperations.selectedCount}
         totalCount={queueData?.items?.length || 0}
-        selectedItems={bulkOperations.getSelectedItems(
-          queueData?.items?.map((item: components["schemas"]["DownloadStatus"]) => ({
-            id: item.downloadId,
-            title: String(item.result?.title || item.downloadId),
-            filePath: item.currentFilename || undefined,
-            status: item.status
-          })) || []
-        )}
+        selectedItems={bulkOperations.getSelectedItems(bulkItems)}
         onSelectAll={() => {
-          if (queueData?.items) {
-            bulkOperations.selectAll(queueData.items.map((item: components["schemas"]["DownloadStatus"]) => ({
-              id: item.downloadId,
-              title: String(item.result?.title || item.downloadId),
-              filePath: item.currentFilename || undefined,
-              status: item.status
-            })))
-          }
+          bulkOperations.selectAll(bulkItems)
         }}
         onDeselectAll={bulkOperations.deselectAll}
-        onBulkDelete={() => bulkOperations.bulkDelete(
-          queueData?.items?.map((item: components["schemas"]["DownloadStatus"]) => ({
-            id: item.downloadId,
-            title: String(item.result?.title || item.downloadId),
-            filePath: item.currentFilename || undefined,
-            status: item.status
-          })) || []
-        )}
-        onBulkCancel={() => bulkOperations.bulkCancel(
-          queueData?.items?.map((item: components["schemas"]["DownloadStatus"]) => ({
-            id: item.downloadId,
-            title: String(item.result?.title || item.downloadId),
-            filePath: item.currentFilename || undefined,
-            status: item.status
-          })) || []
-        )}
+        onBulkDelete={() => bulkOperations.bulkDelete(bulkItems)}
+        onBulkCancel={() => bulkOperations.bulkCancel(bulkItems)}
         isProcessing={bulkOperations.isProcessing}
       />
 
@@ -103,14 +67,7 @@ export function QueueTabContent({
             isSelectable={true}
             selectedItems={bulkOperations.selectedItems}
             onToggleSelect={bulkOperations.toggleItem}
-            onSelectAll={(items) => bulkOperations.selectAll(
-              items.map(item => ({
-                id: item.downloadId,
-                title: String(item.result?.title || item.downloadId),
-                filePath: item.currentFilename || undefined,
-                status: item.status
-              }))
-            )}
+            onSelectAll={(items) => bulkOperations.selectAll(toBulkOperationItems(items))}
             onDeselectAll={bulkOperations.deselectAll}
           />
         </CardContent>

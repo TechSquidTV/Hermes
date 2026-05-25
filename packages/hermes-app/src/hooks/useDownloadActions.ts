@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '@/services/api/client'
 import { toast } from 'sonner'
 import type { components } from '@/types/api.generated'
+import { invalidateQueueQueries } from '@/lib/queryClient'
 
 type DownloadRequest = components["schemas"]["DownloadRequest"]
 import { TokenStorage } from '@/utils/tokenStorage'
@@ -13,13 +14,7 @@ export function useStartDownload() {
     mutationFn: (request: DownloadRequest) => apiClient.startDownload(request),
     onSuccess: () => {
       toast.success('Download started successfully!')
-      // Invalidate queue queries with different filter combinations
-      queryClient.invalidateQueries({ queryKey: ['queue'], exact: false })
-      queryClient.invalidateQueries({ queryKey: ['queue', 'active'], exact: false })
-      queryClient.invalidateQueries({ queryKey: ['queue', 'history'], exact: false })
-      queryClient.invalidateQueries({ queryKey: ['queue', 'all'], exact: false })
-      queryClient.invalidateQueries({ queryKey: ['queueStats'], exact: false })
-      queryClient.invalidateQueries({ queryKey: ['recentDownloadsQueue'], exact: false })
+      invalidateQueueQueries(queryClient)
     },
     onError: (error) => {
       toast.error(`Failed to start download: ${error.message}`)
@@ -40,14 +35,7 @@ export function useDeleteFiles() {
       } else {
         toast.warning('File was not found or already deleted')
       }
-      // Invalidate queue queries with different filter combinations
-      queryClient.invalidateQueries({ queryKey: ['queue'], exact: false })
-      queryClient.invalidateQueries({ queryKey: ['queue', 'active'], exact: false })
-      queryClient.invalidateQueries({ queryKey: ['queue', 'history'], exact: false })
-      queryClient.invalidateQueries({ queryKey: ['queue', 'all'], exact: false })
-      queryClient.invalidateQueries({ queryKey: ['queueStats'], exact: false })
-      // Also invalidate files list to keep it in sync
-      queryClient.invalidateQueries({ queryKey: ['files'], exact: false })
+      invalidateQueueQueries(queryClient, { includeFiles: true })
     },
     onError: (error) => {
       toast.error(`Failed to delete files: ${error.message}`)
@@ -117,12 +105,11 @@ export function useCancelDownload() {
     mutationFn: (downloadId: string) => apiClient.cancelDownload(downloadId),
     onSuccess: () => {
       toast.success('Download cancelled')
-      queryClient.invalidateQueries({ queryKey: ['queue'] })
+      invalidateQueueQueries(queryClient)
     },
     onError: (error) => {
       toast.error(`Failed to cancel download: ${error.message}`)
     },
   })
 }
-
 
