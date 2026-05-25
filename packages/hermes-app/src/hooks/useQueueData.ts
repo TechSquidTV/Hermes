@@ -14,9 +14,11 @@ interface UseQueueDataOptions {
 
 export function getQueueQueryKey(
   statusFilter: string,
-  viewMode: QueueViewMode
+  viewMode: QueueViewMode,
+  limit = 20,
+  offset = 0
 ) {
-  return ['queue', statusFilter, viewMode] as const
+  return ['queue', statusFilter, viewMode, limit, offset] as const
 }
 
 export function useQueueData({
@@ -26,7 +28,7 @@ export function useQueueData({
   offset = 0,
 }: UseQueueDataOptions) {
   return useQuery({
-    queryKey: getQueueQueryKey(statusFilter, viewMode),
+    queryKey: getQueueQueryKey(statusFilter, viewMode, limit, offset),
     queryFn: () =>
       apiClient.getDownloadQueue(
         getQueueStatusFilter(viewMode, statusFilter),
