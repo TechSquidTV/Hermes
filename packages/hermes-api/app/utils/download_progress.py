@@ -56,7 +56,7 @@ def build_download_progress_payload(
             eta=eta,
         )
 
-    if result:
+    if result is not None:
         payload["result"] = result
 
     return payload

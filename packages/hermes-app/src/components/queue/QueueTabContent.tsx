@@ -4,9 +4,18 @@ import { QueueStats } from './QueueStats'
 import { BulkOperations } from './BulkOperations'
 import { useBulkOperations } from '@/hooks/useBulkOperations'
 import { useQueueData } from '@/hooks/useQueueData'
-import { toBulkOperationItems } from '@/lib/queueData'
+import {
+  getQueueDisplayStatusFilter,
+  getVisibleQueueItems,
+  toBulkOperationItems,
+  type DownloadStatus,
+} from '@/lib/queueData'
+import { useFilteredDownloads } from '@/hooks/useFilters'
+import { useMemo } from 'react'
 
 import type { FilterState } from '@/hooks/useFilters'
+
+const EMPTY_QUEUE_ITEMS: DownloadStatus[] = []
 
 interface QueueTabContentProps {
   viewMode: 'active' | 'history' | 'all'
@@ -30,13 +39,24 @@ export function QueueTabContent({
   const typedSortOrder = sortOrder as FilterState['sortOrder']
   const bulkOperations = useBulkOperations()
 
-  // Get current queue data for bulk operations
-  // Uses same query key as QueueList so SSE invalidation updates both
-  const { data: queueData } = useQueueData({
+  // Derive the visible queue once so list rendering and bulk actions stay aligned.
+  const { data: queueData, isLoading, error, refetch } = useQueueData({
     statusFilter,
     viewMode,
   })
-  const bulkItems = toBulkOperationItems(queueData?.items)
+  const displayStatusFilter = getQueueDisplayStatusFilter(viewMode, statusFilter)
+  const queueItems = queueData?.items ?? EMPTY_QUEUE_ITEMS
+  const filterState = useMemo<FilterState>(() => ({
+    statusFilter: displayStatusFilter,
+    searchQuery,
+    viewMode,
+    sortBy: typedSortBy,
+    sortOrder: typedSortOrder,
+  }), [displayStatusFilter, searchQuery, viewMode, typedSortBy, typedSortOrder])
+  const sortedItems = useFilteredDownloads(queueItems, filterState)
+  const visibleItems = getVisibleQueueItems(sortedItems, viewMode)
+  const bulkItems = toBulkOperationItems(visibleItems)
+  const selectedBulkItems = bulkOperations.getSelectedItems(bulkItems)
 
   return (
     <div className="space-y-4">
@@ -44,9 +64,9 @@ export function QueueTabContent({
 
       {/* Bulk Operations Toolbar */}
       <BulkOperations
-        selectedCount={bulkOperations.selectedCount}
-        totalCount={queueData?.items?.length || 0}
-        selectedItems={bulkOperations.getSelectedItems(bulkItems)}
+        selectedCount={selectedBulkItems.length}
+        totalCount={visibleItems.length}
+        selectedItems={selectedBulkItems}
         onSelectAll={() => {
           bulkOperations.selectAll(bulkItems)
         }}
@@ -60,14 +80,15 @@ export function QueueTabContent({
         <CardContent className="pt-6">
           <QueueList
             viewMode={viewMode}
-            statusFilter={statusFilter}
             searchQuery={searchQuery}
-            sortBy={typedSortBy}
-            sortOrder={typedSortOrder}
+            items={visibleItems}
+            isLoading={isLoading}
+            error={error}
+            onRetry={() => refetch()}
             isSelectable={true}
             selectedItems={bulkOperations.selectedItems}
             onToggleSelect={bulkOperations.toggleItem}
-            onSelectAll={(items) => bulkOperations.selectAll(toBulkOperationItems(items))}
+            onSelectAll={() => bulkOperations.selectAll(bulkItems)}
             onDeselectAll={bulkOperations.deselectAll}
           />
         </CardContent>

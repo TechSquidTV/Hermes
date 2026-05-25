@@ -21,7 +21,6 @@ from app.services.yt_dlp_service import YTDLPService
 from app.tasks.celery_app import celery_app
 from app.utils.download_progress import (
     build_download_progress_payload,
-    build_progress_object,
 )
 from app.utils.media import VIDEO_EXTENSIONS
 
@@ -111,6 +110,44 @@ async def _publish_sse_progress(
     )
 
 
+async def _get_progress_payload_fields(
+    download_id: str,
+    status: str,
+    progress: float = None,
+    downloaded_bytes: int = None,
+    total_bytes: int = None,
+    download_speed: float = None,
+    eta: float = None,
+) -> dict[str, Any] | None:
+    """Resolve progress fields for active SSE payloads."""
+    if progress is not None or downloaded_bytes is not None:
+        return {
+            "progress": progress,
+            "downloaded_bytes": downloaded_bytes,
+            "total_bytes": total_bytes,
+            "download_speed": download_speed,
+            "eta": eta,
+        }
+
+    if status not in ("downloading", "processing"):
+        return None
+
+    async with async_session_maker() as session:
+        download_repo = DownloadRepository(session)
+        download = await download_repo.get_by_id(download_id)
+
+        if not download or download.progress is None:
+            return None
+
+        return {
+            "progress": download.progress,
+            "downloaded_bytes": download.downloaded_bytes,
+            "total_bytes": download.total_bytes,
+            "download_speed": download.download_speed,
+            "eta": download.eta,
+        }
+
+
 async def _update_download_status(
     download_id: str,
     status: str,
@@ -149,39 +186,26 @@ async def _update_download_status(
 
     # Optionally publish SSE (disabled during progress updates for frequency control)
     if publish_sse:
-        # Structure to match DownloadStatus schema with nested progress object
+        payload_extra = dict(kwargs)
+        result = payload_extra.pop("result", None)
+        progress_fields = await _get_progress_payload_fields(
+            download_id=download_id,
+            status=status,
+            progress=progress,
+            downloaded_bytes=downloaded_bytes,
+            total_bytes=total_bytes,
+            download_speed=download_speed,
+            eta=eta,
+        )
+
         progress_data = build_download_progress_payload(
             status=status,
             error_message=error_message,
-            **kwargs,
+            result=result,
+            include_progress=progress_fields is not None,
+            **(progress_fields or {}),
+            **payload_extra,
         )
-
-        # Add nested progress object (matching _publish_sse_progress structure)
-        # Always include progress for active downloads to prevent frontend state loss
-        if progress is not None or downloaded_bytes is not None:
-            progress_data["progress"] = build_progress_object(
-                status=status,
-                progress=progress,
-                downloaded_bytes=downloaded_bytes,
-                total_bytes=total_bytes,
-                download_speed=download_speed,
-                eta=eta,
-            )
-        elif status in ("downloading", "processing"):
-            # For active downloads without new progress data, fetch current progress from DB
-            # to prevent SSE events from wiping out frontend progress state
-            async with async_session_maker() as session:
-                download_repo = DownloadRepository(session)
-                download = await download_repo.get_by_id(download_id)
-                if download and download.progress is not None:
-                    progress_data["progress"] = build_progress_object(
-                        status=status,
-                        progress=download.progress,
-                        downloaded_bytes=download.downloaded_bytes,
-                        total_bytes=download.total_bytes,
-                        download_speed=download.download_speed,
-                        eta=download.eta,
-                    )
 
         # Debug logging to trace SSE events
         logger.info(
