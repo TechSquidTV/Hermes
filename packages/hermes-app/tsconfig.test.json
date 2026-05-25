@@ -4,6 +4,7 @@
     "types": ["vite/client", "@types/node", "vitest/globals", "@testing-library/jest-dom"]
   },
   "include": [
+    "src/**/*.d.ts",
     "src/**/*.test.ts",
     "src/**/*.test.tsx",
     "src/**/__tests__/**/*",
