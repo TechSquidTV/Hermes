@@ -83,7 +83,11 @@ async def _publish_sse_progress(
     # Note: download_id is added by publish_download_progress
     sse_data = build_download_progress_payload(
         status=status,
-        message=f"Downloading: {progress:.1f}%" if progress else "Downloading...",
+        message=(
+            f"Downloading: {progress:.1f}%"
+            if progress is not None
+            else "Downloading..."
+        ),
         progress=progress,
         downloaded_bytes=downloaded_bytes,
         total_bytes=total_bytes,

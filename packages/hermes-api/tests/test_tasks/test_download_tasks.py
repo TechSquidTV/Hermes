@@ -63,6 +63,26 @@ async def test_publish_sse_progress_shapes_download_status_payload():
 
 
 @pytest.mark.asyncio
+async def test_publish_sse_progress_keeps_zero_percent_message():
+    mock_progress_service = AsyncMock()
+
+    with patch.object(download_tasks, "redis_progress_service", mock_progress_service):
+        await download_tasks._publish_sse_progress(
+            download_id="download-123",
+            status="downloading",
+            progress=0.0,
+            downloaded_bytes=0,
+            total_bytes=1000,
+        )
+
+    progress_data = mock_progress_service.publish_download_progress.await_args.kwargs[
+        "progress_data"
+    ]
+    assert progress_data["message"] == "Downloading: 0.0%"
+    assert progress_data["progress"]["percentage"] == 0.0
+
+
+@pytest.mark.asyncio
 async def test_update_download_status_publishes_cached_db_progress_for_active_status(
     db_session,
 ):
