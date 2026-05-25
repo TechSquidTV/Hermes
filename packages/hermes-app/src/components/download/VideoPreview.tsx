@@ -30,6 +30,7 @@ import { toast } from 'sonner'
 import { cn, formatDate } from '@/lib/utils'
 import { useQueryClient } from '@tanstack/react-query'
 import { taskTracker } from '@/lib/taskTracking'
+import { invalidateQueueQueries } from '@/lib/queryClient'
 
 interface VideoPreviewProps {
   info: VideoInfo
@@ -187,9 +188,7 @@ export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewPr
           `in ${successfulBatches} batch${successfulBatches !== 1 ? 'es' : ''}`
         )
         
-        // Invalidate queries to refresh UI (same as single download behavior)
-        queryClient.invalidateQueries({ queryKey: ['queueStats'] })
-        queryClient.invalidateQueries({ queryKey: ['recentDownloadsQueue'] })
+        invalidateQueueQueries(queryClient)
       } else {
         toast.error('Failed to queue any batches. Please check the console for details.')
       }

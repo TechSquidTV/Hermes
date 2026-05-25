@@ -18,7 +18,12 @@ export function getQueueQueryKey(
   limit = 20,
   offset = 0
 ) {
-  return ['queue', statusFilter, viewMode, limit, offset] as const
+  return [
+    'queue',
+    getQueueStatusFilter(viewMode, statusFilter) ?? 'all',
+    limit,
+    offset,
+  ] as const
 }
 
 export function useQueueData({

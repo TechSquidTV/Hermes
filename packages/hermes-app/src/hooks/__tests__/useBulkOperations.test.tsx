@@ -179,14 +179,7 @@ describe('useBulkOperations', () => {
       queryKey: ['queue'],
       exact: false,
     })
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ['queueStats'],
-      exact: false,
-    })
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ['recentDownloadsQueue'],
-      exact: false,
-    })
+    expect(invalidateQueries).toHaveBeenCalledTimes(1)
     expect(onSuccess).toHaveBeenCalledTimes(1)
     expect(result.current.selectedCount).toBe(0)
   })

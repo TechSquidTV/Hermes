@@ -156,7 +156,7 @@ describe('queryClient', () => {
   })
 
   describe('invalidateQueueQueries', () => {
-    it('invalidates every queue view that displays download state', () => {
+    it('invalidates the queue prefix that owns list and stats data', () => {
       const client = new QueryClient()
       const invalidateQueries = vi.spyOn(client, 'invalidateQueries')
 
@@ -166,30 +166,11 @@ describe('queryClient', () => {
         queryKey: ['queue'],
         exact: false,
       })
-      expect(invalidateQueries).toHaveBeenCalledWith({
-        queryKey: ['queue', 'active'],
-        exact: false,
-      })
-      expect(invalidateQueries).toHaveBeenCalledWith({
-        queryKey: ['queue', 'history'],
-        exact: false,
-      })
-      expect(invalidateQueries).toHaveBeenCalledWith({
-        queryKey: ['queue', 'all'],
-        exact: false,
-      })
-      expect(invalidateQueries).toHaveBeenCalledWith({
-        queryKey: ['queueStats'],
-        exact: false,
-      })
-      expect(invalidateQueries).toHaveBeenCalledWith({
-        queryKey: ['recentDownloadsQueue'],
-        exact: false,
-      })
       expect(invalidateQueries).not.toHaveBeenCalledWith({
         queryKey: ['files'],
         exact: false,
       })
+      expect(invalidateQueries).toHaveBeenCalledTimes(1)
     })
 
     it('can also invalidate downloaded file lists', () => {

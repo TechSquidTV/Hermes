@@ -390,7 +390,7 @@ describe('useQueueUpdatesSSE', () => {
       })
     })
 
-    it('invalidates queueStats queries when updates arrive', async () => {
+    it('uses the queue prefix so stats queries refresh when updates arrive', async () => {
       const mockCreateSSEToken = vi.fn().mockResolvedValue({
         token: mockSSEToken,
         expires_at: '2025-12-31T23:59:59Z',
@@ -426,7 +426,7 @@ describe('useQueueUpdatesSSE', () => {
 
       await waitFor(() => {
         expect(invalidateQueriesSpy).toHaveBeenCalledWith({
-          queryKey: ['queueStats'],
+          queryKey: ['queue'],
           exact: false,
         })
       })
