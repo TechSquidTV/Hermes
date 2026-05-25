@@ -19,6 +19,10 @@ from app.db.repositories import (
 from app.services.redis_progress import redis_progress_service
 from app.services.yt_dlp_service import YTDLPService
 from app.tasks.celery_app import celery_app
+from app.utils.download_progress import (
+    build_download_progress_payload,
+    build_progress_object,
+)
 
 logger = get_logger(__name__)
 yt_service = YTDLPService()
@@ -76,22 +80,17 @@ async def _publish_sse_progress(
     """
     # Structure to match DownloadStatus schema
     # Note: download_id is added by publish_download_progress
-    sse_data = {
-        "status": status,
-        "message": f"Downloading: {progress:.1f}%" if progress else "Downloading...",
-        "progress": {
-            "percentage": progress,
-            "status": status,
-            "downloaded_bytes": downloaded_bytes,
-            "total_bytes": total_bytes,
-            "speed": download_speed,
-            "eta": eta,
-        },
-    }
-
-    # Include result object if provided (for video metadata)
-    if result:
-        sse_data["result"] = result
+    sse_data = build_download_progress_payload(
+        status=status,
+        message=f"Downloading: {progress:.1f}%" if progress else "Downloading...",
+        progress=progress,
+        downloaded_bytes=downloaded_bytes,
+        total_bytes=total_bytes,
+        download_speed=download_speed,
+        eta=eta,
+        result=result,
+        include_progress=True,
+    )
 
     # Debug logging
     logger.info(
@@ -146,23 +145,23 @@ async def _update_download_status(
     # Optionally publish SSE (disabled during progress updates for frequency control)
     if publish_sse:
         # Structure to match DownloadStatus schema with nested progress object
-        progress_data = {
-            "status": status,
-            "error_message": error_message,
+        progress_data = build_download_progress_payload(
+            status=status,
+            error_message=error_message,
             **kwargs,
-        }
+        )
 
         # Add nested progress object (matching _publish_sse_progress structure)
         # Always include progress for active downloads to prevent frontend state loss
         if progress is not None or downloaded_bytes is not None:
-            progress_data["progress"] = {
-                "percentage": progress,
-                "status": status,
-                "downloaded_bytes": downloaded_bytes,
-                "total_bytes": total_bytes,
-                "speed": download_speed,
-                "eta": eta,
-            }
+            progress_data["progress"] = build_progress_object(
+                status=status,
+                progress=progress,
+                downloaded_bytes=downloaded_bytes,
+                total_bytes=total_bytes,
+                download_speed=download_speed,
+                eta=eta,
+            )
         elif status in ("downloading", "processing"):
             # For active downloads without new progress data, fetch current progress from DB
             # to prevent SSE events from wiping out frontend progress state
@@ -170,14 +169,14 @@ async def _update_download_status(
                 download_repo = DownloadRepository(session)
                 download = await download_repo.get_by_id(download_id)
                 if download and download.progress is not None:
-                    progress_data["progress"] = {
-                        "percentage": download.progress,
-                        "status": status,
-                        "downloaded_bytes": download.downloaded_bytes,
-                        "total_bytes": download.total_bytes,
-                        "speed": download.download_speed,
-                        "eta": download.eta,
-                    }
+                    progress_data["progress"] = build_progress_object(
+                        status=status,
+                        progress=download.progress,
+                        downloaded_bytes=download.downloaded_bytes,
+                        total_bytes=download.total_bytes,
+                        download_speed=download.download_speed,
+                        eta=download.eta,
+                    )
 
         # Debug logging to trace SSE events
         logger.info(
@@ -371,17 +370,17 @@ async def _download_video_task(
                     # Prepare progress data matching DownloadStatus schema
                     progress_data = {
                         "download_id": download_id,
-                        "status": "downloading",
-                        "message": f"Downloading: {percentage:.1f}%",
-                        "progress": {
-                            "percentage": percentage,
-                            "status": "downloading",
-                            "downloaded_bytes": downloaded_int,
-                            "total_bytes": total_int,
-                            "speed": speed_float,
-                            "eta": eta_float,
-                        },
-                        "result": result_data,  # Include video metadata
+                        **build_download_progress_payload(
+                            status="downloading",
+                            message=f"Downloading: {percentage:.1f}%",
+                            progress=percentage,
+                            downloaded_bytes=downloaded_int,
+                            total_bytes=total_int,
+                            download_speed=speed_float,
+                            eta=eta_float,
+                            result=result_data,
+                            include_progress=True,
+                        ),
                     }
 
                     # ============================================================

@@ -21,6 +21,7 @@ from app.models.pydantic.download import (
 )
 from app.services.redis_progress import redis_progress_service
 from app.tasks.download_tasks import batch_download_task, download_video_task
+from app.utils.download_progress import progress_fields_from_payload
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -146,20 +147,11 @@ async def get_download_status(
         if download.status == "downloading":
             redis_progress = await redis_progress_service.get_progress(download_id)
             if redis_progress:
-                progress_source = redis_progress.get("progress")
-                if not isinstance(progress_source, dict):
-                    progress_source = redis_progress
-
                 # Use Redis data for active downloads
                 progress_info = DownloadProgress(
-                    percentage=progress_source.get("percentage", 0.0),
-                    status=progress_source.get(
-                        "status", redis_progress.get("status", "downloading")
-                    ),
-                    downloaded_bytes=progress_source.get("downloaded_bytes"),
-                    total_bytes=progress_source.get("total_bytes"),
-                    speed=progress_source.get("speed"),
-                    eta=progress_source.get("eta"),
+                    **progress_fields_from_payload(
+                        redis_progress, fallback_status="downloading"
+                    )
                 )
 
         # Fall back to database if not in Redis or not downloading
