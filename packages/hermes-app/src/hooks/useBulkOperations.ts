@@ -85,17 +85,6 @@ export function useBulkOperations(options: UseBulkOperationsOptions = {}) {
     }
   }, [selectedItems, deleteMutation, deselectAll, onSuccess, onError])
 
-  const bulkRetry = useCallback(async () => {
-    const selectedItemIds = Array.from(selectedItems)
-    if (selectedItemIds.length === 0) {
-      toast.error('No items selected')
-      return
-    }
-
-    // TODO: Implement bulk retry functionality
-    toast.info('Bulk retry coming soon!')
-  }, [selectedItems])
-
   const bulkCancel = useCallback(async (items: BulkOperationItem[]) => {
     const selectedItemIds = Array.from(selectedItems)
     if (selectedItemIds.length === 0) {
@@ -149,7 +138,6 @@ export function useBulkOperations(options: UseBulkOperationsOptions = {}) {
     // Bulk operations
     bulkDelete,
     bulkCancel,
-    bulkRetry,
 
     // Utilities
     getSelectedItems,
