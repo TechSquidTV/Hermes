@@ -225,4 +225,68 @@ describe('ApiClient - API Key Methods', () => {
       )
     })
   })
+
+  describe('query parameter methods', () => {
+    it('serializes defined file filters and skips undefined values', async () => {
+      const mockResponse = {
+        files: [],
+        totalCount: 0,
+        totalSize: 0,
+        directory: '/downloads',
+      }
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockResponse,
+      } as Response)
+
+      const result = await apiClient.getDownloadedFiles({
+        extension: 'mp4',
+        limit: 25,
+        offset: 0,
+        max_size: undefined,
+      })
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/v1/files/?extension=mp4&limit=25&offset=0',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'Content-Type': 'application/json',
+          }),
+        })
+      )
+      expect(result).toEqual(mockResponse)
+    })
+
+    it('combines timeline period with optional filters consistently', async () => {
+      const mockResponse = [
+        {
+          date: '2026-01-01',
+          downloads: 1,
+          successful: 1,
+          failed: 0,
+          totalSize: 1024,
+          avgDuration: 10,
+          successRate: 1,
+        },
+      ]
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockResponse,
+      } as Response)
+
+      const result = await apiClient.getTimelineStats('month', {
+        extractor: 'youtube',
+        status: 'completed',
+        start_date: undefined,
+      })
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/v1/timeline/?period=month&extractor=youtube&status=completed',
+        expect.any(Object)
+      )
+      expect(result).toEqual(mockResponse)
+    })
+  })
 })

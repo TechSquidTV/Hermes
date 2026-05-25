@@ -49,6 +49,31 @@ interface ApiRequestInit extends RequestInit {
   skipAuth?: boolean
 }
 
+type SearchParamValue = string | number | boolean | null | undefined
+type SearchParams = Record<string, SearchParamValue>
+
+function buildSearchParams(
+  params?: SearchParams,
+  initialParams?: SearchParams
+): URLSearchParams {
+  const searchParams = new URLSearchParams()
+
+  const appendParams = (values?: SearchParams) => {
+    if (!values) return
+
+    Object.entries(values).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        searchParams.append(key, value.toString())
+      }
+    })
+  }
+
+  appendParams(initialParams)
+  appendParams(params)
+
+  return searchParams
+}
+
 class ApiClient {
   private baseURL: string
 
@@ -210,14 +235,7 @@ class ApiClient {
     limit?: number
     offset?: number
   }): Promise<FileList> {
-    const searchParams = new URLSearchParams()
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined) {
-          searchParams.append(key, value.toString())
-        }
-      })
-    }
+    const searchParams = buildSearchParams(params)
     return this.request<FileList>(`/files/?${searchParams}`)
   }
 
@@ -230,14 +248,7 @@ class ApiClient {
     limit?: number
     offset?: number
   }): Promise<DownloadHistory> {
-    const searchParams = new URLSearchParams()
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined) {
-          searchParams.append(key, value.toString())
-        }
-      })
-    }
+    const searchParams = buildSearchParams(params)
     return this.request<DownloadHistory>(`/history/?${searchParams}`)
   }
 
@@ -255,14 +266,7 @@ class ApiClient {
       status?: string
     }
   ): Promise<DailyStats[]> {
-    const searchParams = new URLSearchParams({ period })
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined) {
-          searchParams.append(key, value.toString())
-        }
-      })
-    }
+    const searchParams = buildSearchParams(params, { period })
     return this.request<DailyStats[]>(`/timeline/?${searchParams}`)
   }
 
@@ -273,14 +277,7 @@ class ApiClient {
       end_date?: string
     }
   ): Promise<TimelineSummary> {
-    const searchParams = new URLSearchParams({ period })
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined) {
-          searchParams.append(key, value.toString())
-        }
-      })
-    }
+    const searchParams = buildSearchParams(params, { period })
     return this.request<TimelineSummary>(`/timeline/summary?${searchParams}`)
   }
 
