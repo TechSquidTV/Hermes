@@ -4,13 +4,7 @@ import { apiClient } from '@/services/api/client'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { invalidateQueueQueries } from '@/lib/queryClient'
-
-interface BulkOperationItem {
-  id: string
-  title: string
-  filePath?: string
-  status: string
-}
+import type { BulkOperationItem } from '@/lib/queueData'
 
 interface UseBulkOperationsOptions {
   onSuccess?: () => void
