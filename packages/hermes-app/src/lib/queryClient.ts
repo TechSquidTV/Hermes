@@ -2,6 +2,10 @@
 
 import { QueryClient } from '@tanstack/react-query'
 
+interface InvalidateQueueOptions {
+  includeFiles?: boolean
+}
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -23,8 +27,18 @@ export const queryClient = new QueryClient({
   },
 })
 
+export function invalidateQueueQueries(
+  client: QueryClient,
+  options: InvalidateQueueOptions = {}
+) {
+  client.invalidateQueries({ queryKey: ['queue'], exact: false })
+  client.invalidateQueries({ queryKey: ['queue', 'active'], exact: false })
+  client.invalidateQueries({ queryKey: ['queue', 'history'], exact: false })
+  client.invalidateQueries({ queryKey: ['queue', 'all'], exact: false })
+  client.invalidateQueries({ queryKey: ['queueStats'], exact: false })
+  client.invalidateQueries({ queryKey: ['recentDownloadsQueue'], exact: false })
 
-
-
-
-
+  if (options.includeFiles) {
+    client.invalidateQueries({ queryKey: ['files'], exact: false })
+  }
+}

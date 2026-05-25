@@ -2,8 +2,9 @@
  * Tests for React Query client configuration
  */
 
-import { describe, it, expect } from 'vitest'
-import { queryClient } from '../queryClient'
+import { describe, it, expect, vi } from 'vitest'
+import { QueryClient } from '@tanstack/react-query'
+import { invalidateQueueQueries, queryClient } from '../queryClient'
 
 describe('queryClient', () => {
   describe('Configuration', () => {
@@ -151,6 +152,56 @@ describe('queryClient', () => {
     it('has retry set to 1', () => {
       const defaultOptions = queryClient.getDefaultOptions()
       expect(defaultOptions.mutations?.retry).toBe(1)
+    })
+  })
+
+  describe('invalidateQueueQueries', () => {
+    it('invalidates every queue view that displays download state', () => {
+      const client = new QueryClient()
+      const invalidateQueries = vi.spyOn(client, 'invalidateQueries')
+
+      invalidateQueueQueries(client)
+
+      expect(invalidateQueries).toHaveBeenCalledWith({
+        queryKey: ['queue'],
+        exact: false,
+      })
+      expect(invalidateQueries).toHaveBeenCalledWith({
+        queryKey: ['queue', 'active'],
+        exact: false,
+      })
+      expect(invalidateQueries).toHaveBeenCalledWith({
+        queryKey: ['queue', 'history'],
+        exact: false,
+      })
+      expect(invalidateQueries).toHaveBeenCalledWith({
+        queryKey: ['queue', 'all'],
+        exact: false,
+      })
+      expect(invalidateQueries).toHaveBeenCalledWith({
+        queryKey: ['queueStats'],
+        exact: false,
+      })
+      expect(invalidateQueries).toHaveBeenCalledWith({
+        queryKey: ['recentDownloadsQueue'],
+        exact: false,
+      })
+      expect(invalidateQueries).not.toHaveBeenCalledWith({
+        queryKey: ['files'],
+        exact: false,
+      })
+    })
+
+    it('can also invalidate downloaded file lists', () => {
+      const client = new QueryClient()
+      const invalidateQueries = vi.spyOn(client, 'invalidateQueries')
+
+      invalidateQueueQueries(client, { includeFiles: true })
+
+      expect(invalidateQueries).toHaveBeenCalledWith({
+        queryKey: ['files'],
+        exact: false,
+      })
     })
   })
 })

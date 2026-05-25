@@ -3,6 +3,7 @@ import { useDeleteFiles } from './useDownloadActions'
 import { apiClient } from '@/services/api/client'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { invalidateQueueQueries } from '@/lib/queryClient'
 
 interface BulkOperationItem {
   id: string
@@ -124,9 +125,7 @@ export function useBulkOperations(options: UseBulkOperationsOptions = {}) {
       await Promise.all(cancellableItems.map(item => apiClient.cancelDownload(item.id)))
       toast.success(`Cancelled ${cancellableItems.length} download${cancellableItems.length !== 1 ? 's' : ''}`)
       deselectAll()
-      queryClient.invalidateQueries({ queryKey: ['queue'], exact: false })
-      queryClient.invalidateQueries({ queryKey: ['queueStats'], exact: false })
-      queryClient.invalidateQueries({ queryKey: ['recentDownloadsQueue'], exact: false })
+      invalidateQueueQueries(queryClient)
       onSuccess?.()
     } catch (error) {
       toast.error(`Failed to cancel downloads: ${error instanceof Error ? error.message : 'Unknown error'}`)
