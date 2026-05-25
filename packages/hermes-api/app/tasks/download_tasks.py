@@ -23,6 +23,7 @@ from app.utils.download_progress import (
     build_download_progress_payload,
     build_progress_object,
 )
+from app.utils.media import VIDEO_EXTENSIONS
 
 logger = get_logger(__name__)
 yt_service = YTDLPService()
@@ -467,23 +468,12 @@ async def _download_video_task(
 
         if result_path and os.path.exists(result_path):
             # Ensure the file has a proper extension
-            if not result_path.lower().endswith(
-                (".mp4", ".webm", ".mkv", ".avi", ".mov", ".flv", ".3gp", ".m4v")
-            ):
+            if not result_path.lower().endswith(VIDEO_EXTENSIONS):
                 # Try to find the correct file with extension
                 directory = os.path.dirname(result_path)
                 base_name = os.path.basename(result_path)
 
-                for ext in [
-                    ".mp4",
-                    ".webm",
-                    ".mkv",
-                    ".avi",
-                    ".mov",
-                    ".flv",
-                    ".3gp",
-                    ".m4v",
-                ]:
+                for ext in VIDEO_EXTENSIONS:
                     potential_path = os.path.join(directory, base_name + ext)
                     if os.path.exists(potential_path):
                         result_path = potential_path

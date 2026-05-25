@@ -11,6 +11,7 @@ import yt_dlp
 from yt_dlp.utils import DownloadError, ExtractorError
 
 from app.core.logging import get_logger
+from app.utils.media import VIDEO_EXTENSIONS
 
 logger = get_logger(__name__)
 
@@ -122,16 +123,7 @@ class YTDLPService:
                                 base_name = base_name.replace(".%(ext)s", "")
 
                             # Look for the actual downloaded file with common extensions
-                            for ext in [
-                                ".mp4",
-                                ".webm",
-                                ".mkv",
-                                ".avi",
-                                ".mov",
-                                ".flv",
-                                ".3gp",
-                                ".m4v",
-                            ]:
+                            for ext in VIDEO_EXTENSIONS:
                                 potential_path = os.path.join(
                                     directory, base_name + ext
                                 )
