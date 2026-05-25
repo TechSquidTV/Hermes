@@ -34,6 +34,15 @@ def test_build_download_progress_payload_uses_nested_progress_shape():
     }
 
 
+def test_build_download_progress_payload_preserves_empty_result_object():
+    payload = build_download_progress_payload(
+        status="downloading",
+        result={},
+    )
+
+    assert payload["result"] == {}
+
+
 def test_progress_fields_from_payload_accepts_nested_task_payload():
     fields = progress_fields_from_payload(
         {

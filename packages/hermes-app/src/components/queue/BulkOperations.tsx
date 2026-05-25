@@ -3,13 +3,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Trash2, X, CheckSquare, Square, RefreshCw } from 'lucide-react'
 import { useConfirmation } from '@/hooks/useConfirmation'
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
-
-interface BulkOperationItem {
-  id: string
-  title: string
-  filePath?: string
-  status: string
-}
+import type { BulkOperationItem } from '@/lib/queueData'
 
 interface BulkOperationsProps {
   selectedCount: number
