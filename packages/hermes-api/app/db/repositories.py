@@ -86,8 +86,15 @@ class DownloadRepository(BaseRepository):
         if not download:
             return None
 
+        terminal_statuses = {"completed", "failed", "cancelled"}
+        if download.status in terminal_statuses and status not in terminal_statuses:
+            return download
+
         download.status = status
-        download.progress = progress if progress is not None else download.progress
+        if status == "completed":
+            download.progress = 100.0
+        elif progress is not None:
+            download.progress = progress
 
         # Update progress tracking fields
         if downloaded_bytes is not None:

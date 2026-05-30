@@ -54,6 +54,41 @@ class TestDownloadEndpoints:
         )
 
     @pytest.mark.asyncio
+    async def test_completed_download_persists_full_progress(
+        self, db_session: AsyncSession
+    ):
+        repo = DownloadRepository(db_session)
+        download = await repo.create(
+            url="https://example.test/watch",
+            status="downloading",
+            progress=41.5,
+        )
+
+        await repo.update_status(download.id, "completed", progress=41.5)
+        await db_session.refresh(download)
+
+        assert download.status == "completed"
+        assert download.progress == 100.0
+
+    @pytest.mark.asyncio
+    async def test_terminal_download_ignores_late_active_progress(
+        self, db_session: AsyncSession
+    ):
+        repo = DownloadRepository(db_session)
+        download = await repo.create(
+            url="https://example.test/watch",
+            status="downloading",
+            progress=83.0,
+        )
+
+        await repo.update_status(download.id, "completed", progress=100.0)
+        await repo.update_status(download.id, "downloading", progress=41.5)
+        await db_session.refresh(download)
+
+        assert download.status == "completed"
+        assert download.progress == 100.0
+
+    @pytest.mark.asyncio
     async def test_get_download_status_uses_nested_redis_progress_from_task(
         self, client: AsyncClient, db_session: AsyncSession
     ):
