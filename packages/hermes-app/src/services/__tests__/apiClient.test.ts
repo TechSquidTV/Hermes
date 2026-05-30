@@ -289,4 +289,35 @@ describe('ApiClient - API Key Methods', () => {
       expect(result).toEqual(mockResponse)
     })
   })
+
+  describe('health checks', () => {
+    it('fetches health without attaching auth state', async () => {
+      const getAccessTokenSpy = vi
+        .spyOn(TokenStorage, 'getAccessToken')
+        .mockReturnValue('stale-token')
+      const mockResponse = {
+        status: 'healthy',
+        version: 'v0.4.2',
+        environment: 'production',
+      }
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockResponse,
+      } as Response)
+
+      const result = await apiClient.getHealth()
+
+      expect(getAccessTokenSpy).not.toHaveBeenCalled()
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/v1/health/',
+        expect.objectContaining({
+          headers: expect.not.objectContaining({
+            Authorization: expect.any(String),
+          }),
+        })
+      )
+      expect(result).toEqual(mockResponse)
+    })
+  })
 })

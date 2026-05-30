@@ -415,7 +415,7 @@ Adjust worker concurrency:
 
 ```yaml
 celery_worker:
-  command: celery -A app.worker worker --loglevel=info --concurrency=4
+  command: celery -A app.worker worker --loglevel=info --concurrency=4 --queues=hermes.downloads,hermes.cleanup,hermes.default
 ```
 
 ### Storage Optimization

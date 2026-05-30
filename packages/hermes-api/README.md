@@ -38,7 +38,7 @@ redis-server &
 uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 # In another terminal, start Celery worker
-uv run celery -A app.tasks.celery_app worker --loglevel=info
+uv run celery -A app.tasks.celery_app worker --loglevel=info --concurrency=1 --hostname=hermes-worker@%h --queues=hermes.downloads,hermes.cleanup,hermes.default
 ```
 
 ### Using Docker

@@ -3,6 +3,7 @@ Celery configuration for background task processing.
 """
 
 from celery import Celery
+from kombu import Queue
 
 from app.core.config import settings
 
@@ -15,6 +16,8 @@ celery_app = Celery(
 
 # Make celery_app available for task decorators before importing tasks
 __all__ = ["celery_app"]
+
+TASK_QUEUE_NAMES = ("hermes.default", "hermes.downloads", "hermes.cleanup")
 
 # Celery configuration
 celery_app.conf.update(
@@ -29,6 +32,7 @@ celery_app.conf.update(
     worker_max_tasks_per_child=1000,
     # Queue settings
     task_default_queue="hermes.default",
+    task_queues=[Queue(queue_name) for queue_name in TASK_QUEUE_NAMES],
     task_create_missing_queues=True,
     # Routing
     task_routes={

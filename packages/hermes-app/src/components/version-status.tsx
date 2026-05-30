@@ -14,6 +14,11 @@ import packageJson from '../../package.json'
 // Current versions
 const CURRENT_APP_VERSION = resolveCurrentAppVersion(packageJson.version)
 
+type ComponentVersionInfo = {
+  app: { current: string; latest: string | null; status: VersionStatus }
+  api: { current: string; latest: string | null; status: VersionStatus }
+}
+
 interface VersionStatusProps {
   className?: string
 }
@@ -22,10 +27,8 @@ export function VersionStatus({ className }: VersionStatusProps) {
   const { state: sidebarState } = useSidebar()
   const isMountedRef = React.useRef(false)
   const requestIdRef = React.useRef(0)
-  const [versionInfo, setVersionInfo] = React.useState<{
-    app: { current: string; latest: string | null; status: VersionStatus }
-    api: { current: string; latest: string | null; status: VersionStatus }
-  } | null>(null)
+  const versionInfoRef = React.useRef<ComponentVersionInfo | null>(null)
+  const [versionInfo, setVersionInfo] = React.useState<ComponentVersionInfo | null>(null)
   const [isLoading, setIsLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
 
@@ -37,18 +40,27 @@ export function VersionStatus({ className }: VersionStatusProps) {
     try {
       if (!isMountedRef.current) return
 
-      setIsLoading(true)
+      if (!versionInfoRef.current) {
+        setIsLoading(true)
+      }
       setError(null)
 
-      // Fetch API version from health endpoint
-      const healthResponse = await apiClient.getHealth()
-      const apiVersion = healthResponse.version || 'unknown'
+      let apiVersion = versionInfoRef.current?.api.current || 'unknown'
+      let healthError: string | null = null
+
+      try {
+        const healthResponse = await apiClient.getHealth()
+        apiVersion = healthResponse.version || 'unknown'
+      } catch (err) {
+        console.error('Failed to fetch API health:', err)
+        healthError = err instanceof Error ? err.message : 'Failed to check API health'
+      }
 
       // Fetch GitHub tag info
       const info = await githubService.getVersionInfo(CURRENT_APP_VERSION, apiVersion)
 
       if (isLatestRequest()) {
-        setVersionInfo({
+        const nextVersionInfo = {
           app: {
             current: CURRENT_APP_VERSION,
             latest: info.latest.app,
@@ -59,25 +71,33 @@ export function VersionStatus({ className }: VersionStatusProps) {
             latest: info.latest.api,
             status: info.status.api
           }
-        })
+        }
+
+        versionInfoRef.current = nextVersionInfo
+        setVersionInfo(nextVersionInfo)
+        setError(healthError)
       }
     } catch (err) {
       console.error('Failed to fetch version info:', err)
       if (isLatestRequest()) {
         setError(err instanceof Error ? err.message : 'Failed to check for updates')
-        // Set fallback version info
-        setVersionInfo({
-          app: {
-            current: CURRENT_APP_VERSION,
-            latest: null,
-            status: 'unknown'
-          },
-          api: {
-            current: 'unknown',
-            latest: null,
-            status: 'unknown'
+        if (!versionInfoRef.current) {
+          const fallbackVersionInfo = {
+            app: {
+              current: CURRENT_APP_VERSION,
+              latest: null,
+              status: 'unknown' as const
+            },
+            api: {
+              current: 'unknown',
+              latest: null,
+              status: 'unknown' as const
+            }
           }
-        })
+
+          versionInfoRef.current = fallbackVersionInfo
+          setVersionInfo(fallbackVersionInfo)
+        }
       }
     } finally {
       if (isLatestRequest()) {
@@ -96,6 +116,23 @@ export function VersionStatus({ className }: VersionStatusProps) {
       isMountedRef.current = false
     }
   }, [fetchVersionInfo])
+
+  React.useEffect(() => {
+    const retryDelay = error ? 30_000 : 300_000
+    const intervalId = window.setInterval(() => {
+      void fetchVersionInfo()
+    }, retryDelay)
+    const handleFocus = () => {
+      void fetchVersionInfo()
+    }
+
+    window.addEventListener('focus', handleFocus)
+
+    return () => {
+      window.clearInterval(intervalId)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [error, fetchVersionInfo])
 
   const getStatusIcon = (status: VersionStatus) => {
     switch (status) {

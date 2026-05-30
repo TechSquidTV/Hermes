@@ -205,7 +205,7 @@ services:
     depends_on:
       - redis
       - api
-    command: celery -A app.worker worker --loglevel=info
+    command: celery -A app.worker worker --loglevel=info --concurrency=1 --hostname=hermes-worker@%h --queues=hermes.downloads,hermes.cleanup,hermes.default
 
   # App - hermes.example.com
   app:
@@ -790,7 +790,7 @@ services:
     depends_on:
       - redis
       - api
-    command: celery -A app.worker worker --loglevel=info
+    command: celery -A app.worker worker --loglevel=info --concurrency=1 --hostname=hermes-worker@%h --queues=hermes.downloads,hermes.cleanup,hermes.default
 
   redis:
     image: redis:7-alpine
@@ -886,7 +886,7 @@ services:
     depends_on:
       - redis
       - api
-    command: celery -A app.worker worker --loglevel=info
+    command: celery -A app.worker worker --loglevel=info --concurrency=1 --hostname=hermes-worker@%h --queues=hermes.downloads,hermes.cleanup,hermes.default
 
   redis:
     image: redis:7-alpine

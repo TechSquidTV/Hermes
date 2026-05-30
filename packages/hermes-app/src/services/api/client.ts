@@ -178,7 +178,7 @@ class ApiClient {
 
   // Health check - Use trailing slash to match API router
   async getHealth(): Promise<HealthResponse> {
-    return this.request<HealthResponse>('/health/')
+    return this.request<HealthResponse>('/health/', { skipAuth: true })
   }
 
   // Video information
