@@ -52,7 +52,7 @@ Releases follow a structured workflow to ensure stability:
 3. **Main Branch** → When ready, merge `develop` to `main`
 4. **Release Workflow** → Manually trigger release from `main` branch
 
-Releases are created using the GitHub Actions workflow, which ensures consistency and runs in a clean CI environment.
+Releases are created using the GitHub Actions workflow, which ensures consistency and runs in a clean CI environment. Do not create GitHub Releases manually; the workflow creates the release only after the version bump, tags, and Docker images have all succeeded.
 
 ### Using GitHub UI
 
@@ -104,6 +104,7 @@ The release workflow automatically handles everything in one go:
 8. ✅ Builds and pushes Docker images to GitHub Container Registry:
    - `ghcr.io/[org]/hermes-app:X.X.X`, `X.X`, `X`, `latest`
    - `ghcr.io/[org]/hermes-api:X.X.X`, `X.X`, `X`, `latest`
+9. ✅ Creates the GitHub Release for `vX.X.X`
 
 **If pre-checks fail, nothing is committed, tagged, or published - your main branch stays clean.**
 
@@ -127,6 +128,9 @@ When the release workflow completes successfully, the following are available:
    - `packages/hermes-app/package.json`
    - `packages/hermes-api/pyproject.toml`
 
+4. **GitHub Release** for the project tag:
+   - `vX.X.X`
+
 ### 📊 Version Status Integration
 
 The application includes an automatic version status feature that integrates with the release process:
@@ -135,7 +139,7 @@ The application includes an automatic version status feature that integrates wit
 
 1. **Frontend Version**: Automatically reads from `package.json` and updates when rebuilt
 2. **API Version**: Fetched from the API's health endpoint (`/api/v1/health/`)
-3. **Latest Versions**: Queried from GitHub releases in the monorepo
+3. **Latest Versions**: Queried from published component Git tags in the monorepo
 4. **Status Detection**: Compares current vs latest versions and shows appropriate status
 
 #### User Experience
@@ -154,8 +158,8 @@ When users access the deployed application, they see:
 
 The version status feature automatically detects updates by:
 
-- **Monitoring GitHub releases** in `techsquidtv/hermes` repository
-- **Filtering by tag patterns** (`hermes-app-v*`, `hermes-api-v*`)
+- **Monitoring Git tags** in the `techsquidtv/hermes` repository
+- **Filtering by published-image tag patterns** (`hermes-app-v*`, `hermes-api-v*`)
 - **Semantic version comparison** (MAJOR.MINOR.PATCH)
 - **Real-time updates** without requiring application restart
 
@@ -241,10 +245,10 @@ docker pull ghcr.io/<your-org>/hermes-app:1.0.0  # Previous working version
 ### Option 2: Create a Hotfix Release
 
 1. Fix the issue in your code
-2. Create a new patch version tag:
+2. Merge the fix to `main`
+3. Run the Release workflow with the next patch version:
    ```bash
-   git tag hermes-app-v1.0.1
-   git push origin hermes-app-v1.0.1
+   gh workflow run release.yml -f version=1.0.1
    ```
 
 ### Option 3: Delete a Bad Tag (Use Sparingly)
@@ -252,11 +256,13 @@ docker pull ghcr.io/<your-org>/hermes-app:1.0.0  # Previous working version
 If you haven't deployed the release yet:
 
 ```bash
-# Delete local tag
-git tag -d hermes-app-v1.0.0
+# Delete local tags
+git tag -d v1.0.0 hermes-app-v1.0.0 hermes-api-v1.0.0
 
-# Delete remote tag
+# Delete remote tags
+git push origin :refs/tags/v1.0.0
 git push origin :refs/tags/hermes-app-v1.0.0
+git push origin :refs/tags/hermes-api-v1.0.0
 ```
 
 **Note**: Only delete tags that haven't been deployed to production. Once deployed, create a new version instead.
@@ -282,25 +288,9 @@ docker compose -f docker-compose.example.yml up -d
 - Clear separation from production `latest` tag
 - Easy to test accumulated changes before release
 
-### Pre-release Version Tags (Alternative)
+### Pre-release Version Tags
 
-For formal pre-release versions (alpha/beta/rc), you can use pre-release tags:
-
-```bash
-# Alpha version
-git tag hermes-app-v1.0.0-alpha.1
-git push origin hermes-app-v1.0.0-alpha.1
-
-# Beta version
-git tag hermes-app-v1.0.0-beta.1
-git push origin hermes-app-v1.0.0-beta.1
-
-# Release candidate
-git tag hermes-app-v1.0.0-rc.1
-git push origin hermes-app-v1.0.0-rc.1
-```
-
-These will build and publish Docker images but won't update the `latest` tag.
+Pre-release version tags are not published automatically. Use `develop` images for release-candidate testing, or add a dedicated pre-release workflow before publishing `alpha`, `beta`, or `rc` tags.
 
 ## 📋 Release Checklist
 
@@ -332,7 +322,9 @@ Before triggering a release:
   - Version bump and commit
   - Tag creation
   - Docker image builds (both app and api)
+  - GitHub Release creation
 - [ ] Verify Docker images are published in [GitHub Packages](https://github.com/TechSquidTV?tab=packages)
+- [ ] Verify the GitHub Release links to the same `vX.X.X` tag
 - [ ] Test pulling and running the new images (optional)
 
 ### Version Status Integration
@@ -353,7 +345,7 @@ The version status feature will automatically:
 **Cause**: Tests, linting, type-checking, or build failed.
 
 **Solution**:
-1. Run `pnpm pre-check:full` locally to identify the issue
+1. Run `pnpm pre-check` locally to identify the issue
 2. Fix the failing checks
 3. Commit and push fixes
 4. Re-run the release workflow
@@ -372,6 +364,17 @@ The version status feature will automatically:
    docker build -f packages/hermes-api/Dockerfile packages/hermes-api
    ```
 3. Fix any issues and re-run the release workflow
+
+### Published Release Has No Docker Images
+
+**Symptom**: A GitHub Release exists, but `docker pull ghcr.io/...:X.Y.Z` fails with `manifest unknown`.
+
+**Cause**: The release was likely created manually from a `vX.Y.Z` tag that was not produced by the Release workflow, so the package versions or component tags do not match.
+
+**Solution**:
+1. If the release was not deployed, delete the bad GitHub Release and its tag, then rerun the Release workflow.
+2. If the release may have been deployed, leave it in place and cut the next patch version.
+3. Use the manual **Publish Release Images** workflow only for tags created by the Release workflow.
 
 ### Permission Denied When Pushing Images
 

@@ -181,12 +181,11 @@ class GitHubService {
     }
   }
 
-  getReleaseUrl(repo: 'app' | 'api', version: string | null): string | null {
+  getReleaseUrl(_repo: 'app' | 'api', version: string | null): string | null {
     if (!version) return null
 
-    // Construct the full tag name like 'hermes-app-v1.0.0'
-    const tagName = `hermes-${repo}-v${version}`
-    return `https://github.com/${this.HERMES_MONOREPO}/releases/tag/${tagName}`
+    const releaseVersion = version.replace(/^v/, '')
+    return `https://github.com/${this.HERMES_MONOREPO}/releases/tag/v${releaseVersion}`
   }
 }
 

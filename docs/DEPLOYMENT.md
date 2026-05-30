@@ -125,7 +125,7 @@ When using Docker Compose, leave `VITE_API_BASE_URL=/api/v1`; the frontend nginx
 The application includes a built-in version status indicator in the sidebar that:
 
 - **Shows current versions** of both frontend (hermes-app) and backend (hermes-api)
-- **Checks for updates** by querying GitHub releases automatically
+- **Checks for updates** by querying published-image Git tags automatically
 - **Displays status badges**:
   - 🟢 **Up to date**: Green checkmark when running latest version
   - 🟠 **Update available**: Orange warning with clickable link to new release
@@ -135,8 +135,8 @@ The application includes a built-in version status indicator in the sidebar that
 
 - **Frontend Version**: Dynamically loaded from `package.json` at build time
 - **API Version**: Fetched from the API's health endpoint (`/api/v1/health/`), sourced from `pyproject.toml`
-- **Latest Versions**: Retrieved from GitHub releases in the monorepo (`techsquidtv/hermes`)
-- **Release Tags**: Supports semantic versioning with tags like `hermes-app-v1.0.0`
+- **Latest Versions**: Retrieved from Git tags in the monorepo (`techsquidtv/hermes`)
+- **Published Image Tags**: Supports semantic versioning with tags like `hermes-app-v1.0.0`
 
 #### Accessing Version Status
 
