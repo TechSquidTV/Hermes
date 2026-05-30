@@ -47,7 +47,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -205,10 +205,10 @@ jobs:
           echo "Pushed commit and tags to main"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -216,7 +216,7 @@ jobs:
 
       - name: Extract metadata for hermes-app
         id: meta-app
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository_owner }}/hermes-app
           tags: |
@@ -228,7 +228,7 @@ jobs:
             org.opencontainers.image.revision=${{ steps.release_commit.outputs.sha }}
 
       - name: Build and push hermes-app Docker image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./packages/hermes-app/Dockerfile
@@ -243,7 +243,7 @@ jobs:
 
       - name: Extract metadata for hermes-api
         id: meta-api
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository_owner }}/hermes-api
           tags: |
@@ -255,7 +255,7 @@ jobs:
             org.opencontainers.image.revision=${{ steps.release_commit.outputs.sha }}
 
       - name: Build and push hermes-api Docker image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./packages/hermes-api
           file: ./packages/hermes-api/Dockerfile
