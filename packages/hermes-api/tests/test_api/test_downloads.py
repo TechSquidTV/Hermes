@@ -4,7 +4,7 @@ External work queues and Redis are mocked; these tests cover API-owned request
 handling, persistence, response shaping, and state transitions.
 """
 
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import AsyncClient
@@ -183,9 +183,9 @@ class TestDownloadEndpoints:
     async def test_start_batch_download_creates_records_and_schedules_batch(
         self, client: AsyncClient, db_session: AsyncSession
     ):
-        batch_task = Mock()
-
-        with patch("app.api.v1.endpoints.downloads.batch_download_task", batch_task):
+        with patch(
+            "app.api.v1.endpoints.downloads.batch_download_task.apply_async"
+        ) as apply_async:
             response = await client.post(
                 "/api/v1/download/batch",
                 json={
@@ -215,9 +215,12 @@ class TestDownloadEndpoints:
         ]
         assert [download.status for download in downloads] == ["pending", "pending"]
 
-        batch_task.assert_called_once_with(
-            data["downloads"],
-            ["https://example.test/one", "https://example.test/two"],
-            "best",
-            "/downloads/batch",
+        apply_async.assert_called_once_with(
+            kwargs={
+                "download_ids": data["downloads"],
+                "urls": ["https://example.test/one", "https://example.test/two"],
+                "format_spec": "best",
+                "output_directory": "/downloads/batch",
+            },
+            queue="hermes.downloads",
         )
