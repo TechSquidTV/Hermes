@@ -27,6 +27,49 @@ router = APIRouter()
 logger = get_logger(__name__)
 
 
+def _download_options_from_request(download_request: DownloadRequest) -> dict:
+    """Map public download options onto task/yt-dlp keyword arguments."""
+    options = {}
+
+    if download_request.output_template:
+        options["output_template"] = download_request.output_template
+    if download_request.download_subtitles:
+        options["writesubtitles"] = True
+    if download_request.download_thumbnail:
+        options["writethumbnail"] = True
+    if download_request.subtitle_languages:
+        options["subtitleslangs"] = download_request.subtitle_languages
+    if download_request.cookie_file:
+        options["cookiefile"] = download_request.cookie_file
+    if download_request.cookies:
+        options["http_headers"] = {
+            "Cookie": "; ".join(
+                f"{name}={value}" for name, value in download_request.cookies.items()
+            )
+        }
+    if download_request.browser_cookies and download_request.browser_cookies.get(
+        "browser"
+    ):
+        options["cookiesfrombrowser"] = tuple(
+            download_request.browser_cookies.get(key)
+            for key in ("browser", "profile", "keyring", "container")
+        )
+
+    return options
+
+
+def _batch_download_options_from_request(batch_request: BatchDownloadRequest) -> dict:
+    """Map public batch download options onto task/yt-dlp keyword arguments."""
+    options = {}
+
+    if batch_request.download_subtitles:
+        options["writesubtitles"] = True
+    if batch_request.download_thumbnail:
+        options["writethumbnail"] = True
+
+    return options
+
+
 def get_repositories_from_session(db_session: AsyncSession):
     """Create repository instances using the provided database session."""
     return {
@@ -108,6 +151,7 @@ async def start_download(
                 "url": download_request.url,
                 "format_spec": download_request.format,
                 "output_path": download_request.output_directory,
+                **_download_options_from_request(download_request),
             },
             queue="hermes.downloads",
         )
@@ -306,6 +350,7 @@ async def start_batch_download(
             batch_request.urls,
             batch_request.format,
             batch_request.output_directory,
+            **_batch_download_options_from_request(batch_request),
         )
 
         logger.info(
