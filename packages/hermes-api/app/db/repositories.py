@@ -228,6 +228,22 @@ class DownloadFileRepository(BaseRepository):
         )
         return result.scalars().all()
 
+    async def get_all(self, limit: int = 10000) -> List[DownloadFile]:
+        """Get all downloaded file records."""
+        result = await self.session.execute(
+            select(DownloadFile).order_by(desc(DownloadFile.created_at)).limit(limit)
+        )
+        return result.scalars().all()
+
+    async def delete(self, file_id: str) -> bool:
+        """Delete a downloaded file record by ID."""
+        download_file = await self.session.get(DownloadFile, file_id)
+        if download_file:
+            await self.session.delete(download_file)
+            await self.commit()
+            return True
+        return False
+
     async def delete_by_download_id(self, download_id: str) -> int:
         """Delete all files for a download. Returns count of deleted files."""
         from sqlalchemy import delete
