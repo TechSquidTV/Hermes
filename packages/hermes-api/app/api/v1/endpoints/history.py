@@ -187,7 +187,7 @@ async def get_download_history(
             for record in history_records
         ]
 
-        # Calculate statistics (for all records, not just current page)
+        # Calculate statistics for all matching records, not just current page.
         stats_query = select(
             func.count().label("total"),
             func.avg(DownloadHistoryModel.duration).label("avg_duration"),
@@ -195,43 +195,44 @@ async def get_download_history(
             func.sum(
                 func.cast(DownloadHistoryModel.status == "completed", type_=Integer)
             ).label("successful"),
-        )
+        ).select_from(DownloadHistoryModel)
         if filters:
             stats_query = stats_query.where(and_(*filters))
 
-        # Simplified statistics for now
-        total_downloads = total_count
-        success_rate = 0.0
-        avg_time = 0.0
-        total_size = 0
+        stats_result = await db_session.execute(stats_query)
+        stats = stats_result.one()
 
-        if total_downloads > 0:
-            completed_count = sum(1 for r in history_records if r.status == "completed")
-            success_rate = (
-                completed_count / len(history_records) if history_records else 0
-            )
-            durations = [r.duration for r in history_records if r.duration]
-            avg_time = sum(durations) / len(durations) if durations else 0
-            sizes = [r.file_size for r in history_records if r.file_size]
-            total_size = sum(sizes)
+        total_downloads = stats.total or 0
+        successful_downloads = stats.successful or 0
+        success_rate = (
+            successful_downloads / total_downloads if total_downloads > 0 else 0.0
+        )
+        avg_time = stats.avg_duration or 0.0
+        total_size = stats.total_size or 0
 
-        # Get popular extractors (simplified)
+        # Get popular extractors for all matching records.
+        extractor_query = select(
+            DownloadHistoryModel.extractor,
+            func.count().label("count"),
+        ).select_from(DownloadHistoryModel)
+        if filters:
+            extractor_query = extractor_query.where(and_(*filters))
+        extractor_query = (
+            extractor_query.group_by(DownloadHistoryModel.extractor)
+            .order_by(func.count().desc())
+            .limit(5)
+        )
+
+        extractor_result = await db_session.execute(extractor_query)
         popular_extractors = []
-        extractor_counts = {}
-        for record in history_records:
-            ext = record.extractor or "unknown"
-            extractor_counts[ext] = extractor_counts.get(ext, 0) + 1
-
-        for ext, count in sorted(
-            extractor_counts.items(), key=lambda x: x[1], reverse=True
-        )[:5]:
+        for extractor, count in extractor_result.all():
             popular_extractors.append(
                 PopularExtractor(
-                    extractor=ext,
+                    extractor=extractor or "unknown",
                     count=count,
                     percentage=(
-                        round((count / len(history_records)) * 100, 2)
-                        if history_records
+                        round((count / total_downloads) * 100, 2)
+                        if total_downloads
                         else 0
                     ),
                 )
