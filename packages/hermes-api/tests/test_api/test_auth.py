@@ -95,7 +95,7 @@ class TestAuthentication:
 
         response = await client.post(
             "/api/v1/auth/refresh",
-            json={"refresh_token": create_refresh_token(token_data)},
+            json={"refreshToken": create_refresh_token(token_data)},
         )
 
         assert response.status_code == 200
