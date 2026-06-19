@@ -7,7 +7,9 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from httpx import AsyncClient
 
+from app.core.config import settings
 from app.core.security import create_refresh_token
+from app.db.repositories import DownloadFileRepository, DownloadRepository
 
 
 class TestAuthentication:
@@ -622,7 +624,13 @@ class TestApiKeyAuthentication:
 
     @pytest.mark.asyncio
     async def test_database_api_key_permissions_by_route(
-        self, client: AsyncClient, test_user, auth_token, tmp_path
+        self,
+        client: AsyncClient,
+        test_user,
+        auth_token,
+        db_session,
+        tmp_path,
+        monkeypatch,
     ):
         """Test read, write, and download permissions are distinct."""
         from app.main import app
@@ -648,8 +656,24 @@ class TestApiKeyAuthentication:
         read_key = read_response.json()["key"]
         write_key = write_response.json()["key"]
         download_key = download_response.json()["key"]
-        file_path = tmp_path / "sample.txt"
+
+        downloads_dir = tmp_path / "downloads"
+        monkeypatch.setattr(settings, "download_dir", str(downloads_dir))
+        file_path = downloads_dir / "sample.txt"
+        file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text("sample")
+        download = await DownloadRepository(db_session).create(
+            url="https://example.test/watch",
+            status="completed",
+            output_path=str(file_path),
+        )
+        await DownloadFileRepository(db_session).create(
+            download_id=download.id,
+            filename=file_path.name,
+            filepath=str(file_path),
+            file_size=file_path.stat().st_size,
+            file_type="text",
+        )
 
         read_allowed = await client.get(
             "/api/v1/queue/", headers={"Authorization": f"Bearer {read_key}"}
