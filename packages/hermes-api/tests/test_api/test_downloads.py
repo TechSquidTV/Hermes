@@ -54,6 +54,53 @@ class TestDownloadEndpoints:
         )
 
     @pytest.mark.asyncio
+    async def test_start_download_forwards_supported_options(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        with patch(
+            "app.api.v1.endpoints.downloads.download_video_task.apply_async"
+        ) as apply_async:
+            response = await client.post(
+                "/api/v1/download/",
+                json={
+                    "url": "https://example.test/watch",
+                    "format": "best",
+                    "outputDirectory": "/downloads/custom",
+                    "outputTemplate": "%(title)s.custom.%(ext)s",
+                    "downloadSubtitles": True,
+                    "downloadThumbnail": True,
+                    "subtitleLanguages": ["en", "es"],
+                    "cookies": {"session": "abc", "pref": "dark"},
+                    "cookieFile": "/cookies/browser.txt",
+                    "browserCookies": {
+                        "browser": "firefox",
+                        "profile": "default",
+                    },
+                },
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        download = await DownloadRepository(db_session).get_by_id(data["downloadId"])
+        assert download is not None
+
+        queued_kwargs = apply_async.call_args.kwargs["kwargs"]
+        assert queued_kwargs == {
+            "download_id": data["downloadId"],
+            "url": "https://example.test/watch",
+            "format_spec": "best",
+            "output_path": "/downloads/custom",
+            "output_template": "%(title)s.custom.%(ext)s",
+            "writesubtitles": True,
+            "writethumbnail": True,
+            "subtitleslangs": ["en", "es"],
+            "http_headers": {"Cookie": "session=abc; pref=dark"},
+            "cookiefile": "/cookies/browser.txt",
+            "cookiesfrombrowser": ("firefox", "default", None, None),
+        }
+        assert apply_async.call_args.kwargs["queue"] == "hermes.downloads"
+
+    @pytest.mark.asyncio
     async def test_completed_download_persists_full_progress(
         self, db_session: AsyncSession
     ):
@@ -195,6 +242,8 @@ class TestDownloadEndpoints:
                     ],
                     "format": "best",
                     "outputDirectory": "/downloads/batch",
+                    "downloadSubtitles": True,
+                    "downloadThumbnail": True,
                 },
             )
 
@@ -221,6 +270,8 @@ class TestDownloadEndpoints:
                 "urls": ["https://example.test/one", "https://example.test/two"],
                 "format_spec": "best",
                 "output_directory": "/downloads/batch",
+                "writesubtitles": True,
+                "writethumbnail": True,
             },
             queue="hermes.downloads",
         )

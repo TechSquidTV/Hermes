@@ -300,6 +300,56 @@ async def test_download_video_task_extract_failure_marks_failed_and_cleans_up():
 
 
 @pytest.mark.asyncio
+async def test_download_video_task_uses_output_template_and_forwarded_options(tmp_path):
+    download_file = tmp_path / "custom-name.mp4"
+    yt_service = AsyncMock()
+    yt_service.extract_info.return_value = {
+        "title": "Template Video",
+        "duration": 12,
+    }
+
+    async def fake_download_video(
+        url, output_path, format_spec, progress_callback=None, **kwargs
+    ):
+        assert output_path == os.path.join(str(tmp_path), "custom-name.%(ext)s")
+        assert kwargs == {
+            "writesubtitles": True,
+            "writethumbnail": True,
+            "subtitleslangs": ["en"],
+        }
+        download_file.write_bytes(b"video")
+        return str(download_file)
+
+    yt_service.download_video.side_effect = fake_download_video
+
+    update_status = AsyncMock()
+    create_history = AsyncMock()
+    trigger_webhooks = AsyncMock()
+    redis_progress_service = AsyncMock()
+    redis_progress_service.revoke_user_sse_tokens.return_value = 0
+
+    with (
+        patch.object(download_tasks, "yt_service", yt_service),
+        patch.object(download_tasks, "_update_download_status", update_status),
+        patch.object(download_tasks, "_create_download_history", create_history),
+        patch.object(download_tasks, "_trigger_webhooks", trigger_webhooks),
+        patch.object(download_tasks, "redis_progress_service", redis_progress_service),
+    ):
+        result = await download_tasks._download_video_task(
+            download_id="download-123",
+            url="https://example.test/watch",
+            output_path=str(tmp_path),
+            output_template="../custom-name.%(ext)s",
+            writesubtitles=True,
+            writethumbnail=True,
+            subtitleslangs=["en"],
+        )
+
+    assert result["success"] is True
+    yt_service.download_video.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_download_video_task_missing_file_marks_failed(tmp_path):
     yt_service = AsyncMock()
     yt_service.extract_info.return_value = {"title": "Missing File"}

@@ -284,6 +284,7 @@ async def _download_video_task(
     url: str,
     format_spec: str = "best",
     output_path: str = None,
+    output_template: str = None,
     **kwargs,
 ) -> Dict[str, Any]:
     """Core download logic."""
@@ -333,15 +334,23 @@ async def _download_video_task(
             result=result_data,  # Include result for SSE
         )
 
+        output_filename = (
+            os.path.basename(output_template)
+            if output_template
+            else f"{sanitized_title}.%(ext)s"
+        )
+
+        if not output_filename:
+            output_filename = f"{sanitized_title}.%(ext)s"
+
         # Generate output path if not provided
         if not output_path:
             output_path = os.path.join(
                 os.getenv("HERMES_DOWNLOADS_DIR", "./downloads"),
-                f"{sanitized_title}.%(ext)s",
+                output_filename,
             )
         else:
-            # If custom path provided, still use sanitized title
-            output_path = os.path.join(output_path, f"{sanitized_title}.%(ext)s")
+            output_path = os.path.join(output_path, output_filename)
 
         # Ensure output directory exists
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -715,6 +724,7 @@ def download_video_task(
     url: str,
     format_spec: str = "best",
     output_path: str = None,
+    output_template: str = None,
     **kwargs,
 ) -> Dict[str, Any]:
     """
@@ -728,6 +738,7 @@ def download_video_task(
             url=url,
             format_spec=format_spec,
             output_path=output_path,
+            output_template=output_template,
             **kwargs,
         )
     )
