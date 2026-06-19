@@ -2,7 +2,7 @@
 Download management endpoints.
 """
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
@@ -301,7 +301,6 @@ async def cancel_download(
 @router.post("/batch")
 async def start_batch_download(
     batch_request: BatchDownloadRequest,  # Renamed from 'request' to avoid conflicts
-    background_tasks: BackgroundTasks,
     db_session: AsyncSession = Depends(get_database_session),
     principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.WRITE)),
 ) -> BatchDownloadResponse:
@@ -344,13 +343,15 @@ async def start_batch_download(
         logger.info("Created download records", download_count=len(download_ids))
 
         # Queue the batch download task with real download IDs
-        background_tasks.add_task(
-            batch_download_task,
-            download_ids,
-            batch_request.urls,
-            batch_request.format,
-            batch_request.output_directory,
-            **_batch_download_options_from_request(batch_request),
+        batch_download_task.apply_async(
+            kwargs={
+                "download_ids": download_ids,
+                "urls": batch_request.urls,
+                "format_spec": batch_request.format,
+                "output_directory": batch_request.output_directory,
+                **_batch_download_options_from_request(batch_request),
+            },
+            queue="hermes.downloads",
         )
 
         logger.info(

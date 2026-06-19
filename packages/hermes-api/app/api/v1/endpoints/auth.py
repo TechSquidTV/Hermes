@@ -120,6 +120,12 @@ class TokenResponse(CamelCaseModel):
     token_type: str = "bearer"
 
 
+class RefreshTokenRequest(CamelCaseModel):
+    """Refresh-token request accepting camelCase and snake_case input."""
+
+    refresh_token: str
+
+
 class UserResponse(CamelCaseModel):
     """User information response model with automatic camelCase conversion."""
 
@@ -369,11 +375,12 @@ async def logout(
 
 @router.post("/refresh")
 async def refresh_token(
-    refresh_data: dict, db_session: AsyncSession = Depends(get_database_session)
+    refresh_data: RefreshTokenRequest,
+    db_session: AsyncSession = Depends(get_database_session),
 ) -> TokenResponse:
     """Refresh access token using refresh token."""
     try:
-        refresh_token = refresh_data.get("refresh_token")
+        refresh_token = refresh_data.refresh_token
         if not refresh_token:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
