@@ -1,11 +1,14 @@
 """Tests for download history endpoints."""
 
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.endpoints import history as history_endpoint
 from app.db.models import DownloadHistory
 
 
@@ -67,3 +70,96 @@ async def test_history_statistics_use_all_matching_records_not_current_page(
         "count": 2,
         "percentage": 66.67,
     }
+
+
+@pytest.mark.asyncio
+async def test_history_statistics_are_zero_without_matching_records(
+    client: AsyncClient, db_session: AsyncSession
+):
+    db_session.add(
+        DownloadHistory(
+            id="history-other-extractor",
+            download_id="download-other-extractor",
+            url="https://example.test/other",
+            status="completed",
+            duration=12,
+            file_size=120,
+            extractor="youtube",
+            started_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+            completed_at=datetime.now(timezone.utc),
+        )
+    )
+    await db_session.commit()
+
+    response = await client.get(
+        "/api/v1/history/", params={"extractor": "vimeo", "limit": 1}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["items"] == []
+    assert data["totalDownloads"] == 0
+    assert data["totalItems"] == 0
+    assert data["successRate"] == 0
+    assert data["averageDownloadTime"] == 0
+    assert data["totalSize"] == 0
+    assert data["popularExtractors"] == []
+
+
+@pytest.mark.asyncio
+async def test_history_endpoint_maps_aggregate_query_results(monkeypatch):
+    now = datetime.now(timezone.utc)
+    history_record = SimpleNamespace(
+        download_id="download-aggregate",
+        url="https://example.test/aggregate",
+        status="completed",
+        started_at=now - timedelta(minutes=1),
+        completed_at=now,
+        duration=None,
+        file_size=25,
+        extractor=None,
+        error_message=None,
+    )
+
+    count_result = SimpleNamespace(scalar=lambda: 1)
+    history_result = SimpleNamespace(
+        scalars=lambda: SimpleNamespace(all=lambda: [history_record])
+    )
+    stats_result = SimpleNamespace(
+        one=lambda: SimpleNamespace(
+            total=1,
+            successful=1,
+            avg_duration=None,
+            total_size=25,
+        )
+    )
+    extractor_result = SimpleNamespace(all=lambda: [(None, 1)])
+    db_session = SimpleNamespace(
+        execute=AsyncMock(
+            side_effect=[count_result, history_result, stats_result, extractor_result]
+        )
+    )
+    monkeypatch.setattr(
+        history_endpoint, "calculate_daily_stats", AsyncMock(return_value=[])
+    )
+
+    history = await history_endpoint.get_download_history(
+        start_date=None,
+        end_date=None,
+        extractor="youtube",
+        status="completed",
+        limit=1,
+        offset=0,
+        db_session=db_session,
+        principal=SimpleNamespace(),
+    )
+
+    assert history.total_downloads == 1
+    assert history.total_items == 1
+    assert history.success_rate == 1
+    assert history.average_download_time == 0
+    assert history.total_size == 25
+    assert history.items[0].duration == 0
+    assert history.items[0].extractor == "unknown"
+    assert history.popular_extractors[0].extractor == "unknown"
+    assert history.popular_extractors[0].percentage == 100
