@@ -68,7 +68,7 @@ jobs:
         run: pnpm --filter hermes-app test:coverage
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./packages/hermes-app/coverage/lcov.info
@@ -132,7 +132,7 @@ jobs:
         run: ls -la *.xml || echo "No XML files found"
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./packages/hermes-api/coverage.xml
