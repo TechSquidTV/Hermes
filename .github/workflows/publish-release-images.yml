@@ -35,7 +35,7 @@ jobs:
           echo "Publishing Docker images for $RELEASE_TAG ($VERSION)"
 
       - name: Checkout release tag
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.RELEASE_TAG }}
           fetch-depth: 0
