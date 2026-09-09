@@ -1,7 +1,7 @@
 """Pytest configuration and fixtures."""
 
-import asyncio
 import os
+from tempfile import TemporaryDirectory
 from typing import AsyncGenerator
 
 import pytest
@@ -11,19 +11,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 # Set test environment variables BEFORE any imports
 os.environ.setdefault("HERMES_DEBUG", "true")
-os.environ.setdefault("HERMES_DATABASE_URL", "sqlite+aiosqlite:///./test_hermes.db")
+_test_database_dir = TemporaryDirectory(prefix="hermes-tests-")
+os.environ["HERMES_DATABASE_URL"] = (
+    f"sqlite+aiosqlite:///{_test_database_dir.name}/hermes.db"
+)
 os.environ.setdefault("HERMES_REDIS_URL", "redis://localhost:6379/1")
 os.environ.setdefault(
     "HERMES_SECRET_KEY", "test-secret-key-min-32-chars-long-for-testing"
 )
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create an instance of the default event loop for the test session."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_test_database_directory():
+    """Keep test databases isolated from developer data and parallel runs."""
+    yield
+    _test_database_dir.cleanup()
 
 
 @pytest_asyncio.fixture(scope="function", autouse=True)
@@ -42,15 +44,6 @@ async def setup_test_database():
 
     # Dispose of the engine to close connections
     await engine.dispose()
-
-    # Clean up test database files
-    test_files = ["test_hermes.db", "test_hermes.db-shm", "test_hermes.db-wal"]
-    for file in test_files:
-        if os.path.exists(file):
-            try:
-                os.remove(file)
-            except OSError:
-                pass
 
 
 @pytest_asyncio.fixture

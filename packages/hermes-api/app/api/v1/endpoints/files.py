@@ -2,7 +2,6 @@
 File management endpoints.
 """
 
-import os
 from pathlib import Path
 from typing import Any, List, Optional  # noqa: F401
 
@@ -132,56 +131,57 @@ async def list_downloaded_files(
     try:
         repos = get_repositories_from_session(db_session)
 
-        # Get all download files from database
-        # For now, this is a simplified implementation
-        # In production, you'd want more sophisticated querying and filtering
-        all_files = []
+        if min_size is not None and max_size is not None and min_size > max_size:
+            raise HTTPException(
+                status_code=422, detail="min_size must not exceed max_size"
+            )
 
-        # Get recent downloads and their files
-        recent_downloads = await repos["downloads"].get_by_status(
-            "completed", limit * 2
-        )
+        directory_path = Path(directory).resolve() if directory else None
+        paginated_files = []
+        total_files = 0
+        total_size = 0
+        async for file_info, download in repos["download_files"].iter_completed_files():
+            try:
+                file_path = _resolve_download_path(file_info.filepath)
+            except (HTTPException, OSError):
+                continue
+            if directory_path and not file_path.is_relative_to(directory_path):
+                continue
+            if (
+                extension
+                and file_path.suffix.lower() != f".{extension.lstrip('.').lower()}"
+            ):
+                continue
+            if min_size is not None and file_info.file_size < min_size:
+                continue
+            if max_size is not None and file_info.file_size > max_size:
+                continue
+            if not file_path.is_file():
+                continue
 
-        for download in recent_downloads:
-            files = await repos["download_files"].get_by_download_id(download.id)
-            for file_info in files:
-                # Apply filters
-                if directory and not file_info.filepath.startswith(directory):
-                    continue
-                if extension and not file_info.filepath.endswith(f".{extension}"):
-                    continue
-                if min_size and file_info.file_size < min_size:
-                    continue
-                if max_size and file_info.file_size > max_size:
-                    continue
-
-                # Check if file actually exists
-                if os.path.exists(file_info.filepath):
-                    all_files.append(
-                        DownloadedFile(
-                            filename=file_info.filename,
-                            filepath=file_info.filepath,
-                            size=file_info.file_size,
-                            created_at=file_info.created_at,
-                            video_info={
-                                "url": download.url,
-                                "title": download.title,
-                                "duration": download.duration,
-                            },
-                        )
+            if offset <= total_files < offset + limit:
+                paginated_files.append(
+                    DownloadedFile(
+                        filename=file_info.filename,
+                        filepath=file_info.filepath,
+                        size=file_info.file_size,
+                        created_at=file_info.created_at,
+                        video_info={
+                            "url": download.url,
+                            "title": download.title,
+                            "duration": download.duration,
+                        },
                     )
-
-        # Apply pagination
-        total_files = len(all_files)
-        paginated_files = all_files[offset : offset + limit]
-
-        # Calculate total size
-        total_size = sum(file.size for file in paginated_files)
+                )
+            total_files += 1
+            total_size += file_info.file_size
 
         return FileList(
             total_files=total_files, total_size=total_size, files=paginated_files
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to list downloaded files", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to list files: {str(e)}")

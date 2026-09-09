@@ -28,8 +28,12 @@ jobs:
               - 'packages/hermes-app/**'
               - 'package.json'
               - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - '.github/workflows/**'
             backend:
               - 'packages/hermes-api/**'
+              - 'package.json'
+              - '.github/workflows/**'
 
   # Frontend validation
   frontend-checks:
@@ -155,17 +159,19 @@ jobs:
     steps:
       - name: Check all jobs succeeded
         run: |
-          # Check if any required job failed
-          if [[ "${{ needs.frontend-checks.result }}" == "failure" ]] || [[ "${{ needs.backend-checks.result }}" == "failure" ]]; then
-            echo "One or more checks failed"
+          if [[ "${{ needs.detect-changes.result }}" != "success" ]]; then
+            echo "Change detection did not succeed"
             exit 1
           fi
-          
-          # If no changes were detected, that's ok
-          if [[ "${{ needs.detect-changes.outputs.frontend }}" != "true" ]] && [[ "${{ needs.detect-changes.outputs.backend }}" != "true" ]]; then
-            echo "No package changes detected, skipping checks"
-            exit 0
+
+          if [[ "${{ needs.detect-changes.outputs.frontend }}" == "true" && "${{ needs.frontend-checks.result }}" != "success" ]]; then
+            echo "Required frontend checks did not succeed"
+            exit 1
           fi
-          
-          # All required checks passed
-          echo "All checks passed!"
+
+          if [[ "${{ needs.detect-changes.outputs.backend }}" == "true" && "${{ needs.backend-checks.result }}" != "success" ]]; then
+            echo "Required backend checks did not succeed"
+            exit 1
+          fi
+
+          echo "All required checks passed!"

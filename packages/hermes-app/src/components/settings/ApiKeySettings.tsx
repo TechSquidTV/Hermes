@@ -72,11 +72,19 @@ export function ApiKeySettings() {
     )
   }
 
+  const copyToClipboard = async (text: string, message: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success(message)
+    } catch {
+      toast.error('Could not copy to clipboard. Please copy the value manually.')
+    }
+  }
+
   const handleCopyJWTToken = () => {
     const token = TokenStorage.getAccessToken()
     if (token) {
-      navigator.clipboard.writeText(token)
-      toast.success('JWT token copied to clipboard!')
+      void copyToClipboard(token, 'JWT token copied to clipboard!')
     } else {
       toast.error('No JWT token available. Please log in again.')
     }
@@ -199,13 +207,15 @@ export function ApiKeySettings() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => navigator.clipboard.writeText(`Key ID: ${apiKey.id}`)}
+                      aria-label={`Copy key ID for ${apiKey.name}`}
+                      onClick={() => void copyToClipboard(`Key ID: ${apiKey.id}`, 'Key ID copied to clipboard!')}
                     >
                       <Copy className="h-4 w-4" />
                     </Button>
                     <Button
                       variant="destructive"
                       size="sm"
+                      aria-label={`Revoke key ${apiKey.name}`}
                       onClick={() => handleRevokeKey(apiKey.id, apiKey.name)}
                       disabled={revokeKey.isPending}
                     >
@@ -251,6 +261,7 @@ export function ApiKeySettings() {
               <Button
                 variant="outline"
                 size="sm"
+                aria-label="Copy JWT token"
                 onClick={handleCopyJWTToken}
                 disabled={!TokenStorage.getAccessToken()}
               >

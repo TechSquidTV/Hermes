@@ -1134,6 +1134,7 @@ export interface paths {
          *     **Scopes:**
          *     - `download:<download_id>` - Single download progress
          *     - `queue` - Queue updates
+         *     - `stats` - Download statistics
          *     - `system` - System notifications
          */
         post: operations["create_sse_token_api_v1_events_token_post"];
@@ -1806,9 +1807,10 @@ export interface components {
         CreateSSETokenRequest: {
             /**
              * Scope
-             * @description Token scope (e.g., 'download:abc-123', 'queue', 'system')
+             * @description Token scope (e.g., 'download:abc-123', 'queue', 'stats', 'system')
              * @example download:abc-123
              * @example queue
+             * @example stats
              * @example system
              */
             scope: string;

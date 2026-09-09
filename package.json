@@ -4,9 +4,9 @@
   "private": true,
   "packageManager": "pnpm@12.3.4+sha512.961aa41fb077da3a04a441d9f8e15ebc0c96da8ef710b2eb67bf9ee7cb0610eabd48f1fd85f51cffe73846785fa0f87c56a3a872a1d893f8446741b5cce45457",
   "scripts": {
-    "dev": "docker compose down && docker compose -f docker-compose.dev.yml build && docker compose -f docker-compose.dev.yml up",
-    "dev:down": "docker compose down",
-    "dev:logs": "docker compose logs -f",
+    "dev": "docker compose -f docker-compose.dev.yml up --build",
+    "dev:down": "docker compose -f docker-compose.dev.yml down",
+    "dev:logs": "docker compose -f docker-compose.dev.yml logs -f",
     "dev:frontend": "pnpm --filter hermes-app dev",
     "dev:api": "cd packages/hermes-api && uv run uvicorn app.main:app --reload",
     "build": "pnpm --filter hermes-app build",
@@ -24,19 +24,20 @@
     "clean:all": "pnpm clean && docker compose down -v && rm -rf data/data/* data/downloads/* data/temp/*",
     "setup": "pnpm install && echo 'Create .env file from .env.example and update values'",
     "security:generate-key": "uv run python3 -c \"import secrets; print('HERMES_SECRET_KEY=' + secrets.token_urlsafe(32))\"",
-    "security:check": "echo 'Checking for potential security issues...' && echo '\u2713 .env file should not be committed' && echo '\u2713 Database files are gitignored' && echo '\u2713 Consider using .dockerignore for production'",
-    "pre-check": "pnpm pre-check:api && pnpm pre-check:app && docker compose build",
+    "security:check": "echo 'Checking for potential security issues...' && echo '✓ .env file should not be committed' && echo '✓ Database files are gitignored' && echo '✓ Consider using .dockerignore for production'",
+    "pre-check": "pnpm pre-check:api && pnpm pre-check:app && pnpm build:docker",
     "format:check": "cd packages/hermes-api && uv run black --check --diff app/ tests/ && uv run isort --check-only --diff app/ tests/",
     "pre-check:api": "cd packages/hermes-api && uv run black --check app/ tests/ && uv run isort --check-only app/ tests/ && uv run ruff check app/ tests/ && uv run python -m mypy --explicit-package-bases app/ tests/ && uv run pytest",
-    "pre-check:app": "pnpm --filter hermes-app lint &&pnpm --filter hermes-app build && pnpm --filter hermes-app type-check && pnpm --filter hermes-app test",
+    "pre-check:app": "pnpm --filter hermes-app lint && pnpm --filter hermes-app build && pnpm --filter hermes-app type-check && pnpm --filter hermes-app test",
     "update:all": "pnpm update --recursive --latest && cd packages/hermes-api && uv lock --upgrade && uv sync",
-    "generate:routes": "pnpm --filter hermes-app generate:routes"
+    "generate:routes": "pnpm --filter hermes-app generate:routes",
+    "build:docker": "docker build -f packages/hermes-app/Dockerfile . && docker build -f packages/hermes-api/Dockerfile packages/hermes-api && docker build -f packages/hermes-app/Dockerfile.dev ."
   },
   "devDependencies": {
     "shadcn": "^4.21.0"
   },
   "engines": {
-    "node": ">=22.12.0",
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0",
     "pnpm": ">=12.3.4"
   }
 }

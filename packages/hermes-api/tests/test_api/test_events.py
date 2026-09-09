@@ -39,6 +39,19 @@ class TestSSETokenEndpoint:
     """Test POST /api/v1/events/token endpoint."""
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("scope", ["queue", "stats", "system"])
+    async def test_create_token_for_each_global_scope(
+        self, client: AsyncClient, mock_redis_for_sse, scope: str
+    ):
+        response = await client.post(
+            "/api/v1/events/token", json={"scope": scope, "ttl": 600}
+        )
+        assert response.status_code == 200
+        assert response.json()["scope"] == scope
+        assert response.json()["permissions"] == ["read"]
+        mock_redis_for_sse.setex.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_create_token_requires_auth(self, client: AsyncClient):
         """Test that token creation requires authentication."""
         # Clear auth override to test actual auth

@@ -25,7 +25,25 @@ class SSETokenScope(str, Enum):
 
     DOWNLOAD = "download"  # download:download_id format
     QUEUE = "queue"  # Queue updates (all queue events)
+    STATS = "stats"  # Download statistics
     SYSTEM = "system"  # System notifications
+
+
+def validate_sse_scope(scope: str) -> str:
+    """Validate the shared scope contract for token requests and stored data."""
+    if scope in {
+        item.value for item in SSETokenScope if item != SSETokenScope.DOWNLOAD
+    }:
+        return scope
+    if scope.startswith("download:"):
+        if not scope.split(":", 1)[1]:
+            raise ValueError(
+                "Invalid scope format: Download scope must include download_id"
+            )
+        return scope
+    raise ValueError(
+        f"Invalid scope format: {scope}. Must be 'download:<id>', 'queue', 'stats', or 'system'"
+    )
 
 
 class SSETokenPermission(str, Enum):
@@ -40,7 +58,7 @@ class SSETokenData(BaseModel):
     token: str = Field(..., description="The SSE token string")
     scope: str = Field(
         ...,
-        description="Token scope (e.g., 'download:abc-123', 'queue', 'system')",
+        description="Token scope (e.g., 'download:abc-123', 'queue', 'stats', 'system')",
     )
     user_id: str = Field(..., description="User ID who owns this token")
     expires_at: datetime = Field(..., description="Token expiration timestamp")
@@ -56,26 +74,7 @@ class SSETokenData(BaseModel):
     @field_validator("scope")
     @classmethod
     def validate_scope(cls, v: str) -> str:
-        """
-        Validate scope format.
-
-        Valid formats:
-        - download:<download_id>
-        - queue
-        - system
-        """
-        if v == "queue" or v == "system":
-            return v
-
-        if v.startswith("download:"):
-            download_id = v.split(":", 1)[1]
-            if not download_id:
-                raise ValueError("Download scope must include download_id")
-            return v
-
-        raise ValueError(
-            f"Invalid scope format: {v}. Must be 'download:<id>', 'queue', or 'system'"
-        )
+        return validate_sse_scope(v)
 
     def is_expired(self) -> bool:
         """Check if token has expired."""
@@ -112,8 +111,8 @@ class CreateSSETokenRequest(BaseModel):
 
     scope: str = Field(
         ...,
-        description="Token scope (e.g., 'download:abc-123', 'queue', 'system')",
-        examples=["download:abc-123", "queue", "system"],
+        description="Token scope (e.g., 'download:abc-123', 'queue', 'stats', 'system')",
+        examples=["download:abc-123", "queue", "stats", "system"],
     )
     ttl: int = Field(
         default=300,

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 
 // Stable default to prevent unnecessary re-renders
 const DEFAULT_EVENTS: string[] = [];
@@ -118,6 +118,13 @@ export function useSSE<T = unknown>(
     onError,
   } = options;
 
+  const eventTypesKey = JSON.stringify(events);
+  const eventTypes = useMemo<string[]>(() => JSON.parse(eventTypesKey), [eventTypesKey]);
+  const callbacksRef = useRef({ onOpen, onClose, onError });
+  useEffect(() => {
+    callbacksRef.current = { onOpen, onClose, onError };
+  }, [onOpen, onClose, onError]);
+
   const [data, setData] = useState<T | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -147,6 +154,11 @@ export function useSSE<T = unknown>(
   const connect = useCallback(() => {
     if (!url) return;
 
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+
     // Close existing connection
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
@@ -157,43 +169,38 @@ export function useSSE<T = unknown>(
       eventSourceRef.current = eventSource;
 
       eventSource.onopen = () => {
+        if (eventSourceRef.current !== eventSource) return;
         setIsConnected(true);
         setError(null);
         setIsReconnecting(false);
         reconnectAttemptsRef.current = 0;
         setReconnectAttempts(0);
-        onOpen?.();
+        callbacksRef.current.onOpen?.();
       };
 
       eventSource.onerror = () => {
+        if (eventSourceRef.current !== eventSource) return;
         setIsConnected(false);
+        const permanentlyClosed = eventSource.readyState === EventSource.CLOSED;
+        // Own reconnection here, so the browser cannot retry alongside our timer.
+        eventSource.close();
+        eventSourceRef.current = null;
+        setIsReconnecting(false);
 
-        // EventSource immediately closes on HTTP errors (403, 401, etc.)
-        // Check readyState after a brief delay to detect permanent failures
-        const checkForAuthError = () => {
-          if (eventSource.readyState === EventSource.CLOSED) {
-            // Connection closed immediately = likely auth error (403/401)
-            // Don't retry auth failures
-            console.error('SSE connection closed immediately - likely auth failure, not retrying');
-            shouldReconnectRef.current = false;
-            const err = new Error('SSE authentication failed');
-            setError(err);
-            onError?.(err);
-            onClose?.();
-            return true;
-          }
-          return false;
-        };
-
-        // Check immediately for CLOSED state
-        if (checkForAuthError()) {
+        // A CLOSED source is terminal; EventSource does not expose its HTTP status.
+        if (permanentlyClosed) {
+          shouldReconnectRef.current = false;
+          const err = new Error('SSE connection closed');
+          setError(err);
+          callbacksRef.current.onError?.(err);
+          callbacksRef.current.onClose?.();
           return;
         }
 
         // If not immediately closed, it's a network error - can retry
         const err = new Error('SSE connection error');
         setError(err);
-        onError?.(err);
+        callbacksRef.current.onError?.(err);
 
         // Attempt reconnection for network errors
         if (
@@ -212,58 +219,38 @@ export function useSSE<T = unknown>(
           );
 
           reconnectTimeoutRef.current = setTimeout(() => {
-            connectRef.current?.();
+            reconnectTimeoutRef.current = null;
+            if (shouldReconnectRef.current) connectRef.current?.();
           }, delay);
         } else {
-          onClose?.();
+          callbacksRef.current.onClose?.();
         }
       };
 
-      // Listen for specified events
-      if (events.length > 0) {
-        events.forEach((eventType) => {
-          eventSource.addEventListener(eventType, (event: MessageEvent) => {
-            // Skip empty messages (heartbeats/keepalives)
-            if (!event.data || event.data.trim() === '') {
-              return;
-            }
+      const handleMessage = (event: MessageEvent<string>) => {
+        if (eventSourceRef.current !== eventSource || !event.data.trim()) return;
+        try {
+          const parsedData: T = JSON.parse(event.data);
+          setData(parsedData);
+        } catch (error) {
+          console.error('Failed to parse SSE data:', error, 'Data:', event.data);
+        }
+      };
 
-            try {
-              const parsedData = JSON.parse(event.data);
-              setData(parsedData);
-            } catch (e) {
-              // Only log parse errors for non-empty data
-              if (event.data.trim() !== '') {
-                console.error('Failed to parse SSE data:', e, 'Data:', event.data);
-              }
-            }
-          });
+      if (eventTypes.length > 0) {
+        eventTypes.forEach((eventType) => {
+          eventSource.addEventListener(eventType, handleMessage);
         });
       } else {
-        // Listen for all messages
-        eventSource.onmessage = (event: MessageEvent) => {
-          // Skip empty messages (heartbeats/keepalives)
-          if (!event.data || event.data.trim() === '') {
-            return;
-          }
-
-          try {
-            const parsedData = JSON.parse(event.data);
-            setData(parsedData);
-          } catch (e) {
-            // Only log parse errors for non-empty data
-            if (event.data.trim() !== '') {
-              console.error('Failed to parse SSE data:', e, 'Data:', event.data);
-            }
-          }
-        };
+        eventSource.onmessage = handleMessage;
       }
+
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Failed to create SSE connection');
       setError(error);
-      onError?.(error);
+      callbacksRef.current.onError?.(error);
     }
-  }, [url, reconnect, maxReconnectAttempts, reconnectDelay, maxReconnectDelay, events, onOpen, onClose, onError]);
+  }, [url, reconnect, maxReconnectAttempts, reconnectDelay, maxReconnectDelay, eventTypes]);
 
   // Store connect in ref to avoid closure issues
   useEffect(() => {
@@ -283,6 +270,7 @@ export function useSSE<T = unknown>(
   }, [url, connect, close]);
 
   const manualReconnect = useCallback(() => {
+    shouldReconnectRef.current = true;
     reconnectAttemptsRef.current = 0;
     setReconnectAttempts(0);
     connect();

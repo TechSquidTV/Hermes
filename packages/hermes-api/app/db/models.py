@@ -95,7 +95,9 @@ class DownloadFile(Base):
     __tablename__ = "download_files"
 
     id = Column(String, primary_key=True, index=True)
-    download_id = Column(String, ForeignKey("downloads.id"), nullable=False)
+    download_id = Column(
+        String, ForeignKey("downloads.id", ondelete="CASCADE"), nullable=False
+    )
     filename = Column(String, nullable=False)
     filepath = Column(String, nullable=False)
     file_size = Column(Integer, nullable=False)  # Size in bytes
@@ -157,7 +159,7 @@ class DownloadBatch(Base):
     failed_videos = Column(Integer, default=0, nullable=False)
 
     # Progress
-    overall_progress = Column(Float, default=0.0)  # 0.0 to 100.0
+    overall_progress = Column(Float, nullable=False, default=0.0)  # 0.0 to 100.0
 
     # Metadata from playlist
     playlist_id = Column(String(200), nullable=True)
@@ -361,7 +363,9 @@ class TokenBlacklist(Base):
 
     id = Column(String, primary_key=True, index=True)
     token_id = Column(String, unique=True, index=True, nullable=False)  # JWT ID (jti)
-    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(
+        String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     expires_at = Column(
         DateTime, nullable=False, index=True
     )  # When the token naturally expires

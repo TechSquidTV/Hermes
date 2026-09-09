@@ -6,7 +6,7 @@ Modern React/TypeScript app for the Hermes video downloader, built with Vite, Ta
 
 ### Prerequisites
 
-- Node.js 22.12+ (Node 24 recommended)
+- Node.js 22.22.2+ (22.x), 24.15+ (24.x, recommended), or 26+
 - pnpm 12.3.4 (pinned in the root package.json; enable Corepack)
 
 ### Installation

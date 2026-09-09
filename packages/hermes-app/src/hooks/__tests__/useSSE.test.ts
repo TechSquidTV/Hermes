@@ -18,6 +18,7 @@ class MockEventSource {
   onmessage: ((event: MessageEvent) => void) | null = null
   private listeners: Map<string, Array<(event: MessageEvent) => void>> = new Map()
 
+  static autoOpen = true
   static CONNECTING = 0
   static OPEN = 1
   static CLOSED = 2
@@ -26,7 +27,7 @@ class MockEventSource {
     this.url = url
     eventSourceInstances.push(this)
     // Simulate async connection
-    setTimeout(() => {
+    if (MockEventSource.autoOpen) setTimeout(() => {
       if (this.readyState !== MockEventSource.CLOSED) {
         this.readyState = MockEventSource.OPEN
         if (this.onopen) {
@@ -81,7 +82,8 @@ class MockEventSource {
 const originalEventSource = globalThis.EventSource
 beforeEach(() => {
   eventSourceInstances.length = 0 // Clear instances
-  globalThis.EventSource = MockEventSource as any
+  MockEventSource.autoOpen = true
+  vi.stubGlobal('EventSource', MockEventSource)
   // Don't use fake timers by default - they conflict with waitFor
 })
 
@@ -248,141 +250,126 @@ describe('useSSE', () => {
   })
 
   describe('reconnection logic', () => {
-    it.skip('should attempt reconnection with exponential backoff', async () => {
-      const { result } = renderHook(() =>
-        useSSE('/api/v1/events/stream', {
-          reconnect: true,
-          maxReconnectAttempts: 3,
-          reconnectDelay: 10, // Use short delay for testing
-        })
-      )
-
-      // Wait for initial connection
-      await waitFor(() => {
-        expect(result.current.isConnected).toBe(true)
-      })
-
-      const eventSource = eventSourceInstances[0]
-
-      // Simulate error (should trigger reconnection)
-      act(() => {
-        eventSource.readyState = MockEventSource.CLOSED
-        eventSource._simulateError()
-      })
-
-      // Should be reconnecting after error
-      await waitFor(() => {
-        expect(result.current.isReconnecting).toBe(true)
-        expect(result.current.isConnected).toBe(false)
-        expect(result.current.reconnectAttempts).toBe(1)
-      })
-
-      // Wait for first reconnection attempt
-      await waitFor(() => {
-        expect(eventSourceInstances.length).toBeGreaterThan(1)
-      }, { timeout: 100 })
+    beforeEach(() => {
+      vi.useFakeTimers()
+      MockEventSource.autoOpen = false
     })
 
-    it.skip('should stop reconnecting after max attempts', async () => {
+    const fail = (index: number, permanent = false) => act(() => {
+      eventSourceInstances[index].readyState = permanent ? MockEventSource.CLOSED : MockEventSource.CONNECTING
+      eventSourceInstances[index]._simulateError()
+    })
+    const advance = (milliseconds: number) => act(() => vi.advanceTimersByTime(milliseconds))
+    const open = (index: number) => act(() => {
+      eventSourceInstances[index].readyState = MockEventSource.OPEN
+      eventSourceInstances[index].onopen?.(new Event('open'))
+    })
+
+    it('backs off exponentially and caps the delay', () => {
+      const { result } = renderHook(() => useSSE('/events', {
+        reconnectDelay: 100, maxReconnectDelay: 150,
+      }))
+      fail(0)
+      expect(eventSourceInstances[0].readyState).toBe(MockEventSource.CLOSED)
+      expect(result.current.isReconnecting).toBe(true)
+      advance(99)
+      expect(eventSourceInstances).toHaveLength(1)
+      advance(1)
+      fail(1)
+      advance(149)
+      expect(eventSourceInstances).toHaveLength(2)
+      advance(1)
+      expect(eventSourceInstances).toHaveLength(3)
+    })
+
+    it('stops after the maximum number of attempts', () => {
       const onClose = vi.fn()
-
-      const { result } = renderHook(() =>
-        useSSE('/api/v1/events/stream', {
-          reconnect: true,
-          maxReconnectAttempts: 2,
-          reconnectDelay: 10, // Use short delay for testing
-          onClose,
-        })
-      )
-
-      await waitFor(() => {
-        expect(result.current.isConnected).toBe(true)
-      })
-
-      // Simulate repeated errors to exceed max attempts
-      // First error
-      act(() => {
-        eventSourceInstances[0].readyState = MockEventSource.CLOSED
-        eventSourceInstances[0]._simulateError()
-      })
-
-      // Wait for reconnection attempts to complete
-      await waitFor(() => {
-        expect(result.current.reconnectAttempts).toBe(2)
-      }, { timeout: 500 })
-
-      expect(onClose).toHaveBeenCalled()
+      const { result } = renderHook(() => useSSE('/events', {
+        reconnectDelay: 100, maxReconnectAttempts: 2, onClose,
+      }))
+      fail(0)
+      advance(100)
+      fail(1)
+      advance(200)
+      fail(2)
+      advance(1000)
+      expect(eventSourceInstances).toHaveLength(3)
+      expect(result.current.reconnectAttempts).toBe(2)
+      expect(result.current.isReconnecting).toBe(false)
+      expect(onClose).toHaveBeenCalledOnce()
     })
 
-    it.skip('should not retry on immediate closure (auth failure)', async () => {
+    it('does not retry permanent closure', () => {
       const onError = vi.fn()
-      const onClose = vi.fn()
-
-      const { result } = renderHook(() =>
-        useSSE('/api/v1/events/stream', {
-          reconnect: true,
-          maxReconnectAttempts: 5,
-          reconnectDelay: 10,
-          onError,
-          onClose,
-        })
-      )
-
-      await waitFor(() => {
-        expect(result.current.isConnected).toBe(true)
-      })
-
-      const eventSource = eventSourceInstances[0]
-
-      // Simulate immediate closure (like 401/403)
-      act(() => {
-        eventSource.readyState = MockEventSource.CLOSED
-        eventSource._simulateError()
-      })
-
-      await waitFor(() => {
-        expect(onError).toHaveBeenCalled()
-      })
-
-      // Wait a bit to ensure no reconnection attempt
-      await new Promise(resolve => setTimeout(resolve, 50))
-
-      // Only one EventSource instance should exist
-      expect(eventSourceInstances.length).toBe(1)
+      const { result } = renderHook(() => useSSE('/events', { onError }))
+      fail(0, true)
+      advance(10000)
+      expect(eventSourceInstances).toHaveLength(1)
+      expect(result.current.isReconnecting).toBe(false)
+      expect(onError).toHaveBeenCalledOnce()
     })
 
-    it.skip('should reset reconnect attempts after successful connection', async () => {
-      const { result } = renderHook(() =>
-        useSSE('/api/v1/events/stream', {
-          reconnect: true,
-          reconnectDelay: 10,
-        })
-      )
+    it('resets attempts when a connection succeeds', () => {
+      const { result } = renderHook(() => useSSE('/events', { reconnectDelay: 100 }))
+      fail(0)
+      advance(100)
+      expect(result.current.reconnectAttempts).toBe(1)
+      open(1)
+      expect(result.current.isConnected).toBe(true)
+      expect(result.current.reconnectAttempts).toBe(0)
+    })
 
-      await waitFor(() => {
-        expect(result.current.isConnected).toBe(true)
-      })
+    it('allows unlimited attempts when configured', () => {
+      const { result } = renderHook(() => useSSE('/events', {
+        maxReconnectAttempts: 0, reconnectDelay: 10, maxReconnectDelay: 10,
+      }))
+      for (let index = 0; index < 10; index++) {
+        fail(index)
+        advance(10)
+      }
+      expect(eventSourceInstances).toHaveLength(11)
+      expect(result.current.reconnectAttempts).toBe(10)
+    })
 
-      // Simulate error
-      const eventSource1 = eventSourceInstances[0]
-      act(() => {
-        eventSource1.readyState = MockEventSource.CLOSED
-        eventSource1._simulateError()
-      })
+    it('closes the browser connection when retries are disabled', () => {
+      const { result } = renderHook(() => useSSE('/events', { reconnect: false }))
+      fail(0)
+      advance(10000)
+      expect(eventSourceInstances).toHaveLength(1)
+      expect(eventSourceInstances[0].readyState).toBe(MockEventSource.CLOSED)
+      expect(result.current.isReconnecting).toBe(false)
+    })
 
-      await waitFor(() => {
-        expect(result.current.reconnectAttempts).toBe(1)
-      })
+    it('clears pending retries on unmount', () => {
+      const { unmount } = renderHook(() => useSSE('/events'))
+      fail(0)
+      unmount()
+      advance(10000)
+      expect(eventSourceInstances).toHaveLength(1)
+    })
 
-      // Wait for successful reconnection
-      await waitFor(() => {
-        expect(result.current.isConnected).toBe(true)
-      }, { timeout: 100 })
+    it('manual reconnect clears pending retries and re-enables automatic retries', () => {
+      const { result } = renderHook(() => useSSE('/events', { reconnectDelay: 100 }))
+      fail(0)
+      act(() => result.current.reconnect())
+      advance(100)
+      expect(eventSourceInstances).toHaveLength(2)
+      act(() => result.current.close())
+      act(() => result.current.reconnect())
+      fail(2)
+      advance(100)
+      expect(eventSourceInstances).toHaveLength(4)
+    })
 
-      // Attempts should be reset
-      await waitFor(() => {
-        expect(result.current.reconnectAttempts).toBe(0)
-      })
+    it('ignores duplicate errors and messages from obsolete connections', () => {
+      const { result } = renderHook(() => useSSE<{ value: number }>('/events', { reconnectDelay: 100 }))
+      fail(0)
+      fail(0)
+      act(() => eventSourceInstances[0]._simulateMessage('{"value":1}'))
+      advance(100)
+      expect(eventSourceInstances).toHaveLength(2)
+      expect(result.current.reconnectAttempts).toBe(1)
+      expect(result.current.data).toBeNull()
     })
   })
 
@@ -460,134 +447,5 @@ describe('useSSE', () => {
       expect(eventSource.readyState).toBe(MockEventSource.CLOSED)
     })
 
-    it.skip('should clear reconnection timeout on unmount', async () => {
-      const { result, unmount } = renderHook(() =>
-        useSSE('/api/v1/events/stream', {
-          reconnect: true,
-          reconnectDelay: 100,
-        })
-      )
-
-      await waitFor(() => {
-        expect(result.current.isConnected).toBe(true)
-      })
-
-      // Trigger error to start reconnection timer
-      const eventSource = eventSourceInstances[0]
-      act(() => {
-        eventSource.readyState = MockEventSource.CLOSED
-        eventSource._simulateError()
-      })
-
-      await waitFor(() => {
-        expect(result.current.isReconnecting).toBe(true)
-      })
-
-      const countBeforeUnmount = eventSourceInstances.length
-
-      // Unmount before timer completes
-      unmount()
-
-      // Wait to ensure no new connection is created
-      await new Promise(resolve => setTimeout(resolve, 150))
-
-      // Should still be only one EventSource instance
-      expect(eventSourceInstances.length).toBe(countBeforeUnmount)
-    })
-  })
-
-  describe('configuration options', () => {
-    it.skip('should respect maxReconnectDelay', async () => {
-      const { result } = renderHook(() =>
-        useSSE('/api/v1/events/stream', {
-          reconnect: true,
-          reconnectDelay: 10,
-          maxReconnectDelay: 50,
-          maxReconnectAttempts: 5,
-        })
-      )
-
-      await waitFor(() => {
-        expect(result.current.isConnected).toBe(true)
-      })
-
-      // Simulate error to trigger reconnections
-      act(() => {
-        eventSourceInstances[0].readyState = MockEventSource.CLOSED
-        eventSourceInstances[0]._simulateError()
-      })
-
-      // Wait for reconnection attempts
-      await waitFor(() => {
-        expect(result.current.reconnectAttempts).toBeGreaterThan(0)
-      }, { timeout: 500 })
-
-      // Just verify reconnection logic is working
-      expect(result.current.reconnectAttempts).toBeGreaterThan(0)
-    })
-
-    it.skip('should allow infinite reconnection attempts when maxReconnectAttempts is 0', async () => {
-      const { result } = renderHook(() =>
-        useSSE('/api/v1/events/stream', {
-          reconnect: true,
-          maxReconnectAttempts: 0, // infinite
-          reconnectDelay: 5,
-        })
-      )
-
-      await waitFor(() => {
-        expect(result.current.isConnected).toBe(true)
-      })
-
-      // Simulate error - should keep trying
-      act(() => {
-        eventSourceInstances[0].readyState = MockEventSource.CLOSED
-        eventSourceInstances[0]._simulateError()
-      })
-
-      // Wait for multiple reconnection attempts
-      await waitFor(() => {
-        expect(result.current.reconnectAttempts).toBeGreaterThanOrEqual(3)
-      }, { timeout: 500 })
-
-      // Should continue reconnecting (not stop at a limit)
-      expect(result.current.isReconnecting).toBe(true)
-    })
-
-    it.skip('should disable reconnection when reconnect is false', async () => {
-      const onClose = vi.fn()
-
-      const { result } = renderHook(() =>
-        useSSE('/api/v1/events/stream', {
-          reconnect: false,
-          onClose,
-        })
-      )
-
-      await waitFor(() => {
-        expect(result.current.isConnected).toBe(true)
-      })
-
-      // Simulate error
-      const eventSource = eventSourceInstances[0]
-      act(() => {
-        eventSource.readyState = MockEventSource.CLOSED
-        eventSource._simulateError()
-      })
-
-      await waitFor(() => {
-        expect(result.current.isConnected).toBe(false)
-      })
-
-      // Should not attempt reconnection
-      expect(result.current.isReconnecting).toBe(false)
-      expect(result.current.reconnectAttempts).toBe(0)
-
-      // Wait to ensure no reconnection attempt
-      await new Promise(resolve => setTimeout(resolve, 50))
-
-      // Should only have one EventSource instance
-      expect(eventSourceInstances.length).toBe(1)
-    })
   })
 })
