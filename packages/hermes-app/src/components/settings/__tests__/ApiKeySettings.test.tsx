@@ -1,394 +1,145 @@
-/**
- * Tests for ApiKeySettings component
- */
-
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ReactNode } from 'react'
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiKeySettings } from '../ApiKeySettings'
-import { useApiKeys } from '@/hooks/useApiKeys'
+import { apiClient } from '@/services/api/client'
+import { TokenStorage } from '@/utils/tokenStorage'
+import { toast } from 'sonner'
 
-// Mock the useApiKeys hook
-vi.mock('@/hooks/useApiKeys', () => ({
-  useApiKeys: vi.fn(),
-}))
+vi.mock('@/services/api/client')
+vi.mock('@/utils/tokenStorage')
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
-// Mock toast
-vi.mock('sonner', () => ({
-  toast: {
-    success: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-  },
-}))
+const keys: Awaited<ReturnType<typeof apiClient.getApiKeys>> = [
+  { id: '1', name: 'Sonarr Integration', permissions: ['read', 'write'], rateLimit: 60,
+    isActive: true, createdAt: '2025-01-01T00:00:00Z', lastUsed: null, expiresAt: null },
+  { id: '2', name: 'Mobile App', permissions: ['read'], rateLimit: 30,
+    isActive: false, createdAt: '2025-01-01T00:00:00Z', lastUsed: null, expiresAt: null },
+]
 
-// Mock clipboard API
-Object.assign(navigator, {
-  clipboard: {
-    writeText: vi.fn(),
-  },
-})
-
-// Mock confirm
-global.confirm = vi.fn()
-
-// Test wrapper with QueryClient
-const createWrapper = () => {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-      },
-    },
-  })
-
-  return ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  )
+function setup() {
+  const user = userEvent.setup()
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+  render(<QueryClientProvider client={queryClient}><ApiKeySettings /></QueryClientProvider>)
+  return user
 }
 
+beforeEach(() => {
+  vi.resetAllMocks()
+  vi.mocked(apiClient.getApiKeys).mockResolvedValue(keys)
+  vi.mocked(apiClient.createApiKey).mockResolvedValue({ ...keys[0], name: 'New Key', key: 'hm_new_key' })
+  vi.mocked(apiClient.revokeApiKey).mockResolvedValue({ message: 'Revoked' })
+  vi.spyOn(window, 'confirm').mockReturnValue(true)
+  vi.mocked(TokenStorage.getAccessToken).mockReturnValue(null)
+})
+
 describe('ApiKeySettings', () => {
-  const mockApiKeys = [
-    {
-      id: '1',
-      name: 'Sonarr Integration',
-      permissions: ['read', 'write'],
-      rateLimit: 60,
-      isActive: true,
-      createdAt: '2025-01-01T00:00:00Z',
-      lastUsed: '2025-01-02T00:00:00Z',
-      expiresAt: null,
-    },
-    {
-      id: '2',
-      name: 'Mobile App',
-      permissions: ['read'],
-      rateLimit: 30,
-      isActive: false,
-      createdAt: '2025-01-01T00:00:00Z',
-      lastUsed: null,
-      expiresAt: null,
-    },
-  ]
-
-  beforeEach(() => {
-    vi.clearAllMocks()
-    ;(global.confirm as any).mockReturnValue(true)
-  })
-
-  it('should render API keys list correctly', () => {
-    vi.mocked(useApiKeys).mockReturnValue({
-      keys: {
-        data: mockApiKeys,
-        isLoading: false,
-        isSuccess: true,
-        isError: false,
-      } as any,
-      createKey: {
-        mutateAsync: vi.fn(),
-        isPending: false,
-      } as any,
-      revokeKey: {
-        mutateAsync: vi.fn(),
-        isPending: false,
-      } as any,
-      isLoading: false,
-    } as any)
-
-    render(<ApiKeySettings />, { wrapper: createWrapper() })
-
-    expect(screen.getByText('API Keys')).toBeInTheDocument()
-    expect(screen.getByText(/Generate API keys for external applications/i)).toBeInTheDocument()
-    expect(screen.getByText('Generate New Key')).toBeInTheDocument()
-
-    // Check API keys are displayed
-    expect(screen.getByText('Sonarr Integration')).toBeInTheDocument()
+  it('renders active and inactive API keys', async () => {
+    setup()
+    expect(await screen.findByText('Sonarr Integration')).toBeInTheDocument()
     expect(screen.getByText('Mobile App')).toBeInTheDocument()
     expect(screen.getByText('Active')).toBeInTheDocument()
     expect(screen.getByText('Inactive')).toBeInTheDocument()
   })
 
-  it('should show loading state when fetching API keys', () => {
-    vi.mocked(useApiKeys).mockReturnValue({
-      keys: {
-        data: undefined,
-        isLoading: true,
-        isSuccess: false,
-        isError: false,
-      } as any,
-      createKey: {
-        mutateAsync: vi.fn(),
-        isPending: false,
-      } as any,
-      revokeKey: {
-        mutateAsync: vi.fn(),
-        isPending: false,
-      } as any,
-      isLoading: true,
-    })
-
-    render(<ApiKeySettings />, { wrapper: createWrapper() })
-
+  it('shows loading while fetching keys', () => {
+    vi.mocked(apiClient.getApiKeys).mockImplementation(() => new Promise(() => {}))
+    setup()
     expect(screen.getByText('Loading API keys...')).toBeInTheDocument()
   })
 
-  it('should show empty state when no API keys', () => {
-    vi.mocked(useApiKeys).mockReturnValue({
-      keys: {
-        data: [],
-        isLoading: false,
-        isSuccess: true,
-        isError: false,
-      } as any,
-      createKey: {
-        mutateAsync: vi.fn(),
-        isPending: false,
-      } as any,
-      revokeKey: {
-        mutateAsync: vi.fn(),
-        isPending: false,
-      } as any,
-      isLoading: false,
-    } as any)
-
-    render(<ApiKeySettings />, { wrapper: createWrapper() })
-
-    expect(screen.getByText('No API keys generated yet')).toBeInTheDocument()
-    expect(screen.getByText('Create your first API key to get started')).toBeInTheDocument()
+  it('shows an empty state', async () => {
+    vi.mocked(apiClient.getApiKeys).mockResolvedValue([])
+    setup()
+    expect(await screen.findByText('No API keys generated yet')).toBeInTheDocument()
   })
 
-  it('should show create form when Generate New Key is clicked', async () => {
-    const user = userEvent.setup()
-
-    vi.mocked(useApiKeys).mockReturnValue({
-      keys: {
-        data: [],
-        isLoading: false,
-        isSuccess: true,
-        isError: false,
-      } as any,
-      createKey: {
-        mutateAsync: vi.fn(),
-        isPending: false,
-      } as any,
-      revokeKey: {
-        mutateAsync: vi.fn(),
-        isPending: false,
-      } as any,
-      isLoading: false,
-    } as any)
-
-    render(<ApiKeySettings />, { wrapper: createWrapper() })
-
-    const generateButton = screen.getByText('Generate New Key')
-    await user.click(generateButton)
-
-    expect(screen.getByText('Create New API Key')).toBeInTheDocument()
-    expect(screen.getByLabelText('Key Name')).toBeInTheDocument()
-    expect(screen.getByText('Permissions')).toBeInTheDocument()
-    expect(screen.getByText('read')).toBeInTheDocument()
-    expect(screen.getByText('write')).toBeInTheDocument()
-    expect(screen.getByText('download')).toBeInTheDocument()
-    expect(screen.getByText('delete')).toBeInTheDocument()
+  it('offers only permissions supported by the API', async () => {
+    const user = setup()
+    await user.click(screen.getByRole('button', { name: 'Generate New Key' }))
+    for (const name of ['read', 'write', 'download', 'admin']) {
+      expect(screen.getByRole('button', { name })).toBeInTheDocument()
+    }
+    expect(screen.queryByRole('button', { name: 'delete' })).not.toBeInTheDocument()
   })
 
-  it('should create API key when form is submitted', async () => {
-    const user = userEvent.setup()
-    const mockCreateKey = vi.fn().mockResolvedValue({
-      id: '3',
-      name: 'New Test Key',
-      key: 'hm_1234567890abcdef',
-      permissions: ['read'],
-      rate_limit: 60,
-      is_active: true,
-      created_at: '2025-01-03T00:00:00Z',
-      last_used: null,
-      expires_at: null,
-    })
-
-    vi.mocked(useApiKeys).mockReturnValue({
-      keys: {
-        data: [],
-        isLoading: false,
-        isSuccess: true,
-        isError: false,
-      } as any,
-      createKey: {
-        mutateAsync: mockCreateKey,
-        isPending: false,
-      } as any,
-      revokeKey: {
-        mutateAsync: vi.fn(),
-        isPending: false,
-      },
-      isLoading: false,
-    } as any)
-
-    render(<ApiKeySettings />, { wrapper: createWrapper() })
-
-    // Open form
-    await user.click(screen.getByText('Generate New Key'))
-
-    // Fill form
-    await user.type(screen.getByLabelText('Key Name'), 'New Test Key')
-    await user.click(screen.getByText('read'))
-
-    // Submit form
-    await user.click(screen.getByText('Create Key'))
-
-    expect(mockCreateKey).toHaveBeenCalledWith({
-      name: 'New Test Key',
-      permissions: ['read'],
-    })
+  it('cancels key creation', async () => {
+    const user = setup()
+    await user.click(screen.getByRole('button', { name: 'Generate New Key' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByLabelText('Key Name')).not.toBeInTheDocument()
+    expect(apiClient.createApiKey).not.toHaveBeenCalled()
   })
 
-  it.skip('should copy API key when copy button is clicked', async () => {
-    const user = userEvent.setup()
-    const mockClipboard = navigator.clipboard.writeText as any
-
-    vi.mocked(useApiKeys).mockReturnValue({
-      keys: {
-        data: mockApiKeys,
-        isLoading: false,
-        isSuccess: true,
-        isError: false,
-      } as any,
-      createKey: {
-        mutateAsync: vi.fn(),
-        isPending: false,
-      } as any,
-      revokeKey: {
-        mutateAsync: vi.fn(),
-        isPending: false,
-      } as any,
-      isLoading: false,
-    } as any)
-
-    render(<ApiKeySettings />, { wrapper: createWrapper() })
-
-    // Find copy buttons (there should be one for each API key)
-    const copyButtons = screen.getAllByRole('button', { name: /copy/i })
-    await user.click(copyButtons[0])
-
-    expect(mockClipboard).toHaveBeenCalledWith('Key ID: 1')
+  it('rejects an empty key name', async () => {
+    const user = setup()
+    await user.click(screen.getByRole('button', { name: 'Generate New Key' }))
+    await user.click(screen.getByRole('button', { name: 'Create Key' }))
+    expect(toast.error).toHaveBeenCalledWith('Please enter a name for the API key')
+    expect(apiClient.createApiKey).not.toHaveBeenCalled()
   })
 
-  it.skip('should revoke API key when revoke button is clicked', async () => {
-    const user = userEvent.setup()
-    const mockRevokeKey = vi.fn().mockResolvedValue({
-      message: 'API key revoked successfully!',
-    })
-
-    vi.mocked(useApiKeys).mockReturnValue({
-      keys: {
-        data: mockApiKeys,
-        isLoading: false,
-        isSuccess: true,
-        isError: false,
-      },
-      createKey: {
-        mutateAsync: vi.fn(),
-        isPending: false,
-      },
-      revokeKey: {
-        mutateAsync: mockRevokeKey,
-        isPending: false,
-      },
-      isLoading: false,
-    } as any)
-
-    render(<ApiKeySettings />, { wrapper: createWrapper() })
-
-    // Find revoke buttons (trash icons)
-    const revokeButtons = screen.getAllByRole('button', { name: /trash/i })
-    await user.click(revokeButtons[0])
-
-    // Confirm dialog should be called
-    expect(global.confirm).toHaveBeenCalledWith(
-      expect.stringContaining('revoke the API key "Sonarr Integration"')
-    )
-
-    // Since confirm returns true, revoke should be called
-    expect(mockRevokeKey).toHaveBeenCalledWith('1')
+  it('creates a key and resets the form', async () => {
+    const user = setup()
+    await user.click(screen.getByRole('button', { name: 'Generate New Key' }))
+    await user.type(screen.getByLabelText('Key Name'), '  New Key  ')
+    await user.click(screen.getByRole('button', { name: 'read' }))
+    await user.click(screen.getByRole('button', { name: 'Create Key' }))
+    await waitFor(() => expect(apiClient.createApiKey).toHaveBeenCalledWith({ name: 'New Key', permissions: ['read'] }))
+    await waitFor(() => expect(screen.queryByLabelText('Key Name')).not.toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'Generate New Key' }))
+    expect(screen.getByLabelText('Key Name')).toHaveValue('')
   })
 
-  it.skip('should not revoke API key when cancelled', async () => {
-    const user = userEvent.setup()
-    const mockRevokeKey = vi.fn()
-
-    // Mock confirm to return false (cancelled)
-    ;(global.confirm as any).mockReturnValue(false)
-
-    vi.mocked(useApiKeys).mockReturnValue({
-      keys: {
-        data: mockApiKeys,
-        isLoading: false,
-        isSuccess: true,
-        isError: false,
-      },
-      createKey: {
-        mutateAsync: vi.fn(),
-        isPending: false,
-      },
-      revokeKey: {
-        mutateAsync: mockRevokeKey,
-        isPending: false,
-      },
-      isLoading: false,
-    } as any)
-
-    render(<ApiKeySettings />, { wrapper: createWrapper() })
-
-    const revokeButtons = screen.getAllByRole('button', { name: /trash/i })
-    await user.click(revokeButtons[0])
-
-    // Should not call revoke when cancelled
-    expect(mockRevokeKey).not.toHaveBeenCalled()
+  it('toggles selected permissions before submission', async () => {
+    const user = setup()
+    await user.click(screen.getByRole('button', { name: 'Generate New Key' }))
+    await user.type(screen.getByLabelText('Key Name'), 'New Key')
+    await user.click(screen.getByRole('button', { name: 'read' }))
+    await user.click(screen.getByRole('button', { name: 'write' }))
+    await user.click(screen.getByRole('button', { name: 'read' }))
+    await user.click(screen.getByRole('button', { name: 'download' }))
+    await user.click(screen.getByRole('button', { name: 'Create Key' }))
+    await waitFor(() => expect(apiClient.createApiKey).toHaveBeenCalledWith({ name: 'New Key', permissions: ['write', 'download'] }))
   })
 
-  it.skip('should toggle permissions in create form', async () => {
-    const user = userEvent.setup()
+  it('copies a key ID', async () => {
+    const user = setup()
+    const clipboard = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue()
+    await user.click(await screen.findByRole('button', { name: 'Copy key ID for Sonarr Integration' }))
+    expect(clipboard).toHaveBeenCalledWith('Key ID: 1')
+  })
 
-    vi.mocked(useApiKeys).mockReturnValue({
-      keys: {
-        data: [],
-        isLoading: false,
-        isSuccess: true,
-        isError: false,
-      } as any,
-      createKey: {
-        mutateAsync: vi.fn(),
-        isPending: false,
-      } as any,
-      revokeKey: {
-        mutateAsync: vi.fn(),
-        isPending: false,
-      } as any,
-      isLoading: false,
-    } as any)
+  it('revokes a key after confirmation', async () => {
+    const user = setup()
+    await user.click(await screen.findByRole('button', { name: 'Revoke key Sonarr Integration' }))
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('Sonarr Integration'))
+    await waitFor(() => expect(apiClient.revokeApiKey).toHaveBeenCalledWith('1'))
+  })
 
-    render(<ApiKeySettings />, { wrapper: createWrapper() })
+  it('does not revoke a key when confirmation is cancelled', async () => {
+    vi.mocked(window.confirm).mockReturnValue(false)
+    const user = setup()
+    await user.click(await screen.findByRole('button', { name: 'Revoke key Sonarr Integration' }))
+    expect(apiClient.revokeApiKey).not.toHaveBeenCalled()
+  })
 
-    // Open form
-    await user.click(screen.getByText('Generate New Key'))
+  it('copies the JWT token', async () => {
+    vi.mocked(TokenStorage.getAccessToken).mockReturnValue('test-token')
+    const user = setup()
+    const clipboard = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue()
+    await user.click(screen.getByRole('button', { name: 'Copy JWT token' }))
+    expect(clipboard).toHaveBeenCalledWith('test-token')
+    expect(toast.success).toHaveBeenCalledWith('JWT token copied to clipboard!')
+  })
 
-    // Initially no permissions selected
-    expect(screen.getByText('read')).toBeInTheDocument()
-    expect(screen.getByText('write')).toBeInTheDocument()
-
-    // Toggle read permission
-    await user.click(screen.getByText('read'))
-    await user.click(screen.getByText('download'))
-
-    // Submit form
-    await user.click(screen.getByText('Create Key'))
-
-    // Should include selected permissions
-    expect((useApiKeys as any)().createKey.mutateAsync).toHaveBeenCalledWith({
-      name: '',
-      permissions: ['read', 'download'],
-    })
+  it('reports clipboard rejection without claiming success', async () => {
+    vi.mocked(TokenStorage.getAccessToken).mockReturnValue('test-token')
+    const user = setup()
+    vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('Permission denied'))
+    await user.click(screen.getByRole('button', { name: 'Copy JWT token' }))
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('Could not copy'))
+    expect(toast.success).not.toHaveBeenCalled()
   })
 })

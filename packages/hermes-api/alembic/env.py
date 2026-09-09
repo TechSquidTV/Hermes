@@ -9,9 +9,8 @@ from alembic import context
 from app.core.config import settings
 
 # Import your app's base and models
+from app.db import models  # noqa: F401
 from app.db.base import Base
-
-# Import all models so they're registered with SQLAlchemy
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

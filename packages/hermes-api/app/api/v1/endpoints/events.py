@@ -24,6 +24,7 @@ from app.models import (
     SSETokenResponse,
     generate_sse_token,
 )
+from app.models.sse_token import validate_sse_scope
 from app.services.event_service import event_service
 from app.services.redis_progress import redis_progress_service
 
@@ -360,22 +361,17 @@ async def create_sse_token(
     **Scopes:**
     - `download:<download_id>` - Single download progress
     - `queue` - Queue updates
+    - `stats` - Download statistics
     - `system` - System notifications
     """
     user_id = principal.user_id or principal.subject
 
-    # Validate scope format
-    scope = request.scope
-    if not (
-        scope == "queue"
-        or scope == "system"
-        or scope == "stats"
-        or (scope.startswith("download:") and len(scope.split(":", 1)[1]) > 0)
-    ):
+    try:
+        scope = validate_sse_scope(request.scope)
+    except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid scope format. Must be 'download:<id>', 'queue', 'stats', or 'system'",
-        )
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
 
     # For download scopes, verify download exists (security: prevent token creation for invalid IDs)
     if scope.startswith("download:"):

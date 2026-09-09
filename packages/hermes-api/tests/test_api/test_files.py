@@ -85,3 +85,48 @@ async def test_delete_files_rejects_path_outside_download_dir(
     assert response.json()["deletedFiles"] == 0
     assert response.json()["failedDeletions"]
     assert outside_file.exists()
+
+
+@pytest.mark.asyncio
+async def test_file_listing_paginates_all_matches_and_reports_full_totals(
+    client: AsyncClient, db_session: AsyncSession, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(settings, "download_dir", str(tmp_path))
+    for index in range(5):
+        await _create_managed_file(db_session, tmp_path / f"{index}.mp4", b"video")
+
+    response = await client.get("/api/v1/files/", params={"limit": 1, "offset": 3})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["totalFiles"] == 5
+    assert data["totalSize"] == 25
+    assert [file["filename"] for file in data["files"]] == ["1.mp4"]
+
+
+@pytest.mark.asyncio
+async def test_file_listing_respects_zero_max_size_and_directory_boundaries(
+    client: AsyncClient, db_session: AsyncSession, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(settings, "download_dir", str(tmp_path))
+    await _create_managed_file(db_session, tmp_path / "videos" / "empty.mp4", b"")
+    await _create_managed_file(db_session, tmp_path / "videos" / "full.mp4")
+    await _create_managed_file(db_session, tmp_path / "videos-other" / "empty.mp4", b"")
+
+    response = await client.get(
+        "/api/v1/files/",
+        params={"directory": str(tmp_path / "videos"), "max_size": 0},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["totalFiles"] == 1
+    assert data["files"][0]["filepath"] == str(tmp_path / "videos" / "empty.mp4")
+
+
+@pytest.mark.asyncio
+async def test_file_listing_rejects_inverted_size_range(client: AsyncClient):
+    response = await client.get(
+        "/api/v1/files/", params={"min_size": 10, "max_size": 0}
+    )
+    assert response.status_code == 422

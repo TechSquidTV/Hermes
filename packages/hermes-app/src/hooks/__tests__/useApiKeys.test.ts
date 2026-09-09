@@ -12,7 +12,7 @@ import { apiClient } from '@/services/api/client'
 // Mock the API client
 vi.mock('@/services/api/client')
 
-const mockApiClient = apiClient as any
+const mockApiClient = vi.mocked(apiClient)
 
 // Mock toast
 vi.mock('sonner', () => ({
@@ -39,31 +39,32 @@ const createWrapper = () => {
 
 describe('useApiKeys', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks()
+    mockApiClient.getApiKeys.mockResolvedValue([])
   })
 
-  describe.skip('keys query', () => {
+  describe('keys query', () => {
     it('should fetch API keys successfully', async () => {
       const mockApiKeys = [
         {
           id: '1',
           name: 'Test Key 1',
           permissions: ['read', 'write'],
-          rate_limit: 60,
-          is_active: true,
-          created_at: '2025-01-01T00:00:00Z',
-          last_used: '2025-01-02T00:00:00Z',
-          expires_at: null,
+          rateLimit: 60,
+          isActive: true,
+          createdAt: '2025-01-01T00:00:00Z',
+          lastUsed: '2025-01-02T00:00:00Z',
+          expiresAt: null,
         },
         {
           id: '2',
           name: 'Test Key 2',
           permissions: ['read'],
-          rate_limit: 30,
-          is_active: false,
-          created_at: '2025-01-01T00:00:00Z',
-          last_used: null,
-          expires_at: null,
+          rateLimit: 30,
+          isActive: false,
+          createdAt: '2025-01-01T00:00:00Z',
+          lastUsed: null,
+          expiresAt: null,
         },
       ]
 
@@ -96,18 +97,18 @@ describe('useApiKeys', () => {
     })
   })
 
-  describe.skip('createKey mutation', () => {
+  describe('createKey mutation', () => {
     it('should create API key successfully', async () => {
       const mockNewKey = {
         id: '3',
         name: 'New Test Key',
         key: 'hm_1234567890abcdef1234567890abcdef',
         permissions: ['read'],
-        rate_limit: 60,
-        is_active: true,
-        created_at: '2025-01-03T00:00:00Z',
-        last_used: null,
-        expires_at: null,
+        rateLimit: 60,
+        isActive: true,
+        createdAt: '2025-01-03T00:00:00Z',
+        lastUsed: null,
+        expiresAt: null,
       }
 
       mockApiClient.createApiKey.mockResolvedValue(mockNewKey)
@@ -152,7 +153,7 @@ describe('useApiKeys', () => {
     })
   })
 
-  describe.skip('revokeKey mutation', () => {
+  describe('revokeKey mutation', () => {
     it('should revoke API key successfully', async () => {
       const mockResponse = { message: 'API key revoked successfully!' }
       mockApiClient.revokeApiKey.mockResolvedValue(mockResponse)
@@ -188,7 +189,7 @@ describe('useApiKeys', () => {
     })
   })
 
-  describe.skip('loading states', () => {
+  describe('loading states', () => {
     it('should show loading state during operations', async () => {
       mockApiClient.getApiKeys.mockImplementation(
         () => new Promise((resolve) => setTimeout(() => resolve([]), 100))

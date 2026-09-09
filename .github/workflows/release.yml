@@ -41,7 +41,7 @@ jobs:
           echo "✅ Running from main branch"
 
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
@@ -50,20 +50,20 @@ jobs:
         uses: pnpm/action-setup@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'pnpm'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
-          python-version: '3.12'
+          python-version: '3.14'
 
       - name: Install dependencies
         run: |
@@ -79,19 +79,22 @@ jobs:
 
       - name: Calculate new version
         id: new_version
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+          BUMP_TYPE: ${{ inputs.bump_type }}
         run: |
           CURRENT="${{ steps.current_version.outputs.current }}"
 
           # If specific version provided, use it
-          if [ -n "${{ inputs.version }}" ]; then
-            NEW_VERSION="${{ inputs.version }}"
+          if [ -n "$REQUESTED_VERSION" ]; then
+            NEW_VERSION="$REQUESTED_VERSION"
             echo "Using specific version: $NEW_VERSION"
           else
             # Parse current version
             IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
 
             # Bump based on type
-            case "${{ inputs.bump_type }}" in
+            case "$BUMP_TYPE" in
               major)
                 MAJOR=$((MAJOR + 1))
                 MINOR=0
@@ -107,7 +110,7 @@ jobs:
             esac
 
             NEW_VERSION="$MAJOR.$MINOR.$PATCH"
-            echo "Bumped ${{ inputs.bump_type }}: $CURRENT -> $NEW_VERSION"
+            echo "Bumped $BUMP_TYPE: $CURRENT -> $NEW_VERSION"
           fi
 
           if [[ ! "$NEW_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then

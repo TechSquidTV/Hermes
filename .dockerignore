@@ -26,7 +26,7 @@ ehthumbs.db
 Thumbs.db
 
 # Node.js
-node_modules/
+**/node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -119,3 +119,10 @@ jest.config.js
 # Development tools
 docker-build.log
 run_migration.py
+**/.venv/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/coverage/
+**/dist/
+**/junit.xml

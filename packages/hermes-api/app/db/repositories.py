@@ -3,6 +3,7 @@ Repository layer for database operations.
 """
 
 import uuid
+from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -191,6 +192,23 @@ class DownloadRepository(BaseRepository):
 
 class DownloadFileRepository(BaseRepository):
     """Repository for DownloadFile model operations."""
+
+    async def iter_completed_files(
+        self,
+    ) -> AsyncIterator[tuple[DownloadFile, Download]]:
+        """Stream files with their completed download, without truncating pages."""
+        result = await self.session.stream(
+            select(DownloadFile, Download)
+            .join(Download, DownloadFile.download_id == Download.id)
+            .where(Download.status == "completed")
+            .order_by(desc(DownloadFile.created_at), DownloadFile.id)
+            .execution_options(yield_per=100)
+        )
+        try:
+            async for row in result:
+                yield row[0], row[1]
+        finally:
+            await result.close()
 
     async def create(
         self,

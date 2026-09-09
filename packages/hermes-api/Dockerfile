@@ -1,5 +1,5 @@
 # Multi-stage Dockerfile for Hermes API
-FROM python:3.13-slim AS builder
+FROM python:3.14-slim AS builder
 
 # Install system dependencies for building
 RUN apt-get update && apt-get install -y \
@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv package manager
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+COPY --from=ghcr.io/astral-sh/uv:0.12.11 /uv /uvx /usr/local/bin/
 
 # Set work directory
 WORKDIR /app
@@ -21,7 +21,7 @@ RUN uv sync --frozen --no-install-project --no-dev
 FROM node:24-slim AS node-runtime
 
 # Production stage - use Python slim base image
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 # Build args for configurable UID/GID (defaults to 1000)
 # Override at build time: docker build --build-arg USER_UID=$(id -u) --build-arg USER_GID=$(id -g)

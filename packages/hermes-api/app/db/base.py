@@ -2,6 +2,7 @@
 Database base configuration and session management.
 """
 
+from pathlib import Path
 from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -51,18 +52,16 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 async def create_tables():
     """Create all database tables."""
-    # Ensure database file exists and is writable
-    import os
+    # Register models even when this helper runs before application startup.
+    from app.db import models  # noqa: F401
 
-    db_path = settings.database_url.replace("sqlite+aiosqlite:///./", "")
-    os.makedirs(
-        os.path.dirname(db_path) if os.path.dirname(db_path) else ".", exist_ok=True
-    )
-
-    # Touch the database file to ensure it exists
-    if not os.path.exists(db_path):
-        with open(db_path, "w") as f:
-            f.write("")  # Create empty file
+    database = engine.url.database
+    if engine.url.get_backend_name() == "sqlite" and database not in (
+        None,
+        "",
+        ":memory:",
+    ):
+        Path(database).parent.mkdir(parents=True, exist_ok=True)
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

@@ -1,45 +1,29 @@
 # Hermes App Dockerfile - Static Build Only
 FROM node:24-alpine AS base
 
-# Install pnpm with specific version for reproducibility
+# Corepack selects the package manager pinned in the root manifest.
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable && corepack prepare pnpm@10.19.0 --activate
+RUN corepack enable
+WORKDIR /app
 
-# Install dependencies only when needed - optimized caching
 FROM base AS deps
-WORKDIR /app
-
-# Copy lock files first for better caching
-COPY pnpm-lock.yaml packages/hermes-app/package.json ./
-
-# Install dependencies with optimized caching
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/hermes-app/package.json ./packages/hermes-app/package.json
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --no-frozen-lockfile
+    pnpm install --frozen-lockfile
 
-# Build the application - optimized layer caching
-FROM base AS builder
-WORKDIR /app
+FROM deps AS builder
 ARG VITE_HERMES_BUILD_VERSION
 ENV VITE_HERMES_BUILD_VERSION=${VITE_HERMES_BUILD_VERSION}
-
-# Copy dependencies from deps stage
-COPY --from=deps /app/node_modules ./node_modules
-
-# Copy source files (order matters for caching)
-COPY packages/hermes-app/package.json pnpm-lock.yaml ./
-COPY packages/hermes-app/postcss.config.js packages/hermes-app/tsconfig.json packages/hermes-app/tsconfig.node.json packages/hermes-app/vite.config.ts packages/hermes-app/index.html ./
-COPY packages/hermes-app/public ./public
-COPY packages/hermes-app/src ./src
-
-# Build the application
-RUN pnpm run build
+COPY packages/hermes-app/ ./packages/hermes-app/
+RUN pnpm --filter hermes-app build
 
 # Production image - nginx serving static files with runtime config
-FROM nginx:1.29-alpine AS runner
+FROM nginx:1.30-alpine AS runner
 
 # Copy built static files from builder
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=builder /app/packages/hermes-app/dist /usr/share/nginx/html
 
 # Copy nginx configuration
 COPY packages/hermes-app/nginx.conf /etc/nginx/nginx.conf

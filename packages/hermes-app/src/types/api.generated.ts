@@ -1134,6 +1134,7 @@ export interface paths {
          *     **Scopes:**
          *     - `download:<download_id>` - Single download progress
          *     - `queue` - Queue updates
+         *     - `stats` - Download statistics
          *     - `system` - System notifications
          */
         post: operations["create_sse_token_api_v1_events_token_post"];
@@ -1321,7 +1322,7 @@ export interface components {
              */
             name: string;
             /** Permissions */
-            permissions?: string[];
+            permissions?: components["schemas"]["ApiKeyPermission"][];
             /** Expiresat */
             expiresAt?: string | null;
         };
@@ -1347,6 +1348,12 @@ export interface components {
             /** Expiresat */
             expiresAt: string | null;
         };
+        /**
+         * ApiKeyPermission
+         * @description Supported permissions for database-backed API keys.
+         * @enum {string}
+         */
+        ApiKeyPermission: "read" | "write" | "download" | "admin";
         /**
          * ApiKeyResponse
          * @description API key response with automatic camelCase conversion.
@@ -1800,9 +1807,10 @@ export interface components {
         CreateSSETokenRequest: {
             /**
              * Scope
-             * @description Token scope (e.g., 'download:abc-123', 'queue', 'system')
+             * @description Token scope (e.g., 'download:abc-123', 'queue', 'stats', 'system')
              * @example download:abc-123
              * @example queue
+             * @example stats
              * @example system
              */
             scope: string;
@@ -2698,6 +2706,14 @@ export interface components {
         PublicConfig: {
             /** Allowpublicsignup */
             allowPublicSignup: boolean;
+        };
+        /**
+         * RefreshTokenRequest
+         * @description Refresh-token request accepting camelCase and snake_case input.
+         */
+        RefreshTokenRequest: {
+            /** Refreshtoken */
+            refreshToken: string;
         };
         /**
          * SSETokenPermission
@@ -4644,9 +4660,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["RefreshTokenRequest"];
             };
         };
         responses: {

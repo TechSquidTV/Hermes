@@ -6,8 +6,8 @@ Modern React/TypeScript app for the Hermes video downloader, built with Vite, Ta
 
 ### Prerequisites
 
-- Node.js 18+
-- pnpm 8+ (recommended package manager)
+- Node.js 22.22.2+ (22.x), 24.15+ (24.x, recommended), or 26+
+- pnpm 12.3.4 (pinned in the root package.json; enable Corepack)
 
 ### Installation
 
@@ -51,7 +51,7 @@ pnpm generate:types
 
 **Development Workflow:**
 1. Backend API changes are made
-2. Run `pnpm generate:types` with API running on localhost:8000
+2. Run `pnpm generate:types` to export the schema directly from the Python app
 3. Generated types in `src/types/api.generated.ts` are committed
 4. Frontend gets full type safety for all API calls
 

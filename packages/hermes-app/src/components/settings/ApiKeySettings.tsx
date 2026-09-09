@@ -8,12 +8,15 @@ import { Key, Plus, Copy, Trash2, Clock, Eye, Shield } from 'lucide-react'
 import { toast } from 'sonner'
 import { useApiKeys } from '@/hooks/useApiKeys'
 import { TokenStorage } from '@/utils/tokenStorage'
+import type { components } from '@/types/api.generated'
+
+const API_KEY_PERMISSIONS = ['read', 'write', 'download', 'admin'] as const satisfies readonly components['schemas']['ApiKeyPermission'][]
 
 export function ApiKeySettings() {
   const { keys, createKey, revokeKey } = useApiKeys()
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [newKeyName, setNewKeyName] = useState('')
-  const [newKeyPermissions, setNewKeyPermissions] = useState<string[]>([])
+  const [newKeyPermissions, setNewKeyPermissions] = useState<components['schemas']['ApiKeyPermission'][]>([])
 
 
   const handleCreateKey = async () => {
@@ -61,7 +64,7 @@ export function ApiKeySettings() {
     }
   }
 
-  const togglePermission = (permission: string) => {
+  const togglePermission = (permission: components['schemas']['ApiKeyPermission']) => {
     setNewKeyPermissions(prev =>
       prev.includes(permission)
         ? prev.filter(p => p !== permission)
@@ -69,11 +72,19 @@ export function ApiKeySettings() {
     )
   }
 
+  const copyToClipboard = async (text: string, message: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success(message)
+    } catch {
+      toast.error('Could not copy to clipboard. Please copy the value manually.')
+    }
+  }
+
   const handleCopyJWTToken = () => {
     const token = TokenStorage.getAccessToken()
     if (token) {
-      navigator.clipboard.writeText(token)
-      toast.success('JWT token copied to clipboard!')
+      void copyToClipboard(token, 'JWT token copied to clipboard!')
     } else {
       toast.error('No JWT token available. Please log in again.')
     }
@@ -121,7 +132,7 @@ export function ApiKeySettings() {
                 <div className="space-y-2">
                   <Label>Permissions</Label>
                   <div className="grid grid-cols-2 gap-2">
-                    {['read', 'write', 'download', 'delete'].map((permission) => (
+                    {API_KEY_PERMISSIONS.map((permission) => (
                       <Button
                         key={permission}
                         type="button"
@@ -196,13 +207,15 @@ export function ApiKeySettings() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => navigator.clipboard.writeText(`Key ID: ${apiKey.id}`)}
+                      aria-label={`Copy key ID for ${apiKey.name}`}
+                      onClick={() => void copyToClipboard(`Key ID: ${apiKey.id}`, 'Key ID copied to clipboard!')}
                     >
                       <Copy className="h-4 w-4" />
                     </Button>
                     <Button
                       variant="destructive"
                       size="sm"
+                      aria-label={`Revoke key ${apiKey.name}`}
                       onClick={() => handleRevokeKey(apiKey.id, apiKey.name)}
                       disabled={revokeKey.isPending}
                     >
@@ -248,6 +261,7 @@ export function ApiKeySettings() {
               <Button
                 variant="outline"
                 size="sm"
+                aria-label="Copy JWT token"
                 onClick={handleCopyJWTToken}
                 disabled={!TokenStorage.getAccessToken()}
               >
