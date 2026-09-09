@@ -8,12 +8,15 @@ import { Key, Plus, Copy, Trash2, Clock, Eye, Shield } from 'lucide-react'
 import { toast } from 'sonner'
 import { useApiKeys } from '@/hooks/useApiKeys'
 import { TokenStorage } from '@/utils/tokenStorage'
+import type { components } from '@/types/api.generated'
+
+const API_KEY_PERMISSIONS = ['read', 'write', 'download', 'admin'] as const satisfies readonly components['schemas']['ApiKeyPermission'][]
 
 export function ApiKeySettings() {
   const { keys, createKey, revokeKey } = useApiKeys()
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [newKeyName, setNewKeyName] = useState('')
-  const [newKeyPermissions, setNewKeyPermissions] = useState<string[]>([])
+  const [newKeyPermissions, setNewKeyPermissions] = useState<components['schemas']['ApiKeyPermission'][]>([])
 
 
   const handleCreateKey = async () => {
@@ -61,7 +64,7 @@ export function ApiKeySettings() {
     }
   }
 
-  const togglePermission = (permission: string) => {
+  const togglePermission = (permission: components['schemas']['ApiKeyPermission']) => {
     setNewKeyPermissions(prev =>
       prev.includes(permission)
         ? prev.filter(p => p !== permission)
@@ -121,7 +124,7 @@ export function ApiKeySettings() {
                 <div className="space-y-2">
                   <Label>Permissions</Label>
                   <div className="grid grid-cols-2 gap-2">
-                    {['read', 'write', 'download', 'delete'].map((permission) => (
+                    {API_KEY_PERMISSIONS.map((permission) => (
                       <Button
                         key={permission}
                         type="button"

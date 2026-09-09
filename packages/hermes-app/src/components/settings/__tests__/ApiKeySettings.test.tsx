@@ -191,7 +191,7 @@ describe('ApiKeySettings', () => {
     expect(screen.getByText('read')).toBeInTheDocument()
     expect(screen.getByText('write')).toBeInTheDocument()
     expect(screen.getByText('download')).toBeInTheDocument()
-    expect(screen.getByText('delete')).toBeInTheDocument()
+    expect(screen.getByText('admin')).toBeInTheDocument()
   })
 
   it('should create API key when form is submitted', async () => {

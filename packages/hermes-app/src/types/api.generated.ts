@@ -1321,7 +1321,7 @@ export interface components {
              */
             name: string;
             /** Permissions */
-            permissions?: string[];
+            permissions?: components["schemas"]["ApiKeyPermission"][];
             /** Expiresat */
             expiresAt?: string | null;
         };
@@ -1347,6 +1347,12 @@ export interface components {
             /** Expiresat */
             expiresAt: string | null;
         };
+        /**
+         * ApiKeyPermission
+         * @description Supported permissions for database-backed API keys.
+         * @enum {string}
+         */
+        ApiKeyPermission: "read" | "write" | "download" | "admin";
         /**
          * ApiKeyResponse
          * @description API key response with automatic camelCase conversion.
@@ -2698,6 +2704,14 @@ export interface components {
         PublicConfig: {
             /** Allowpublicsignup */
             allowPublicSignup: boolean;
+        };
+        /**
+         * RefreshTokenRequest
+         * @description Refresh-token request accepting camelCase and snake_case input.
+         */
+        RefreshTokenRequest: {
+            /** Refreshtoken */
+            refreshToken: string;
         };
         /**
          * SSETokenPermission
@@ -4644,9 +4658,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["RefreshTokenRequest"];
             };
         };
         responses: {

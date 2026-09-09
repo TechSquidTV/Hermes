@@ -64,16 +64,11 @@ export function UrlInput() {
   }, [])
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
-    const items = Array.from(e.clipboardData.items)
-    const textItem = items.find(item => item.type === 'text/plain')
-
-    if (textItem) {
-      textItem.getAsString((text) => {
-        if (text && isValidUrl(text.trim())) {
-          setUrl(text.trim())
-          toast.success('URL pasted successfully!')
-        }
-      })
+    const text = e.clipboardData.getData('text/plain').trim()
+    if (text && isValidUrl(text)) {
+      e.preventDefault()
+      setUrl(text)
+      toast.success('URL pasted successfully!')
     }
   }, [])
 

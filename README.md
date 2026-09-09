@@ -208,7 +208,9 @@ These templates help us help you faster!
 
 ### Manual Installation (Development)
 
-For development and contribution purposes:
+For development and contribution purposes, use Node.js 22.12+ (Node 24 in CI), pnpm 12.3.4, and Python 3.11+ (Python 3.14 in Docker and CI). Enable Corepack to use the pnpm version pinned in `package.json`.
+
+**Breaking tooling update:** pnpm 10 and Node versions below 22.12 are no longer supported. Run `corepack enable` and `pnpm install` after pulling. TypeScript remains on 6.0.3 because the current ESLint and OpenAPI tooling does not support the TypeScript 7 compiler API.
 
 ```bash
 # Install dependencies

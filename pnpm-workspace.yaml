@@ -1,4 +1,17 @@
 packages:
   - 'packages/hermes-app'
 
+peerDependencyRules:
+  allowedVersions:
+    'openapi-typescript>typescript': '^6.0.0'
 
+# Updates intentionally resolve the latest stable releases.
+minimumReleaseAge: 0
+
+allowBuilds:
+  esbuild: true
+  msw: false
+
+# openapi-typescript's Redocly dependency pins a vulnerable patch.
+overrides:
+  'js-yaml@>=4.0.0 <4.3.2': 4.3.2
