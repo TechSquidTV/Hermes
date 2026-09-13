@@ -1,4 +1,6 @@
 # Multi-stage Dockerfile for Hermes API
+FROM ghcr.io/astral-sh/uv:0.12.11 AS uv-runtime
+
 FROM python:3.14-slim AS builder
 
 # Install system dependencies for building
@@ -7,7 +9,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv package manager
-COPY --from=ghcr.io/astral-sh/uv:0.12.11 /uv /uvx /usr/local/bin/
+COPY --from=uv-runtime /uv /uvx /usr/local/bin/
 
 # Set work directory
 WORKDIR /app
@@ -15,8 +17,8 @@ WORKDIR /app
 # Copy dependency files first for better caching
 COPY pyproject.toml uv.lock ./
 
-# Install dependencies (fixed: added missing --no-dev flag)
-RUN uv sync --frozen --no-install-project --no-dev
+# Validate the lockfile and install only production dependencies
+RUN uv sync --locked --no-install-project --no-dev
 
 FROM node:24-slim AS node-runtime
 

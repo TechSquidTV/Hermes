@@ -19,6 +19,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
+from app.utils.media import DEFAULT_FORMAT_SPEC
 
 
 class Download(Base):
@@ -50,7 +51,7 @@ class Download(Base):
     download_speed = Column(Float, nullable=True)  # Download speed in bytes per second
     eta = Column(Float, nullable=True)  # Estimated time remaining in seconds
 
-    format_spec = Column(String, default="best")
+    format_spec = Column(String, default=DEFAULT_FORMAT_SPEC)
     output_path = Column(String, nullable=True)
     file_size = Column(Integer, nullable=True)  # Final file size in bytes
     duration = Column(Float, nullable=True)  # Video duration in seconds
@@ -173,7 +174,7 @@ class DownloadBatch(Base):
     completed_at = Column(DateTime, nullable=True)
 
     # Settings applied to all downloads in batch
-    format_spec = Column(String(100), default="best")
+    format_spec = Column(String(100), default=DEFAULT_FORMAT_SPEC)
     output_directory = Column(Text, nullable=True)
 
     # Celery task tracking

@@ -265,7 +265,7 @@ class TestBatchCreateParams:
         assert params.batch_type == "playlist"
         assert params.batch_title is None
         assert params.source_url is None
-        assert params.format_spec == "best"
+        assert params.format_spec == "bestvideo*+bestaudio/best"
         assert params.output_directory is None
         assert params.videos == []
 
@@ -500,7 +500,7 @@ class TestCreateBatchRequest:
         assert request.playlist_url == "https://youtube.com/playlist?list=PL123"
         assert request.urls is None
         assert request.batch_title is None
-        assert request.format_spec == "best"
+        assert request.format_spec == "bestvideo*+bestaudio/best"
         assert request.output_directory is None
         assert request.start_immediately is True
 

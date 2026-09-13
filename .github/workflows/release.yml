@@ -67,8 +67,10 @@ jobs:
 
       - name: Install dependencies
         run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
           pnpm install --frozen-lockfile
-          cd packages/hermes-api && uv sync --frozen --all-groups
+          cd packages/hermes-api && uv sync --locked --all-groups
 
       - name: Read current version
         id: current_version

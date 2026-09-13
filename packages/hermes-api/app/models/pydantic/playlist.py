@@ -10,6 +10,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
+from app.utils.media import DEFAULT_FORMAT_SPEC
+
 # yt-dlp result types (from YouTubeDL.py line ~3300)
 YTDLResultType = Literal[
     "video", "playlist", "multi_video", "url", "url_transparent", "compat_list"
@@ -112,7 +114,7 @@ class BatchCreateParams(BaseModel):
     batch_type: BatchType
     batch_title: Optional[str] = None
     source_url: Optional[str] = None
-    format_spec: str = "best"
+    format_spec: str = DEFAULT_FORMAT_SPEC
     output_directory: Optional[str] = None
     videos: list[PlaylistVideoInfo] = Field(default_factory=list)
 
@@ -188,7 +190,7 @@ class CreateBatchRequest(BaseModel):
     playlist_url: Optional[str] = None
     urls: Optional[list[str]] = None
     batch_title: Optional[str] = None
-    format_spec: str = "best"
+    format_spec: str = DEFAULT_FORMAT_SPEC
     output_directory: Optional[str] = None
     start_immediately: bool = True
 

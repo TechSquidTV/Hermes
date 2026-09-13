@@ -1,0 +1,10 @@
+# Dependency and CI review ownership (replaces Dependabot's retired reviewers option).
+/.github/CODEOWNERS @KyleTryon
+/.github/dependabot.yml @KyleTryon
+/.github/workflows/ @KyleTryon
+package.json @KyleTryon
+pnpm-lock.yaml @KyleTryon
+pnpm-workspace.yaml @KyleTryon
+pyproject.toml @KyleTryon
+uv.lock @KyleTryon
+Dockerfile* @KyleTryon

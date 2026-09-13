@@ -4,11 +4,16 @@ on:
   pull_request:
     branches:
       - main
+      - develop
 
 # Cancel in-progress runs when a new push is made to the same PR
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
 
 jobs:
   # Determine which packages have changes
@@ -29,10 +34,12 @@ jobs:
               - 'package.json'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
+              - '.github/dependabot.yml'
               - '.github/workflows/**'
             backend:
               - 'packages/hermes-api/**'
               - 'package.json'
+              - '.github/dependabot.yml'
               - '.github/workflows/**'
 
   # Frontend validation
@@ -70,6 +77,11 @@ jobs:
 
       - name: Test with coverage
         run: pnpm --filter hermes-app test:coverage
+
+      - name: Build frontend Docker images
+        run: |
+          docker build --pull -f packages/hermes-app/Dockerfile .
+          docker build --pull -f packages/hermes-app/Dockerfile.dev .
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
@@ -109,27 +121,33 @@ jobs:
 
       - name: Install dependencies
         working-directory: packages/hermes-api
-        run: uv sync --frozen --all-groups
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          uv sync --locked --all-groups
 
       - name: Run black (format check)
         working-directory: packages/hermes-api
-        run: uv run black --check app/ tests/
+        run: uv run --locked black --check app/ tests/
 
       - name: Run isort (import sorting check)
         working-directory: packages/hermes-api
-        run: uv run isort --check-only app/ tests/
+        run: uv run --locked isort --check-only app/ tests/
 
       - name: Run ruff (linting)
         working-directory: packages/hermes-api
-        run: uv run ruff check app/ tests/
+        run: uv run --locked ruff check app/ tests/
 
       - name: Run mypy (type checking)
         working-directory: packages/hermes-api
-        run: uv run python -m mypy --explicit-package-bases app/ tests/
+        run: uv run --locked python -m mypy --explicit-package-bases app/ tests/
 
       - name: Run tests with coverage
         working-directory: packages/hermes-api
-        run: uv run pytest --cov=app --cov-report=term-missing --cov-report=xml:coverage.xml --junitxml=junit.xml
+        run: uv run --locked pytest --cov=app --cov-report=term-missing --cov-report=xml:coverage.xml --junitxml=junit.xml
+
+      - name: Build API Docker image
+        run: docker build --pull -f packages/hermes-api/Dockerfile packages/hermes-api
 
       - name: List coverage files (debug)
         working-directory: packages/hermes-api

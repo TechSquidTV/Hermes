@@ -14,6 +14,7 @@ from app.core.logging import get_logger
 from app.models.base import CamelCaseModel
 from app.models.pydantic.config import Configuration, ConfigurationUpdate
 from app.services.system_settings_service import system_settings_service
+from app.utils.media import DEFAULT_FORMAT_SPEC
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 logger = get_logger(__name__)
@@ -121,7 +122,7 @@ async def get_admin_configuration(
     return Configuration(
         # Download settings
         output_template="%(title)s.%(ext)s",
-        default_format="best",
+        default_format=DEFAULT_FORMAT_SPEC,
         download_subtitles=False,
         download_thumbnail=False,
         output_directory=settings.download_dir,

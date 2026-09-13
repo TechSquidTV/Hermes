@@ -105,7 +105,7 @@ export interface paths {
          *     **Examples:**
          *     ```json
          *     // Best quality (default)
-         *     {"url": "https://youtube.com/watch?v=...", "format": "best"}
+         *     {"url": "https://youtube.com/watch?v=...", "format": "bestvideo*+bestaudio/best"}
          *
          *     // Best video + audio up to 1080p
          *     {"url": "https://youtube.com/watch?v=...",
@@ -189,7 +189,7 @@ export interface paths {
          *     See GET /api/v1/formats/ for available format options.
          *
          *     Common batch scenarios:
-         *     - `"best"`: Best quality for all videos
+         *     - `"bestvideo*+bestaudio/best"`: Best quality for all videos, merging when needed
          *     - `"bestaudio[ext=mp3]"`: Audio-only in MP3 format
          *     - `"bestvideo[height<=720]+bestaudio"`: All videos limited to 720p
          *
@@ -1470,7 +1470,7 @@ export interface components {
             /**
              * Format
              * @description Format selection for all downloads. See GET /formats endpoint for available options. Examples: 'best', 'bestvideo+bestaudio', 'mp4'
-             * @default best
+             * @default bestvideo*+bestaudio/best
              */
             format: string;
             /**
@@ -2064,10 +2064,10 @@ export interface components {
             url: string;
             /**
              * Format
-             * @description Format selection specification. Examples: 'best', 'worst', 'bestvideo+bestaudio', 'mp4', 'bestaudio', 'bestvideo[height<=720]+bestaudio', or specific format IDs like '137+140'. See GET /formats endpoint for all available options and detailed descriptions.
-             * @default best
-             * @example best
-             * @example best
+             * @description Format selection specification. Defaults to bestvideo*+bestaudio/best, merging separate video and audio streams when needed. Examples: 'best', 'worst', 'bestvideo+bestaudio', 'mp4', 'bestaudio', 'bestvideo[height<=720]+bestaudio', or specific format IDs like '137+140'. See GET /formats endpoint for all available options and detailed descriptions.
+             * @default bestvideo*+bestaudio/best
+             * @example bestvideo*+bestaudio/best
+             * @example bestvideo*+bestaudio/best
              * @example bestvideo+bestaudio
              * @example bestvideo[height<=1080]+bestaudio
              * @example bestaudio[ext=m4a]

@@ -32,6 +32,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import { taskTracker } from '@/lib/taskTracking'
 import { invalidateQueueQueries } from '@/lib/queryClient'
 
+const DEFAULT_FORMAT = 'bestvideo*+bestaudio/best'
+
 interface VideoPreviewProps {
   info: VideoInfo
   onDownload?: (format: string) => void
@@ -39,7 +41,7 @@ interface VideoPreviewProps {
 }
 
 export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewProps) {
-  const [selectedFormat, setSelectedFormat] = useState<string>('best')
+  const [selectedFormat, setSelectedFormat] = useState<string>(DEFAULT_FORMAT)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const queryClient = useQueryClient()
   
@@ -145,7 +147,7 @@ export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewPr
           
           const response = await apiClient.startBatchDownload({
             urls: batches[i],
-            format: selectedFormat || 'best',
+            format: selectedFormat,
             downloadSubtitles: false,
             downloadThumbnail: false,
             priority: 'normal',
@@ -215,7 +217,7 @@ export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewPr
 
   const formatOptions = [
     { 
-      value: 'best', 
+      value: DEFAULT_FORMAT,
       label: 'Best Quality',
       description: 'Highest available quality for both video and audio'
     },
