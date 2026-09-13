@@ -32,10 +32,9 @@ jobs:
             echo "Current branch: ${{ github.ref }}"
             echo ""
             echo "To release:"
-            echo "1. Ensure your changes are merged to develop first"
-            echo "2. Test using develop Docker images"
-            echo "3. Create a PR from develop to main"
-            echo "4. After merge, run this workflow from main"
+            echo "1. Merge reviewed PRs with passing checks into main"
+            echo "2. Verify the combined changes and Docker images"
+            echo "3. Run this workflow from main"
             exit 1
           fi
           echo "✅ Running from main branch"
@@ -52,7 +51,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '24'
+          node-version: '26'
           cache: 'pnpm'
 
       - name: Install uv
