@@ -63,7 +63,9 @@ export function useDownloadFile() {
       })
 
       if (!response.ok) {
-        throw new Error(`Download failed: ${response.statusText}`)
+        const errorBody = await response.text().catch(() => '')
+        const detail = errorBody.trim() || response.statusText
+        throw new Error(`Download failed: HTTP ${response.status}${detail ? `: ${detail}` : ''}`)
       }
 
       const blob = await response.blob()
@@ -112,4 +114,3 @@ export function useCancelDownload() {
     },
   })
 }
-

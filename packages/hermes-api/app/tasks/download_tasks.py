@@ -9,6 +9,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict
 
+from app.core.config import settings
 from app.core.logging import get_logger
 from app.db.base import async_session_maker
 from app.db.repositories import (
@@ -16,6 +17,7 @@ from app.db.repositories import (
     DownloadRepository,
     WebhookRepository,
 )
+from app.services.download_files import register_download_file
 from app.services.redis_progress import redis_progress_service
 from app.services.yt_dlp_service import YTDLPService
 from app.tasks.celery_app import celery_app
@@ -168,6 +170,15 @@ async def _update_download_status(
                      from progress hook (SSE is handled separately for frequency control).
     """
     async with async_session_maker() as session:
+        if status == "completed":
+            # The status repository commits both writes below; registration must
+            # never become visible independently of the completed status.
+            file_record = await register_download_file(
+                session, download_id, kwargs["output_path"]
+            )
+            kwargs["output_path"] = file_record.filepath
+            kwargs["file_size"] = file_record.file_size
+
         repos = {
             "downloads": DownloadRepository(session),
             "history": DownloadHistoryRepository(session),
@@ -346,7 +357,7 @@ async def _download_video_task(
         # Generate output path if not provided
         if not output_path:
             output_path = os.path.join(
-                os.getenv("HERMES_DOWNLOADS_DIR", "./downloads"),
+                settings.download_dir,
                 output_filename,
             )
         else:

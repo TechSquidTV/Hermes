@@ -1,12 +1,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook } from '@testing-library/react'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { apiClient } from '@/services/api/client'
+import { TokenStorage } from '@/utils/tokenStorage'
 import {
   useCancelDownload,
   useDeleteFiles,
+  useDownloadFile,
   useStartDownload,
 } from '../useDownloadActions'
 
@@ -15,6 +17,7 @@ vi.mock('@/services/api/client', () => ({
     startDownload: vi.fn(),
     deleteFiles: vi.fn(),
     cancelDownload: vi.fn(),
+    getDownloadFileUrl: vi.fn(() => '/api/v1/files/download?path=video.mp4'),
   },
 }))
 
@@ -50,6 +53,11 @@ function renderWithQueryClient<T>(hook: () => T) {
 }
 
 describe('useDownloadActions', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     mockStartDownload.mockResolvedValue({
@@ -96,6 +104,60 @@ describe('useDownloadActions', () => {
     })
     expect(invalidateQueries).toHaveBeenCalledTimes(1)
   })
+
+  it.each([
+    {
+      status: 404,
+      body: '{"detail":"File not found"}',
+      statusText: '',
+      message: 'Download failed: HTTP 404: {"detail":"File not found"}',
+    },
+    {
+      status: 500,
+      body: '{"error":{"message":"Storage unavailable"}}',
+      statusText: '',
+      message: 'Download failed: HTTP 500: {"error":{"message":"Storage unavailable"}}',
+    },
+    {
+      status: 502,
+      body: 'Bad gateway from storage',
+      statusText: '',
+      message: 'Download failed: HTTP 502: Bad gateway from storage',
+    },
+    {
+      status: 403,
+      body: '',
+      statusText: 'Forbidden',
+      message: 'Download failed: HTTP 403: Forbidden',
+    },
+    {
+      status: 503,
+      body: '',
+      statusText: '',
+      message: 'Download failed: HTTP 503',
+    },
+  ])(
+    'shows HTTP $status and the API error body when file retrieval fails',
+    async ({ status, body, statusText, message }) => {
+      vi.spyOn(TokenStorage, 'getAccessToken').mockReturnValue('access-token')
+      const fetchMock = vi.fn<typeof fetch>()
+        .mockResolvedValue(new Response(body, { status, statusText }))
+      vi.stubGlobal('fetch', fetchMock)
+      const { result } = renderWithQueryClient(useDownloadFile)
+
+      await act(async () => {
+        await expect(result.current.mutateAsync({
+          filePath: '/downloads/video.mp4',
+          title: 'Video',
+        })).rejects.toThrow(message)
+      })
+
+      expect(mockToast.error).toHaveBeenCalledWith(`Failed to download file: ${message}`)
+      expect(fetchMock).toHaveBeenCalledWith('/api/v1/files/download?path=video.mp4', {
+        headers: { Authorization: 'Bearer access-token' },
+      })
+    }
+  )
 
   it('invalidates queue and files data after deleting files', async () => {
     const { result, invalidateQueries } = renderWithQueryClient(useDeleteFiles)

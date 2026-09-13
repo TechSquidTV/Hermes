@@ -51,6 +51,16 @@ All configuration is managed through environment variables with the `HERMES_` pr
 | `HERMES_DOWNLOAD_DIR` | `./downloads` | Directory for completed downloads |
 | `HERMES_TEMP_DIR` | `./temp` | Directory for temporary files during processing |
 
+The API and worker must use the same `HERMES_DOWNLOAD_DIR` and share that directory.
+On API startup, Hermes repairs missing file records for completed downloads whose
+outputs still exist inside this directory. Missing files, directories, and paths
+or symlinks that escape the download root are skipped. The repair is idempotent
+and does not download media again.
+
+**Breaking configuration change:** The worker no longer reads
+`HERMES_DOWNLOADS_DIR`. Set `HERMES_DOWNLOAD_DIR` instead, using `/app/downloads`
+for the bundled Docker mounts, and restart the API and worker after updating.
+
 ### API Keys & Authentication
 
 | Variable | Default | Description |
@@ -103,7 +113,7 @@ When using Docker, you can also configure these additional variables:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `HERMES_APP_PORT` | `3000` | Port for the frontend application (Docker production build) |
-| `HERMES_DOWNLOADS_DIR` | `/app/downloads` | Downloads directory in container |
+| `HERMES_DOWNLOAD_DIR` | `./downloads` | Use `/app/downloads` for the bundled API and worker download mounts |
 | `HERMES_TEMP_DIR` | `/app/temp` | Temporary directory in container |
 
 **Note:** The frontend development server runs on port 5173 when using `pnpm dev`, but Docker builds use port 3000.

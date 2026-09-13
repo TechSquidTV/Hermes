@@ -115,15 +115,19 @@ async def lifespan(app: FastAPI):
     # Create data directory for SQLite database
     os.makedirs("./data", exist_ok=True)
 
-    # Initialize database tables
+    # Initialize database tables and repair completed downloads from older workers
     try:
-        from app.db.base import create_tables
+        from app.db.base import async_session_maker, create_tables
+        from app.services.download_files import backfill_download_files
 
         logger.info("Creating database tables...")
         await create_tables()
         logger.info("Database tables created successfully")
+        async with async_session_maker() as session:
+            repaired = await backfill_download_files(session)
+        logger.info("Repaired %d completed download file records", repaired)
     except Exception as e:
-        logger.error(f"Failed to create database tables: {e}")
+        logger.error(f"Failed to initialize download database: {e}")
         raise
 
     # Warm up system settings cache
