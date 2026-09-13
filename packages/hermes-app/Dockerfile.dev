@@ -1,5 +1,5 @@
 # Hermes App development server with the same workspace dependencies as CI.
-FROM node:24-alpine
+FROM node:26-alpine
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable

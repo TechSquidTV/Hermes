@@ -1,5 +1,5 @@
 # Hermes App Dockerfile - Static Build Only
-FROM node:24-alpine AS base
+FROM node:26-alpine AS base
 
 # Corepack selects the package manager pinned in the root manifest.
 ENV PNPM_HOME="/pnpm"
