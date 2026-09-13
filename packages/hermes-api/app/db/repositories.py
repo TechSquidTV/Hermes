@@ -22,6 +22,7 @@ from app.db.models import (
     User,
     Webhook,
 )
+from app.utils.media import DEFAULT_FORMAT_SPEC
 
 
 class BaseRepository:
@@ -43,7 +44,11 @@ class DownloadRepository(BaseRepository):
     """Repository for Download model operations."""
 
     async def create(
-        self, url: str, format_spec: str = "best", status: str = "pending", **kwargs
+        self,
+        url: str,
+        format_spec: str = DEFAULT_FORMAT_SPEC,
+        status: str = "pending",
+        **kwargs,
     ) -> Download:
         """Create a new download record."""
         download_id = str(uuid.uuid4())
@@ -628,7 +633,7 @@ class BatchRepository(BaseRepository):
         total_videos: int,
         batch_title: Optional[str] = None,
         source_url: Optional[str] = None,
-        format_spec: str = "best",
+        format_spec: str = DEFAULT_FORMAT_SPEC,
         output_directory: Optional[str] = None,
         **kwargs,
     ) -> str:

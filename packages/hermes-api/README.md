@@ -16,6 +16,19 @@ A production-ready video downloading API built with FastAPI, yt-dlp, and modern 
 - 🐳 **Docker Ready**: Full Docker and Docker Compose support
 - 📊 **Structured Logging**: Production-ready logging with structlog
 
+## Download format default change
+
+The default format and the UI's **Best Quality** option use
+`bestvideo*+bestaudio/best`, matching yt-dlp's normal selection. This supports
+YouTube videos that only provide separate video and audio streams. FFmpeg is
+required to merge these streams and is already bundled in the Docker image.
+
+**Breaking behavior change:** downloads that omit a format can select higher
+resolutions and produce larger files than the old `best` default. Explicit
+format selectors retain their yt-dlp meaning; `best` requests a pre-merged
+stream and can fail when none exists. Existing queued jobs retain their stored
+selector and should be recreated to use the new default.
+
 ## 🚀 Quick Start
 
 ### Using uv (Recommended)
@@ -27,6 +40,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # Install dependencies
 uv sync
 
+# Install FFmpeg for merging separate video/audio streams.
 # Optional: install Node.js 20+ for yt-dlp EJS challenge solving.
 # The Docker image already includes Node 24.
 node --version

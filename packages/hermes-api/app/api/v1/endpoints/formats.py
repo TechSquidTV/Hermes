@@ -8,6 +8,7 @@ quality options, and format selection guidelines.
 from fastapi import APIRouter
 
 from app.models.pydantic.format import FormatInfo
+from app.utils.media import DEFAULT_FORMAT_SPEC
 
 router = APIRouter(tags=["formats"])
 
@@ -95,6 +96,7 @@ async def get_available_formats():
             "ttml",  # Timed Text Markup Language
         ],
         quality_options=[
+            DEFAULT_FORMAT_SPEC,  # Best available quality, merging when needed
             # Single format selections
             "best",  # Best quality single format
             "worst",  # Worst quality single format
@@ -129,8 +131,9 @@ async def get_available_formats():
             "4320p",  # 7680x4320 (8K)
         ],
         format_notes={
+            DEFAULT_FORMAT_SPEC: "Select the best available video and audio, merging when needed",
             # Basic selections
-            "best": "Select the best quality format with both video and audio",
+            "best": "Select the best pre-merged format; unavailable on some videos",
             "worst": "Select the worst quality format",
             # Combined formats
             "bestvideo+bestaudio": "Download best video and audio streams separately and merge them",

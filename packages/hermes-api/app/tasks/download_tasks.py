@@ -22,7 +22,7 @@ from app.tasks.celery_app import celery_app
 from app.utils.download_progress import (
     build_download_progress_payload,
 )
-from app.utils.media import VIDEO_EXTENSIONS
+from app.utils.media import DEFAULT_FORMAT_SPEC
 
 logger = get_logger(__name__)
 yt_service = YTDLPService()
@@ -282,7 +282,7 @@ async def _trigger_webhooks(event: str, download_id: str, data: Dict[str, Any]) 
 async def _download_video_task(
     download_id: str,
     url: str,
-    format_spec: str = "best",
+    format_spec: str = DEFAULT_FORMAT_SPEC,
     output_path: str = None,
     output_template: str = None,
     **kwargs,
@@ -503,167 +503,102 @@ async def _download_video_task(
             **kwargs,
         )
 
-        if result_path and os.path.exists(result_path):
-            # Ensure the file has a proper extension
-            if not result_path.lower().endswith(VIDEO_EXTENSIONS):
-                # Try to find the correct file with extension
-                directory = os.path.dirname(result_path)
-                base_name = os.path.basename(result_path)
+        if not result_path or not os.path.isfile(result_path):
+            raise FileNotFoundError("Downloaded file is missing")
 
-                for ext in VIDEO_EXTENSIONS:
-                    potential_path = os.path.join(directory, base_name + ext)
-                    if os.path.exists(potential_path):
-                        result_path = potential_path
-                        break
-                else:
-                    # If no extension found, add the most common one
-                    result_path = result_path + ".mp4"
+        # Get file size
+        file_size = os.path.getsize(result_path)
 
-            # Get file size
-            file_size = os.path.getsize(result_path)
+        # Update status to completed
+        completed_at = datetime.now(timezone.utc)
+        # Structure complete metadata as DownloadResult for SSE
+        complete_result = {
+            "url": url,
+            "title": video_title,
+            "file_size": file_size,
+            "duration": duration,
+            "thumbnail_url": thumbnail_url,
+            "extractor": extractor,
+            "description": description,
+        }
+        await _update_download_status(
+            download_id,
+            "completed",
+            progress=100.0,
+            completed_at=completed_at,
+            file_size=file_size,
+            output_path=result_path,
+            title=video_title,
+            duration=duration,
+            thumbnail_url=thumbnail_url,
+            extractor=extractor,
+            description=description,
+            result=complete_result,  # Include result for SSE
+        )
 
-            # Update status to completed
-            completed_at = datetime.now(timezone.utc)
-            # Structure complete metadata as DownloadResult for SSE
-            complete_result = {
-                "url": url,
-                "title": video_title,
-                "file_size": file_size,
-                "duration": duration,
-                "thumbnail_url": thumbnail_url,
-                "extractor": extractor,
-                "description": description,
-            }
-            await _update_download_status(
-                download_id,
-                "completed",
-                progress=100.0,
-                completed_at=completed_at,
-                file_size=file_size,
-                output_path=result_path,
-                title=video_title,
-                duration=duration,
-                thumbnail_url=thumbnail_url,
-                extractor=extractor,
-                description=description,
-                result=complete_result,  # Include result for SSE
+        # Create history record
+        await _create_download_history(
+            download_id=download_id,
+            url=url,
+            status="completed",
+            started_at=started_at,
+            completed_at=completed_at,
+            file_size=file_size,
+        )
+
+        # Trigger download completed webhook
+        await _trigger_webhooks(
+            "download_completed",
+            download_id,
+            {"url": url, "file_path": result_path, "file_size": file_size},
+        )
+
+        # Emit stats update event via SSE
+        try:
+            await redis_progress_service.publish_stats_update(
+                {
+                    "event": "download_completed",
+                    "download_id": download_id,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
             )
-
-            # Create history record
-            await _create_download_history(
+        except Exception as e:
+            # Don't fail the download if stats event publish fails
+            logger.error(
+                "Failed to publish stats update event",
                 download_id=download_id,
-                url=url,
-                status="completed",
-                started_at=started_at,
-                completed_at=completed_at,
-                file_size=file_size,
+                error=str(e),
             )
 
-            # Trigger download completed webhook
-            await _trigger_webhooks(
-                "download_completed",
-                download_id,
-                {"url": url, "file_path": result_path, "file_size": file_size},
-            )
+        # Clean up Redis progress data (download complete)
+        await redis_progress_service.delete_progress(download_id)
 
-            # Emit stats update event via SSE
-            try:
-                await redis_progress_service.publish_stats_update(
-                    {
-                        "event": "download_completed",
-                        "download_id": download_id,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                    }
-                )
-            except Exception as e:
-                # Don't fail the download if stats event publish fails
-                logger.error(
-                    "Failed to publish stats update event",
+        # Revoke SSE tokens for this download (security cleanup)
+        try:
+            revoked = await redis_progress_service.revoke_user_sse_tokens(
+                user_id="*",  # Revoke for all users since we don't track user per download yet
+                scope_prefix=f"download:{download_id}",
+            )
+            if revoked > 0:
+                logger.info(
+                    "Revoked SSE tokens for completed download",
                     download_id=download_id,
-                    error=str(e),
+                    tokens_revoked=revoked,
                 )
-
-            # Clean up Redis progress data (download complete)
-            await redis_progress_service.delete_progress(download_id)
-
-            # Revoke SSE tokens for this download (security cleanup)
-            try:
-                revoked = await redis_progress_service.revoke_user_sse_tokens(
-                    user_id="*",  # Revoke for all users since we don't track user per download yet
-                    scope_prefix=f"download:{download_id}",
-                )
-                if revoked > 0:
-                    logger.info(
-                        "Revoked SSE tokens for completed download",
-                        download_id=download_id,
-                        tokens_revoked=revoked,
-                    )
-            except Exception as e:
-                # Don't fail the download if token revocation fails
-                logger.error(
-                    "Failed to revoke SSE tokens for completed download",
-                    download_id=download_id,
-                    error=str(e),
-                )
-
-            return {
-                "success": True,
-                "download_id": download_id,
-                "file_path": result_path,
-                "file_size": file_size,
-            }
-        else:
-            # Download failed
-            error_message = "Download completed but file not found"
-            completed_at = datetime.now(timezone.utc)
-
-            await _update_download_status(
-                download_id,
-                "failed",
-                completed_at=completed_at,
-                error_message=error_message,
-            )
-
-            await _create_download_history(
+        except Exception as e:
+            # Don't fail the download if token revocation fails
+            logger.error(
+                "Failed to revoke SSE tokens for completed download",
                 download_id=download_id,
-                url=url,
-                status="failed",
-                started_at=started_at,
-                completed_at=completed_at,
-                error_message=error_message,
+                error=str(e),
             )
 
-            await _trigger_webhooks(
-                "download_failed", download_id, {"url": url, "error": error_message}
-            )
-
-            # Clean up Redis progress data (download failed)
-            await redis_progress_service.delete_progress(download_id)
-
-            # Revoke SSE tokens for this download (security cleanup)
-            try:
-                revoked = await redis_progress_service.revoke_user_sse_tokens(
-                    user_id="*",
-                    scope_prefix=f"download:{download_id}",
-                )
-                if revoked > 0:
-                    logger.info(
-                        "Revoked SSE tokens for failed download",
-                        download_id=download_id,
-                        tokens_revoked=revoked,
-                    )
-            except Exception as e:
-                logger.error(
-                    "Failed to revoke SSE tokens for failed download",
-                    download_id=download_id,
-                    error=str(e),
-                )
-
-            return {
-                "success": False,
-                "download_id": download_id,
-                "error": error_message,
-            }
+        return {
+            "success": True,
+            "download_id": download_id,
+            "file_path": result_path,
+            "file_size": file_size,
+        }
 
     except Exception as e:
         error_message = str(e)
@@ -722,7 +657,7 @@ async def _download_video_task(
 def download_video_task(
     download_id: str,
     url: str,
-    format_spec: str = "best",
+    format_spec: str = DEFAULT_FORMAT_SPEC,
     output_path: str = None,
     output_template: str = None,
     **kwargs,
@@ -747,7 +682,7 @@ def download_video_task(
 async def _batch_download_task(
     download_ids: list[str],
     urls: list[str],
-    format_spec: str = "best",
+    format_spec: str = DEFAULT_FORMAT_SPEC,
     output_directory: str = None,
     **kwargs,
 ) -> Dict[str, Any]:
@@ -818,7 +753,7 @@ async def _batch_download_task(
 def batch_download_task(
     download_ids: list[str],
     urls: list[str],
-    format_spec: str = "best",
+    format_spec: str = DEFAULT_FORMAT_SPEC,
     output_directory: str = None,
     **kwargs,
 ) -> Dict[str, Any]:

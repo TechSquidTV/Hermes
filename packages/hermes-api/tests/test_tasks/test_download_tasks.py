@@ -9,6 +9,7 @@ import os
 from unittest.mock import AsyncMock, Mock, call, patch
 
 import pytest
+from yt_dlp.utils import DownloadError
 
 from app.tasks import download_tasks
 
@@ -131,8 +132,12 @@ async def test_update_download_status_publishes_cached_db_progress_for_active_st
 
 
 @pytest.mark.asyncio
-async def test_download_video_task_success_updates_metadata_and_cleans_up(tmp_path):
-    download_file = tmp_path / "Dangerous_Title.mp4"
+@pytest.mark.parametrize("extension", ["mp4", "m4a", "opus", ""])
+async def test_download_video_task_success_updates_metadata_and_cleans_up(
+    tmp_path, extension
+):
+    filename = f"Dangerous_Title.{extension}" if extension else "Dangerous_Title"
+    download_file = tmp_path / filename
     yt_service = AsyncMock()
     yt_service.extract_info.return_value = {
         "title": 'Dangerous: "Title"?',
@@ -350,10 +355,18 @@ async def test_download_video_task_uses_output_template_and_forwarded_options(tm
 
 
 @pytest.mark.asyncio
-async def test_download_video_task_missing_file_marks_failed(tmp_path):
+@pytest.mark.parametrize("failure", ["missing_file", "format_unavailable"])
+async def test_download_video_task_failure_preserves_error_and_cleans_up(
+    tmp_path, failure
+):
     yt_service = AsyncMock()
     yt_service.extract_info.return_value = {"title": "Missing File"}
-    yt_service.download_video.return_value = str(tmp_path / "missing-file.mp4")
+    error_message = "Downloaded file is missing"
+    if failure == "format_unavailable":
+        error_message = "Requested format is not available"
+        yt_service.download_video.side_effect = DownloadError(error_message)
+    else:
+        yt_service.download_video.return_value = str(tmp_path / "missing-file.mp4")
 
     update_status = AsyncMock()
     create_history = AsyncMock()
@@ -376,24 +389,19 @@ async def test_download_video_task_missing_file_marks_failed(tmp_path):
     assert result == {
         "success": False,
         "download_id": "download-123",
-        "error": "Download completed but file not found",
+        "error": error_message,
     }
     failed_call = update_status.await_args_list[-1]
     assert failed_call.args == ("download-123", "failed")
-    assert (
-        failed_call.kwargs["error_message"] == "Download completed but file not found"
-    )
+    assert failed_call.kwargs["error_message"] == error_message
     assert create_history.await_args.kwargs["status"] == "failed"
-    assert (
-        create_history.await_args.kwargs["error_message"]
-        == "Download completed but file not found"
-    )
+    assert create_history.await_args.kwargs["error_message"] == error_message
     assert trigger_webhooks.await_args_list[-1] == call(
         "download_failed",
         "download-123",
         {
             "url": "https://example.test/watch",
-            "error": "Download completed but file not found",
+            "error": error_message,
         },
     )
     redis_progress_service.delete_progress.assert_awaited_once_with("download-123")

@@ -1,3 +1,4 @@
-"""Media-related constants shared by download services and tasks."""
+"""Media-related defaults shared by download models, services, and tasks."""
 
-VIDEO_EXTENSIONS = (".mp4", ".webm", ".mkv", ".avi", ".mov", ".flv", ".3gp", ".m4v")
+# yt-dlp's default selection supports sites with separate video/audio streams.
+DEFAULT_FORMAT_SPEC = "bestvideo*+bestaudio/best"

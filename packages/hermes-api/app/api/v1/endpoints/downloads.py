@@ -113,7 +113,7 @@ async def start_download(
     **Examples:**
     ```json
     // Best quality (default)
-    {"url": "https://youtube.com/watch?v=...", "format": "best"}
+    {"url": "https://youtube.com/watch?v=...", "format": "bestvideo*+bestaudio/best"}
 
     // Best video + audio up to 1080p
     {"url": "https://youtube.com/watch?v=...",
@@ -315,7 +315,7 @@ async def start_batch_download(
     See GET /api/v1/formats/ for available format options.
 
     Common batch scenarios:
-    - `"best"`: Best quality for all videos
+    - `"bestvideo*+bestaudio/best"`: Best quality for all videos, merging when needed
     - `"bestaudio[ext=mp3]"`: Audio-only in MP3 format
     - `"bestvideo[height<=720]+bestaudio"`: All videos limited to 720p
 

@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import Field, field_validator
 
 from app.models.base import CamelCaseModel
+from app.utils.media import DEFAULT_FORMAT_SPEC
 
 
 class DownloadRequest(CamelCaseModel):
@@ -17,17 +18,18 @@ class DownloadRequest(CamelCaseModel):
         ..., description="Video URL to download", min_length=1, max_length=2048
     )
     format: str = Field(
-        default="best",
+        default=DEFAULT_FORMAT_SPEC,
         description=(
-            "Format selection specification. "
+            "Format selection specification. Defaults to bestvideo*+bestaudio/best, "
+            "merging separate video and audio streams when needed. "
             "Examples: 'best', 'worst', 'bestvideo+bestaudio', 'mp4', 'bestaudio', "
             "'bestvideo[height<=720]+bestaudio', or specific format IDs like '137+140'. "
             "See GET /formats endpoint for all available options and detailed descriptions."
         ),
         json_schema_extra={
-            "example": "best",
+            "example": DEFAULT_FORMAT_SPEC,
             "examples": [
-                "best",
+                DEFAULT_FORMAT_SPEC,
                 "bestvideo+bestaudio",
                 "bestvideo[height<=1080]+bestaudio",
                 "bestaudio[ext=m4a]",
@@ -157,7 +159,7 @@ class BatchDownloadRequest(CamelCaseModel):
         ..., min_length=1, max_length=50, description="List of video URLs to download"
     )
     format: str = Field(
-        default="best",
+        default=DEFAULT_FORMAT_SPEC,
         description=(
             "Format selection for all downloads. "
             "See GET /formats endpoint for available options. "

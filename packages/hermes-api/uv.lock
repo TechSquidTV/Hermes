@@ -1033,7 +1033,7 @@ requires-dist = [
     { name = "sse-starlette", specifier = ">=1.6.5" },
     { name = "structlog", specifier = ">=23.0.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.24.0" },
-    { name = "yt-dlp", extras = ["default"], specifier = ">=2025.11.12" },
+    { name = "yt-dlp", extras = ["default"], specifier = ">=2026.8.19" },
 ]
 
 [package.metadata.requires-dev]

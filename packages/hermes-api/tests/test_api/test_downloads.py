@@ -11,15 +11,18 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.repositories import DownloadRepository
+from app.utils.media import DEFAULT_FORMAT_SPEC
 
 
 class TestDownloadEndpoints:
     """Download endpoint behavior that belongs to Hermes."""
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("format_spec", [None, "bestvideo+bestaudio", "best"])
     async def test_start_download_creates_record_and_queues_task(
-        self, client: AsyncClient, db_session: AsyncSession
+        self, client: AsyncClient, db_session: AsyncSession, format_spec: str | None
     ):
+        expected_format = format_spec or DEFAULT_FORMAT_SPEC
         with patch(
             "app.api.v1.endpoints.downloads.download_video_task.apply_async"
         ) as apply_async:
@@ -27,7 +30,7 @@ class TestDownloadEndpoints:
                 "/api/v1/download/",
                 json={
                     "url": "https://example.test/watch",
-                    "format": "bestvideo+bestaudio",
+                    **({"format": format_spec} if format_spec else {}),
                     "outputDirectory": "/downloads/custom",
                 },
             )
@@ -40,14 +43,14 @@ class TestDownloadEndpoints:
         download = await DownloadRepository(db_session).get_by_id(data["downloadId"])
         assert download is not None
         assert download.url == "https://example.test/watch"
-        assert download.format_spec == "bestvideo+bestaudio"
+        assert download.format_spec == expected_format
         assert download.status == "pending"
 
         apply_async.assert_called_once_with(
             kwargs={
                 "download_id": data["downloadId"],
                 "url": "https://example.test/watch",
-                "format_spec": "bestvideo+bestaudio",
+                "format_spec": expected_format,
                 "output_path": "/downloads/custom",
             },
             queue="hermes.downloads",
