@@ -47,10 +47,9 @@ We use semantic versioning (MAJOR.MINOR.PATCH) for all releases:
 
 Releases follow a structured workflow to ensure stability:
 
-1. **Develop Branch** → Changes merge to `develop`, automatically builds `develop` Docker images
-2. **Testing** → Test using `develop` Docker images before releasing
-3. **Main Branch** → When ready, merge `develop` to `main`
-4. **Release Workflow** → Manually trigger release from `main` branch
+1. **Pull Requests** → Review changes and require passing PR checks before merging to `main`.
+2. **Testing** → Validate the combined dependencies, tests, and Docker images. The optional `develop` branch can publish preview images for additional testing.
+3. **Release Workflow** → Manually trigger release from `main` after validation. The workflow bumps the shared version and publishes the images and release.
 
 Releases are created using the GitHub Actions workflow, which ensures consistency and runs in a clean CI environment. Do not create GitHub Releases manually; the workflow creates the release only after the version bump, tags, and Docker images have all succeeded.
 
@@ -297,20 +296,14 @@ Pre-release version tags are not published automatically. Use `develop` images f
 Before triggering a release:
 
 **Development & Testing:**
-- [ ] All feature PRs are merged to `develop` branch
-- [ ] `develop` workflow has run successfully (check Actions tab)
-- [ ] Test using `develop` Docker images:
-  ```bash
-  docker pull ghcr.io/techsquidtv/hermes-app:develop
-  docker pull ghcr.io/techsquidtv/hermes-api:develop
-  ```
-- [ ] Verify all functionality works with `develop` images
-- [ ] Optional: Run `pnpm pre-check` locally to catch issues early
+- [ ] All intended feature and dependency PRs are reviewed with passing checks
+- [ ] Validate the combined changes with `pnpm pre-check` (both test suites and all three Docker builds)
+- [ ] Verify the API, worker, and frontend runtime behavior using the built images
+- [ ] If using preview images, verify the optional `develop` workflow and images
 
 **Pre-Release:**
-- [ ] Create PR from `develop` to `main`
-- [ ] Verify all PR checks pass
-- [ ] Merge PR to `main`
+- [ ] Merge the reviewed PRs to `main`
+- [ ] Verify `main` contains the tested changes and all package versions agree
 - [ ] Update changelog (if maintained)
 - [ ] Document breaking changes (if any)
 

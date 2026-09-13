@@ -42,7 +42,7 @@ uv sync
 
 # Install FFmpeg for merging separate video/audio streams.
 # Optional: install Node.js 20+ for yt-dlp EJS challenge solving.
-# The Docker image already includes Node 24.
+# The Docker image already includes Node 26.
 node --version
 
 # Start Redis

@@ -4,11 +4,15 @@ FROM node:26-alpine AS base
 # Corepack selects the package manager pinned in the root manifest.
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
 WORKDIR /app
+COPY package.json ./
+# Node 26 no longer bundles Corepack; keep its version managed by Dependabot.
+RUN npm install --global --ignore-scripts --no-audit --no-fund \
+    "corepack@$(node -p 'require("./package.json").devDependencies.corepack')" \
+    && corepack enable pnpm
 
 FROM base AS deps
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/hermes-app/package.json ./packages/hermes-app/package.json
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile
