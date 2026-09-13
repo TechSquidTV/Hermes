@@ -9,7 +9,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.security import ApiKeyPermission, AuthPrincipal, require_api_permission
 from app.db.models import DownloadFile
@@ -21,6 +20,7 @@ from app.models.pydantic.file import (
     DownloadedFile,
     FileList,
 )
+from app.utils.files import resolve_download_path
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -36,15 +36,10 @@ def get_repositories_from_session(db_session: AsyncSession):
 
 def _resolve_download_path(path: str) -> Path:
     """Resolve a requested path and ensure it stays inside the download root."""
-    downloads_root = Path(settings.download_dir).resolve()
-    requested_path = Path(path).resolve(strict=False)
-
     try:
-        requested_path.relative_to(downloads_root)
-    except ValueError:
+        return resolve_download_path(path)
+    except (OSError, ValueError, RuntimeError):
         raise HTTPException(status_code=404, detail="File not found")
-
-    return requested_path
 
 
 async def _get_managed_file(
