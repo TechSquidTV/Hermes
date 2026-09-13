@@ -1,5 +1,5 @@
 # Multi-stage Dockerfile for Hermes API
-FROM ghcr.io/astral-sh/uv:0.12.11 AS uv-runtime
+FROM ghcr.io/astral-sh/uv:0.12.13 AS uv-runtime
 
 FROM python:3.14-slim AS builder
 
