@@ -20,7 +20,7 @@ COPY pyproject.toml uv.lock ./
 # Validate the lockfile and install only production dependencies
 RUN uv sync --locked --no-install-project --no-dev
 
-FROM node:24-slim AS node-runtime
+FROM node:26-slim AS node-runtime
 
 # Production stage - use Python slim base image
 FROM python:3.14-slim
