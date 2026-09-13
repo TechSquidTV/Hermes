@@ -20,7 +20,7 @@ COPY packages/hermes-app/ ./packages/hermes-app/
 RUN pnpm --filter hermes-app build
 
 # Production image - nginx serving static files with runtime config
-FROM nginx:1.30-alpine AS runner
+FROM nginx:1.31-alpine AS runner
 
 # Copy built static files from builder
 COPY --from=builder /app/packages/hermes-app/dist /usr/share/nginx/html
