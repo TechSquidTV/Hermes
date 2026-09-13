@@ -143,12 +143,16 @@ pnpm test:all        # All tests
 
 ## 🔄 CI/CD Pipeline
 
+See [Dependency maintenance](./DEPENDENCY_MAINTENANCE.md) for automated update
+schedules, lockfile requirements, and how to check Dependabot runs.
+
 We have three automated workflows:
 
 ### 1. PR Checks (`.github/workflows/pr-checks.yml`)
-Runs on all PRs to `main`:
+Runs on all PRs to `main` and `develop`:
 - Frontend: Type checking, linting, build, tests
 - Backend: Formatting, linting, type checking, tests with coverage
+- Both: Locked dependency installs and affected Docker image builds
 - Both run in parallel
 - **PRs are blocked if checks fail**
 
