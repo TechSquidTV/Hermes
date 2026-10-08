@@ -1,0 +1,102 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":semanticCommits"],
+  "enabledManagers": ["npm", "pep621", "github-actions", "dockerfile", "docker-compose"],
+  "timezone": "America/New_York",
+  "schedule": ["* 0-5 * * 1"],
+  "labels": ["dependencies", "automated"],
+  "semanticCommitType": "chore",
+  "semanticCommitScope": "deps",
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "automerge": false,
+  "lockFileMaintenance": {
+    "enabled": true
+  },
+  "ignoreDeps": ["ghcr.io/techsquidtv/hermes-app", "ghcr.io/techsquidtv/hermes-api"],
+  "packageRules": [
+    {
+      "description": "Wait three days for direct JavaScript and Python releases.",
+      "matchManagers": ["npm", "pep621"],
+      "minimumReleaseAge": "3 days",
+      "internalChecksFilter": "strict",
+      "rangeStrategy": "bump"
+    },
+    {
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "javascript",
+      "addLabels": ["pnpm"]
+    },
+    {
+      "extends": ["monorepo:tanstack-query"],
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "tanstack query"
+    },
+    {
+      "extends": ["monorepo:tanstack-router"],
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "tanstack router"
+    },
+    {
+      "extends": ["monorepo:vitest"],
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "vitest"
+    },
+    {
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["typescript"],
+      "allowedVersions": "<7",
+      "description": "Keep the compiler compatible with the ESLint and OpenAPI tooling."
+    },
+    {
+      "matchManagers": ["pep621"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "matchPackageNames": ["!yt-dlp", "!yt-dlp-ejs"],
+      "groupName": "python"
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "semanticCommitType": "ci",
+      "addLabels": ["github-actions"]
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "matchDatasources": ["github-tags"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "github actions"
+    },
+    {
+      "matchDatasources": ["docker"],
+      "pinDigests": true,
+      "semanticCommitType": "build"
+    },
+    {
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pinDigest"],
+      "groupName": "docker images"
+    },
+    {
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "matchUpdateTypes": ["lockFileMaintenance"],
+      "minimumReleaseAge": null
+    },
+    {
+      "description": "Keep both download components current, including calendar-version year changes.",
+      "matchManagers": ["pep621"],
+      "matchPackageNames": ["yt-dlp", "yt-dlp-ejs"],
+      "schedule": ["* 5-8 * * *"],
+      "minimumReleaseAge": null,
+      "groupName": "yt-dlp",
+      "separateMajorMinor": false,
+      "dependencyDashboardApproval": false,
+      "prPriority": 10
+    }
+  ]
+}

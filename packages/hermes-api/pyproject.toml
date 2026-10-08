@@ -12,6 +12,8 @@ dependencies = [
     "celery[redis]>=5.6.3",
     "redis>=6.4.0",
     "yt-dlp[default]>=2026.8.19",
+    # Manage EJS independently so download fixes do not wait for a yt-dlp release.
+    "yt-dlp-ejs>=0.8.0",
     "pydantic[email]>=2.12.3",
     "python-multipart>=0.0.6",
     "PyJWT[crypto]>=2.8.0",
