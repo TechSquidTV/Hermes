@@ -55,7 +55,7 @@
     {
       "matchManagers": ["pep621"],
       "matchUpdateTypes": ["minor", "patch"],
-      "matchPackageNames": ["!yt-dlp", "!yt-dlp-ejs"],
+      "matchPackageNames": ["!yt-dlp"],
       "groupName": "python"
     },
     {
@@ -88,12 +88,11 @@
       "minimumReleaseAge": null
     },
     {
-      "description": "Keep both download components current, including calendar-version year changes.",
+      "description": "Keep yt-dlp and its compatible EJS dependency current, including calendar-version year changes.",
       "matchManagers": ["pep621"],
-      "matchPackageNames": ["yt-dlp", "yt-dlp-ejs"],
+      "matchPackageNames": ["yt-dlp"],
       "schedule": ["* 5-8 * * *"],
       "minimumReleaseAge": null,
-      "groupName": "yt-dlp",
       "separateMajorMinor": false,
       "dependencyDashboardApproval": false,
       "prPriority": 10

@@ -26,16 +26,18 @@ the hosted app decides when it runs, so these are not exact execution times.
 
 | Area | Window | Update policy |
 | --- | --- | --- |
-| yt-dlp and yt-dlp-ejs | Daily, 05:00–09:00, including weekends | One download-tool group with no release-age delay, including calendar-version year changes. |
+| yt-dlp | Daily, 05:00–09:00, including weekends | Download-tool updates with no release-age delay, including calendar-version year changes. EJS follows yt-dlp's compatibility pin. |
 | Other Python dependencies | Mondays, 00:00–06:00 | Minor and patch updates grouped; new direct releases wait three days. |
 | JavaScript workspace | Mondays, 00:00–06:00 | TanStack Query, TanStack Router, and Vitest each have a related-package group. Other minor and patch updates form the JavaScript group; new releases wait three days. |
 | GitHub Actions | Mondays, 00:00–06:00 | Minor and patch action updates grouped. |
 | Container images | Mondays, 00:00–06:00 | Dockerfiles, `Dockerfile.dev`, CI containers, and root Compose files covered. Image digests are pinned and refreshed so mutable tags such as `redis:8-alpine` receive update PRs. |
 | Lockfile maintenance | Mondays, before 04:00 | Refreshes the pnpm and uv lockfiles, including eligible transitive dependencies. |
 
-`yt-dlp-ejs` is explicitly declared in `pyproject.toml` so Renovate can update
-it independently when yt-dlp has no new release. Ordinary uv updates use
-targeted package upgrades rather than upgrading the whole Python lockfile daily.
+`yt-dlp[default]` pins an exact compatible `yt-dlp-ejs` version. EJS stays a
+transitive dependency and updates when a yt-dlp release changes that pin;
+independent EJS upgrades can create unsatisfiable version constraints.
+Ordinary uv updates use targeted package upgrades rather than upgrading the
+whole Python lockfile daily.
 Weekly lockfile maintenance delegates resolution to the package manager and
 does not enforce Renovate's three-day release-age delay for transitive updates.
 
