@@ -54,6 +54,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/renovatebot/renovate:44.147.0
+      # Checkout must write to GitHub's runner-owned state and workspace mounts.
+      options: --user 0:0
     steps:
       - uses: actions/checkout@v7
       - name: Validate Renovate configuration
