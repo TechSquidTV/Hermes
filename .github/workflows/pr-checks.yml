@@ -22,6 +22,7 @@ jobs:
     outputs:
       frontend: ${{ steps.filter.outputs.frontend }}
       backend: ${{ steps.filter.outputs.backend }}
+      dependency-config: ${{ steps.filter.outputs.dependency-config }}
     steps:
       - uses: actions/checkout@v7
       
@@ -34,13 +35,31 @@ jobs:
               - 'package.json'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
-              - '.github/dependabot.yml'
+              - '.github/renovate.json'
+              - 'docker-compose*.yml'
               - '.github/workflows/**'
             backend:
               - 'packages/hermes-api/**'
               - 'package.json'
-              - '.github/dependabot.yml'
+              - '.github/renovate.json'
+              - 'docker-compose*.yml'
               - '.github/workflows/**'
+            dependency-config:
+              - '.github/renovate.json'
+              - '.github/workflows/**'
+
+  dependency-config-checks:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.dependency-config == 'true'
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/renovatebot/renovate:44.147.0
+      # Checkout must write to GitHub's runner-owned state and workspace mounts.
+      options: --user 0:0
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate Renovate configuration
+        run: renovate-config-validator --strict .github/renovate.json
 
   # Frontend validation
   frontend-checks:
@@ -177,13 +196,18 @@ jobs:
   # Summary job that gates merging
   pr-checks-complete:
     runs-on: ubuntu-latest
-    needs: [detect-changes, frontend-checks, backend-checks]
+    needs: [detect-changes, dependency-config-checks, frontend-checks, backend-checks]
     if: always()
     steps:
       - name: Check all jobs succeeded
         run: |
           if [[ "${{ needs.detect-changes.result }}" != "success" ]]; then
             echo "Change detection did not succeed"
+            exit 1
+          fi
+
+          if [[ "${{ needs.detect-changes.outputs.dependency-config }}" == "true" && "${{ needs.dependency-config-checks.result }}" != "success" ]]; then
+            echo "Required dependency configuration checks did not succeed"
             exit 1
           fi
 

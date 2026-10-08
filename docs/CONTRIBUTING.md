@@ -144,7 +144,7 @@ pnpm test:all        # All tests
 ## 🔄 CI/CD Pipeline
 
 See [Dependency maintenance](./DEPENDENCY_MAINTENANCE.md) for automated update
-schedules, lockfile requirements, and how to check Dependabot runs.
+schedules, lockfile requirements, and how to check Renovate runs.
 
 We have three automated workflows:
 

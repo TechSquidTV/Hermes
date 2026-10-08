@@ -6,7 +6,7 @@ ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 WORKDIR /app
 COPY package.json ./
-# Node 26 no longer bundles Corepack; keep its version managed by Dependabot.
+# Node 26 no longer bundles Corepack; use the managed root dependency.
 RUN npm install --global --ignore-scripts --no-audit --no-fund \
     "corepack@$(node -p 'require("./package.json").devDependencies.corepack')" \
     && corepack enable pnpm
