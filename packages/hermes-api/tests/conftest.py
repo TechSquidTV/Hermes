@@ -8,7 +8,6 @@ if TYPE_CHECKING:
     from collections.abc import Generator
     from pathlib import Path
 
-    from app.core.security import AuthPrincipal
     from app.db.models import User
     from app.utils.urls import SocketInfo
 
