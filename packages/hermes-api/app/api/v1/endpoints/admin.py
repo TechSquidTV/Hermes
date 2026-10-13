@@ -5,7 +5,7 @@ Admin-only endpoints for system management.
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from pydantic import Field
 
 from app.api.dependencies import get_current_admin_user
@@ -71,30 +71,19 @@ async def update_signup_setting(
 
     **Requires**: Admin authentication
     """
-    try:
-        updated_settings = await system_settings_service.update_allow_public_signup(
-            value=request.enabled,
-            user_id=current_user.get("id"),
-        )
+    updated_settings = await system_settings_service.update_allow_public_signup(
+        value=request.enabled,
+        user_id=current_user.get("id"),
+    )
 
-        logger.info(
-            "Admin updated signup setting",
-            admin_id=current_user.get("id"),
-            admin_username=current_user.get("username"),
-            new_value=request.enabled,
-        )
+    logger.info(
+        "Admin updated signup setting",
+        admin_id=current_user.get("id"),
+        admin_username=current_user.get("username"),
+        new_value=request.enabled,
+    )
 
-        return SystemSettingsResponse(**updated_settings)
-    except Exception as e:
-        logger.error(
-            f"Failed to update signup setting: {e}",
-            admin_id=current_user.get("id"),
-            exc_info=True,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update signup setting",
-        )
+    return SystemSettingsResponse(**updated_settings)
 
 
 # ============================================================================

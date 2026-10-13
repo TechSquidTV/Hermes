@@ -172,7 +172,7 @@ class TestAdminUserCreation:
             json={
                 "username": "unauthorized",
                 "email": "unauthorized@example.com",
-                "password": "Pass123",
+                "password": "Pass12345",
                 "is_admin": False,
             },
         )
@@ -195,7 +195,7 @@ class TestAdminUserCreation:
             json={
                 "username": test_user.username,
                 "email": "different@example.com",
-                "password": "Pass123",
+                "password": "Pass12345",
                 "is_admin": False,
             },
         )

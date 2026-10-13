@@ -142,9 +142,12 @@ class TestCleanupDownloadFiles:
     """Test suite for download file cleanup."""
 
     @pytest.mark.asyncio
-    async def test_cleanup_download_files_success(self):
+    async def test_cleanup_download_files_success(self, monkeypatch):
         """Test successful cleanup of download files."""
         with tempfile.TemporaryDirectory() as tmpdir:
+            from app.core.config import settings
+
+            monkeypatch.setattr(settings, "download_dir", tmpdir)
             # Create test files
             test_file1 = os.path.join(tmpdir, "video1.mp4")
             test_file2 = os.path.join(tmpdir, "video2.mp4")
@@ -191,8 +194,11 @@ class TestCleanupDownloadFiles:
             assert not os.path.exists(test_file2)
 
     @pytest.mark.asyncio
-    async def test_cleanup_download_files_missing_file(self):
+    async def test_cleanup_download_files_missing_file(self, monkeypatch):
         """Test cleanup handles missing files gracefully."""
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "download_dir", "/nonexistent/path")
         # Mock file info for non-existent file
         mock_file = Mock()
         mock_file.filepath = "/nonexistent/path/video.mp4"
@@ -255,9 +261,12 @@ class TestCleanupDownloadFiles:
         assert "test-download-123" in result["failed_downloads"]
 
     @pytest.mark.asyncio
-    async def test_cleanup_download_files_multiple_downloads(self):
+    async def test_cleanup_download_files_multiple_downloads(self, monkeypatch):
         """Test cleanup of files from multiple downloads."""
         with tempfile.TemporaryDirectory() as tmpdir:
+            from app.core.config import settings
+
+            monkeypatch.setattr(settings, "download_dir", tmpdir)
             # Create files for two downloads
             file1 = os.path.join(tmpdir, "download1_video.mp4")
             file2 = os.path.join(tmpdir, "download2_video.mp4")

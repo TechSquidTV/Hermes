@@ -9,7 +9,7 @@ import { TokenStorage } from '@/utils/tokenStorage'
 // Mock fetch
 global.fetch = vi.fn()
 
-const mockFetch = fetch as any
+const mockFetch = vi.mocked(fetch)
 
 describe('ApiClient - API Key Methods', () => {
   beforeEach(() => {
@@ -138,12 +138,10 @@ describe('ApiClient - API Key Methods', () => {
         },
       ]
 
-      const getAccessTokenSpy = vi
-        .spyOn(TokenStorage, 'getAccessToken')
-        .mockReturnValueOnce('expired-token')
-        .mockReturnValueOnce('fresh-token')
+      let activeToken = 'expired-token'
+      vi.spyOn(TokenStorage, 'getAccessToken').mockImplementation(() => activeToken)
       vi.spyOn(TokenStorage, 'getRefreshToken').mockReturnValue('refresh-token')
-      const setAccessTokenSpy = vi.spyOn(TokenStorage, 'setAccessToken').mockImplementation(() => {})
+      const setAccessTokenSpy = vi.spyOn(TokenStorage, 'setAccessToken').mockImplementation((token) => { activeToken = token })
       const setRefreshTokenSpy = vi.spyOn(TokenStorage, 'setRefreshToken').mockImplementation(() => {})
 
       mockFetch
@@ -174,7 +172,6 @@ describe('ApiClient - API Key Methods', () => {
       expect(result).toEqual(mockApiKeys)
       expect(setAccessTokenSpy).toHaveBeenCalledWith('fresh-token', 15)
       expect(setRefreshTokenSpy).toHaveBeenCalledWith('fresh-refresh-token')
-      expect(getAccessTokenSpy).toHaveBeenCalledTimes(2)
       expect(mockFetch).toHaveBeenNthCalledWith(
         3,
         '/api/v1/auth/api-keys',

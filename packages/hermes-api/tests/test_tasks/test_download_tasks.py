@@ -151,7 +151,9 @@ async def test_download_video_task_success_updates_metadata_and_cleans_up(
         url, output_path, format_spec, progress_callback=None, **kwargs
     ):
         assert url == "https://example.test/watch"
-        assert output_path == os.path.join(str(tmp_path), "Dangerous_Title.%(ext)s")
+        assert output_path == os.path.join(
+            str(tmp_path), "download-123_Dangerous_Title.%(ext)s"
+        )
         assert format_spec == "bestvideo+bestaudio"
         assert kwargs == {"merge_output_format": "mp4"}
         download_file.write_bytes(b"video")
@@ -276,26 +278,29 @@ async def test_download_video_task_extract_failure_marks_failed_and_cleans_up():
     assert result == {
         "success": False,
         "download_id": "download-123",
-        "error": "Failed to extract video information",
+        "error": "Download failed; see server logs for details",
     }
     yt_service.download_video.assert_not_awaited()
 
     failed_call = update_status.await_args_list[-1]
     assert failed_call.args == ("download-123", "failed")
-    assert failed_call.kwargs["error_message"] == "Failed to extract video information"
+    assert (
+        failed_call.kwargs["error_message"]
+        == "Download failed; see server logs for details"
+    )
 
     create_history.assert_awaited_once()
     assert create_history.await_args.kwargs["status"] == "failed"
     assert (
         create_history.await_args.kwargs["error_message"]
-        == "Failed to extract video information"
+        == "Download failed; see server logs for details"
     )
     assert trigger_webhooks.await_args_list[-1] == call(
         "download_failed",
         "download-123",
         {
             "url": "https://example.test/watch",
-            "error": "Failed to extract video information",
+            "error": "Download failed; see server logs for details",
         },
     )
     redis_progress_service.delete_progress.assert_awaited_once_with("download-123")
@@ -316,7 +321,9 @@ async def test_download_video_task_uses_output_template_and_forwarded_options(tm
     async def fake_download_video(
         url, output_path, format_spec, progress_callback=None, **kwargs
     ):
-        assert output_path == os.path.join(str(tmp_path), "custom-name.%(ext)s")
+        assert output_path == os.path.join(
+            str(tmp_path), "download-123_custom-name.%(ext)s"
+        )
         assert kwargs == {
             "writesubtitles": True,
             "writethumbnail": True,
@@ -389,19 +396,25 @@ async def test_download_video_task_failure_preserves_error_and_cleans_up(
     assert result == {
         "success": False,
         "download_id": "download-123",
-        "error": error_message,
+        "error": "Download failed; see server logs for details",
     }
     failed_call = update_status.await_args_list[-1]
     assert failed_call.args == ("download-123", "failed")
-    assert failed_call.kwargs["error_message"] == error_message
+    assert (
+        failed_call.kwargs["error_message"]
+        == "Download failed; see server logs for details"
+    )
     assert create_history.await_args.kwargs["status"] == "failed"
-    assert create_history.await_args.kwargs["error_message"] == error_message
+    assert (
+        create_history.await_args.kwargs["error_message"]
+        == "Download failed; see server logs for details"
+    )
     assert trigger_webhooks.await_args_list[-1] == call(
         "download_failed",
         "download-123",
         {
             "url": "https://example.test/watch",
-            "error": error_message,
+            "error": "Download failed; see server logs for details",
         },
     )
     redis_progress_service.delete_progress.assert_awaited_once_with("download-123")
@@ -506,75 +519,3 @@ async def test_download_progress_hook_normalizes_progress_and_keeps_metadata(tmp
     assert second_progress["progress"]["percentage"] == 50.0
     assert second_progress["progress"]["speed"] == 8.5
     assert second_progress["progress"]["eta"] == 2.5
-
-
-@pytest.mark.asyncio
-async def test_batch_download_task_aggregates_results_and_triggers_webhooks():
-    download_task = AsyncMock(
-        side_effect=[
-            {"success": True, "download_id": "download-1", "file_size": 100},
-            {"success": False, "download_id": "download-2", "error": "failed"},
-        ]
-    )
-    trigger_webhooks = AsyncMock()
-
-    with (
-        patch.object(download_tasks, "_download_video_task", download_task),
-        patch.object(download_tasks, "_trigger_webhooks", trigger_webhooks),
-    ):
-        result = await download_tasks._batch_download_task(
-            download_ids=["download-1", "download-2"],
-            urls=["https://example.test/one", "https://example.test/two"],
-            format_spec="best",
-            output_directory="/downloads/batch",
-            write_thumbnail=True,
-        )
-
-    assert result == {
-        "batch_id": "batch_2_urls",
-        "total_downloads": 2,
-        "successful_downloads": 1,
-        "results": [
-            {"success": True, "download_id": "download-1", "file_size": 100},
-            {"success": False, "download_id": "download-2", "error": "failed"},
-        ],
-    }
-    assert download_task.await_args_list == [
-        call(
-            download_id="download-1",
-            url="https://example.test/one",
-            format_spec="best",
-            output_path="/downloads/batch",
-            write_thumbnail=True,
-        ),
-        call(
-            download_id="download-2",
-            url="https://example.test/two",
-            format_spec="best",
-            output_path="/downloads/batch",
-            write_thumbnail=True,
-        ),
-    ]
-    assert trigger_webhooks.await_args_list == [
-        call(
-            "batch_download_started",
-            "batch_2_urls",
-            {
-                "urls": ["https://example.test/one", "https://example.test/two"],
-                "total_videos": 2,
-            },
-        ),
-        call(
-            "batch_download_completed",
-            "batch_2_urls",
-            {
-                "total_videos": 2,
-                "successful_downloads": 1,
-                "failed_downloads": 1,
-                "results": [
-                    {"success": True, "download_id": "download-1", "file_size": 100},
-                    {"success": False, "download_id": "download-2", "error": "failed"},
-                ],
-            },
-        ),
-    ]

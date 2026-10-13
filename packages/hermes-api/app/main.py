@@ -51,39 +51,37 @@ async def initialize_admin_user() -> None:
         return
 
     # Import here to avoid circular imports
-    import uuid
-
-    from sqlalchemy import select
+    from pydantic import EmailStr, TypeAdapter
 
     from app.core.security import get_password_hash
     from app.db.base import async_session_maker
-    from app.db.models import User
+    from app.db.registration import lock_user_registration
+    from app.db.repositories import UserRepository
+    from app.models.pydantic.password import Password
 
     # Get database session using the session factory directly
     async with async_session_maker() as db:
         try:
+            await lock_user_registration(db)
             # Check if any users exist
-            result = await db.execute(select(User))
-            existing_users = result.scalars().all()
+            user_repository = UserRepository(db)
+            user_count = await user_repository.count()
 
-            if existing_users:
+            if user_count:
                 logger.info(
-                    f"Users already exist ({len(existing_users)}), skipping admin creation"
+                    f"Users already exist ({user_count}), skipping admin creation"
                 )
                 return
 
+            TypeAdapter(Password).validate_python(settings.initial_admin_password)
+            TypeAdapter(EmailStr).validate_python(settings.initial_admin_email)
             # Create admin user
-            admin_user = User(
-                id=str(uuid.uuid4()),
+            await user_repository.create(
                 username=settings.initial_admin_username,
                 email=settings.initial_admin_email,
                 password_hash=get_password_hash(settings.initial_admin_password),
-                is_active=True,
                 is_admin=True,
             )
-
-            db.add(admin_user)
-            await db.commit()
 
             logger.info(
                 f"Initial admin user created successfully: {settings.initial_admin_username}",
@@ -176,7 +174,7 @@ def create_application() -> FastAPI:
         title=settings.api_title,
         description=settings.api_description,
         version=settings.api_version,
-        debug=settings.debug,
+        debug=False,  # Never expose tracebacks through HTTP, including in debug mode.
         lifespan=lifespan,
         responses=STANDARD_ERROR_RESPONSES,
     )
@@ -197,6 +195,7 @@ def create_application() -> FastAPI:
         """Handle HTTP exceptions with consistent error response format."""
         return JSONResponse(
             status_code=exc.status_code,
+            headers=exc.headers,
             content={
                 "error": {
                     "code": f"http_{exc.status_code}",
@@ -216,7 +215,7 @@ def create_application() -> FastAPI:
                 "error": {
                     "code": "internal_server_error",
                     "message": "An internal server error occurred",
-                    "details": str(exc) if settings.debug else None,
+                    "details": None,
                 }
             },
         )

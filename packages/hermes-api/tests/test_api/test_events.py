@@ -189,7 +189,7 @@ class TestSSETokenEndpoint:
         call_args = mock_redis_for_sse.setex.call_args
 
         # Verify correct key format
-        assert call_args[0][0] == f"sse:token:{token}"
+        assert call_args[0][0] == f"hermes:sse:token:{token}"
         # Verify TTL
         assert call_args[0][1] == 600
 
@@ -211,7 +211,7 @@ class TestSSETokenEndpoint:
             assert response.status_code == 500
             data = response.json()
             error_message = data.get("detail") or str(data)
-            assert "Failed to create SSE token" in error_message
+            assert "An internal server error occurred" in error_message
 
 
 class TestSSEEndpointTokenAuth:
@@ -394,7 +394,7 @@ class TestSSEStreamingFunctionality:
             # Consume events from stream
             events = []
             stream = event_service.event_stream(
-                channels=["download:updates", "queue:updates"]
+                channels=["hermes:download:updates", "hermes:queue:updates"]
             )
 
             # Get connected event
@@ -450,7 +450,8 @@ class TestSSEStreamingFunctionality:
 
             # Stream with filter for target-123
             stream = event_service.event_stream(
-                channels=["download:updates"], filters={"download_id": "target-123"}
+                channels=["hermes:download:updates"],
+                filters={"download_id": "target-123"},
             )
 
             # Skip connected event
@@ -478,9 +479,9 @@ class TestSSEStreamingFunctionality:
         # Mock Redis pub/sub to yield events from different channels
         async def mock_subscribe(channels):
             # Verify correct channels were requested
-            assert "download:updates" in channels
-            assert "queue:updates" in channels
-            assert "system:notifications" in channels
+            assert "hermes:download:updates" in channels
+            assert "hermes:queue:updates" in channels
+            assert "hermes:system:notifications" in channels
 
             yield {
                 "type": "download_progress",
@@ -503,7 +504,11 @@ class TestSSEStreamingFunctionality:
             from app.services.event_service import event_service
 
             stream = event_service.event_stream(
-                channels=["download:updates", "queue:updates", "system:notifications"]
+                channels=[
+                    "hermes:download:updates",
+                    "hermes:queue:updates",
+                    "hermes:system:notifications",
+                ]
             )
 
             # Skip connected event
@@ -548,7 +553,7 @@ class TestSSEStreamingFunctionality:
             from app.services import event_service
 
             async def mock_stream(channels, filters):
-                assert channels == ["download:updates"]
+                assert channels == ["hermes:download:updates"]
                 assert filters == {"download_id": "test-123"}
                 yield {
                     "event": "connected",
@@ -593,7 +598,7 @@ class TestSSEStreamingFunctionality:
             from app.services import event_service
 
             async def mock_stream(channels, filters=None):
-                assert channels == ["queue:updates"]
+                assert channels == ["hermes:queue:updates"]
                 yield {
                     "event": "connected",
                     "data": json.dumps({"connection_id": "test"}),
@@ -627,7 +632,7 @@ class TestSSEStreamingFunctionality:
             "subscribe_to_channels",
             side_effect=mock_subscribe,
         ):
-            stream = event_service.event_stream(channels=["download:updates"])
+            stream = event_service.event_stream(channels=["hermes:download:updates"])
 
             # Get connected event
             await anext(stream)
@@ -666,7 +671,7 @@ class TestSSEStreamingFunctionality:
         ):
             from app.services.event_service import event_service
 
-            stream = event_service.event_stream(channels=["download:updates"])
+            stream = event_service.event_stream(channels=["hermes:download:updates"])
 
             # Skip connected event
             await anext(stream)

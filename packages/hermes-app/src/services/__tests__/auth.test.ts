@@ -12,8 +12,8 @@ global.fetch = vi.fn()
 // Mock TokenStorage
 vi.mock('@/utils/tokenStorage')
 
-const mockFetch = fetch as any
-const mockTokenStorage = TokenStorage as any
+const mockFetch = vi.mocked(fetch)
+const mockTokenStorage = vi.mocked(TokenStorage)
 
 describe('AuthService', () => {
   beforeEach(() => {

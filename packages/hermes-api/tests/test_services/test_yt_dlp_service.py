@@ -53,7 +53,7 @@ async def test_extract_info_enables_node_js_runtime():
     ):
         service = YTDLPService()
 
-    with patch("app.services.yt_dlp_service.yt_dlp.YoutubeDL", FakeYoutubeDL):
+    with patch("app.services.yt_dlp_service.PublicYoutubeDL", FakeYoutubeDL):
         result = await service.extract_info("https://example.com/video")
 
     assert result["title"] == "Test Video"
@@ -71,7 +71,7 @@ async def test_download_video_enables_node_js_runtime(tmp_path):
     downloaded_path = tmp_path / "test-video.mp4"
     downloaded_path.write_bytes(b"video")
 
-    with patch("app.services.yt_dlp_service.yt_dlp.YoutubeDL", FakeYoutubeDL):
+    with patch("app.services.yt_dlp_service.PublicYoutubeDL", FakeYoutubeDL):
         result_path = await service.download_video(
             "https://example.com/video",
             str(output_path),
@@ -87,7 +87,7 @@ async def test_extract_info_uses_yt_dlp_defaults_when_node_is_unavailable():
     with patch("app.services.yt_dlp_service.shutil.which", return_value=None):
         service = YTDLPService()
 
-    with patch("app.services.yt_dlp_service.yt_dlp.YoutubeDL", FakeYoutubeDL):
+    with patch("app.services.yt_dlp_service.PublicYoutubeDL", FakeYoutubeDL):
         result = await service.extract_info("https://example.com/video")
 
     assert result["title"] == "Test Video"
@@ -118,12 +118,18 @@ async def test_download_video_returns_real_final_path_after_processing(
 
     # Exercise real yt-dlp downloads, conversion, and an already-downloaded file.
     service = YTDLPService()
-    for _ in range(2):
-        result_path = await service.download_video(
-            source.as_uri(), str(tmp_path / "download.%(ext)s"), **options
-        )
-        assert result_path == str(tmp_path / f"download.{extension}")
-        assert (tmp_path / f"download.{extension}").stat().st_size > 0
+    # Inject a local-fixture transport only for the conversion test. Public URL
+    # confinement is exercised independently, including real socket destinations.
+    with (
+        patch("app.services.yt_dlp_service.validate_public_url"),
+        patch("app.services.yt_dlp_service.PublicYoutubeDL", YoutubeDL),
+    ):
+        for _ in range(2):
+            result_path = await service.download_video(
+                source.as_uri(), str(tmp_path / "download.%(ext)s"), **options
+            )
+            assert result_path == str(tmp_path / f"download.{extension}")
+            assert (tmp_path / f"download.{extension}").stat().st_size > 0
     if extension == "mp3":
         assert not (tmp_path / "download.wav").exists()
 
@@ -136,7 +142,7 @@ async def test_download_video_preserves_yt_dlp_errors_and_format_selection(
     error = DownloadError("Requested format is not available")
     with (
         patch.object(FakeYoutubeDL, "extract_info", side_effect=error),
-        patch("app.services.yt_dlp_service.yt_dlp.YoutubeDL", FakeYoutubeDL),
+        patch("app.services.yt_dlp_service.PublicYoutubeDL", FakeYoutubeDL),
     ):
         options = {} if format_spec is None else {"format_spec": format_spec}
         with pytest.raises(DownloadError) as caught:
@@ -152,7 +158,7 @@ async def test_download_video_preserves_yt_dlp_errors_and_format_selection(
 async def test_download_video_rejects_results_without_downloaded_media(tmp_path, info):
     with (
         patch.object(FakeYoutubeDL, "extract_info", return_value=info),
-        patch("app.services.yt_dlp_service.yt_dlp.YoutubeDL", FakeYoutubeDL),
+        patch("app.services.yt_dlp_service.PublicYoutubeDL", FakeYoutubeDL),
     ):
         with pytest.raises(DownloadError, match="did not produce a media file"):
             await YTDLPService().download_video(
@@ -169,7 +175,7 @@ async def test_download_video_rejects_missing_or_non_file_output(
         (tmp_path / "video.mp4").mkdir()
     # A similarly named file must never substitute for the actual result.
     (tmp_path / "video.mp4.webm").write_bytes(b"unrelated")
-    with patch("app.services.yt_dlp_service.yt_dlp.YoutubeDL", FakeYoutubeDL):
+    with patch("app.services.yt_dlp_service.PublicYoutubeDL", FakeYoutubeDL):
         with pytest.raises(FileNotFoundError, match="Downloaded file is missing"):
             await YTDLPService().download_video(
                 "https://example.com/video", str(tmp_path / "video.%(ext)s")

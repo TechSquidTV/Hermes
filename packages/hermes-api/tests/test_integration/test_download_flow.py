@@ -46,7 +46,9 @@ async def test_worker_completion_registers_retrievable_file(
 
     async def write_output(**kwargs):
         # The worker must use the same configured directory as the file API.
-        assert kwargs["output_path"] == str(tmp_path / "Completed_video.%(ext)s")
+        assert kwargs["output_path"] == str(
+            tmp_path / f"{download_id}_Completed_video.%(ext)s"
+        )
         final_path.write_bytes(content)
         return str(final_path)
 

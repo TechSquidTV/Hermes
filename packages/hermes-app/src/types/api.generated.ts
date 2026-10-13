@@ -398,7 +398,7 @@ export interface paths {
         put?: never;
         /**
          * Logout
-         * @description Logout user and blacklist current token.
+         * @description Revoke the entire token family, including already-rotated refresh tokens.
          */
         post: operations["logout_api_v1_auth_logout_post"];
         delete?: never;
@@ -2115,18 +2115,6 @@ export interface components {
             cookies?: {
                 [key: string]: string;
             } | null;
-            /**
-             * Cookiefile
-             * @description Path to cookie file for authentication
-             */
-            cookieFile?: string | null;
-            /**
-             * Browsercookies
-             * @description Browser cookie extraction settings
-             */
-            browserCookies?: {
-                [key: string]: string;
-            } | null;
         };
         /**
          * DownloadResponse
@@ -2632,6 +2620,7 @@ export interface components {
              */
             errorMessage?: string | null;
         };
+        JsonValue: unknown;
         /**
          * PasswordChange
          * @description Password change request with automatic camelCase conversion.
@@ -2698,6 +2687,17 @@ export interface components {
              * @description Percentage of total downloads
              */
             percentage: number;
+        };
+        /** ProfileUpdate */
+        ProfileUpdate: {
+            /** Email */
+            email?: string | null;
+            /** Avatar */
+            avatar?: string | null;
+            /** Preferences */
+            preferences?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
         };
         /**
          * PublicConfig
@@ -2947,7 +2947,10 @@ export interface components {
         UserCreate: {
             /** Username */
             username: string;
-            /** Email */
+            /**
+             * Email
+             * Format: email
+             */
             email: string;
             /** Password */
             password: string;
@@ -4839,9 +4842,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["ProfileUpdate"];
             };
         };
         responses: {

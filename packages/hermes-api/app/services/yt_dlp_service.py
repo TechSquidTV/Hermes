@@ -7,11 +7,12 @@ import os
 import shutil
 from typing import Any, Callable, Dict, Optional
 
-import yt_dlp
 from yt_dlp.utils import DownloadError, ExtractorError
 
 from app.core.logging import get_logger
+from app.services.public_network import PublicYoutubeDL
 from app.utils.media import DEFAULT_FORMAT_SPEC
+from app.utils.urls import validate_public_url
 
 logger = get_logger(__name__)
 
@@ -24,6 +25,9 @@ class YTDLPService:
             "quiet": True,
             "no_warnings": True,
             "extract_flat": False,
+            "proxy": "",
+            "external_downloader": "native",
+            "hls_prefer_native": True,
         }
         if shutil.which("node"):
             self._default_opts["js_runtimes"] = {"node": {}}
@@ -48,16 +52,15 @@ class YTDLPService:
                 opts = self._default_opts.copy()
                 opts.update(kwargs)
 
-                with yt_dlp.YoutubeDL(opts) as ydl:
+                validate_public_url(url)
+                with PublicYoutubeDL(opts) as ydl:
                     return ydl.extract_info(url, download=download)
 
             except (DownloadError, ExtractorError) as e:
-                logger.warning("Failed to extract info from URL", url=url, error=str(e))
+                logger.warning("Failed to extract info from URL", error=str(e))
                 return None
             except Exception as e:
-                logger.error(
-                    "Unexpected error during info extraction", url=url, error=str(e)
-                )
+                logger.error("Unexpected error during info extraction", error=str(e))
                 return None
 
         # Run in thread pool to avoid blocking the event loop
@@ -88,7 +91,8 @@ class YTDLPService:
             if progress_callback:
                 opts["progress_hooks"] = [progress_callback]
 
-            with yt_dlp.YoutubeDL(opts) as ydl:
+            validate_public_url(url)
+            with PublicYoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=True)
 
             # prepare_filename uses the original format, which can differ from
@@ -107,30 +111,8 @@ class YTDLPService:
 
     def get_supported_extractors(self) -> list[str]:
         """Get list of supported extractor names."""
+        import yt_dlp
+
         return list(
             yt_dlp.extractor.get_info_extractor.__wrapped__.__defaults__[0].keys()
         )
-
-    def validate_url(self, url: str) -> bool:
-        """
-        Validate if URL can be handled by yt-dlp.
-
-        Args:
-            url: URL to validate
-
-        Returns:
-            True if URL is supported, False otherwise
-        """
-        try:
-            # Try to find a suitable extractor
-            from yt_dlp.extractor import gen_extractor_classes
-
-            for ie_class in gen_extractor_classes():
-                ie = ie_class()
-                if ie.suitable(url):
-                    return True
-
-            return False
-
-        except Exception:
-            return False

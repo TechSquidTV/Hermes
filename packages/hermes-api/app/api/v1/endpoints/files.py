@@ -9,10 +9,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.dependencies import get_repositories_from_session
 from app.core.logging import get_logger
 from app.core.security import ApiKeyPermission, AuthPrincipal, require_api_permission
 from app.db.models import DownloadFile
-from app.db.repositories import DownloadFileRepository, DownloadRepository
+from app.db.repositories import DownloadFileRepository
 from app.db.session import get_database_session
 from app.models.pydantic.file import (
     DeleteFilesRequest,
@@ -24,14 +25,6 @@ from app.utils.files import resolve_download_path
 
 router = APIRouter()
 logger = get_logger(__name__)
-
-
-def get_repositories_from_session(db_session: AsyncSession):
-    """Create repository instances using the provided database session."""
-    return {
-        "downloads": DownloadRepository(db_session),
-        "download_files": DownloadFileRepository(db_session),
-    }
 
 
 def _resolve_download_path(path: str) -> Path:
@@ -76,33 +69,24 @@ async def download_file(
     ),
 ) -> FileResponse:
     """Download a specific file."""
-    try:
-        repos = get_repositories_from_session(db_session)
-        file_path = _resolve_download_path(path)
-        managed_file = await _get_managed_file(file_path, repos["download_files"])
+    repos = get_repositories_from_session(db_session)
+    file_path = _resolve_download_path(path)
+    managed_file = await _get_managed_file(file_path, repos["download_files"])
 
-        if not file_path.exists():
-            raise HTTPException(status_code=404, detail="File not found")
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
 
-        if not file_path.is_file():
-            raise HTTPException(status_code=400, detail="Path is not a file")
+    if not file_path.is_file():
+        raise HTTPException(status_code=400, detail="Path is not a file")
 
-        # Get the filename for the Content-Disposition header
-        filename = managed_file.filename
+    # Get the filename for the Content-Disposition header
+    filename = managed_file.filename
 
-        logger.info(
-            "Serving file for download", filepath=str(file_path), filename=filename
-        )
+    logger.info("Serving file for download", filepath=str(file_path), filename=filename)
 
-        return FileResponse(
-            path=file_path, filename=filename, media_type="application/octet-stream"
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("Failed to serve file", error=str(e), filepath=path)
-        raise HTTPException(status_code=500, detail=f"Failed to serve file: {str(e)}")
+    return FileResponse(
+        path=file_path, filename=filename, media_type="application/octet-stream"
+    )
 
 
 @router.get("/")
@@ -123,136 +107,120 @@ async def list_downloaded_files(
     principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.READ)),
 ) -> FileList:
     """List all files that have been downloaded and are currently stored."""
-    try:
-        repos = get_repositories_from_session(db_session)
+    repos = get_repositories_from_session(db_session)
 
-        if min_size is not None and max_size is not None and min_size > max_size:
-            raise HTTPException(
-                status_code=422, detail="min_size must not exceed max_size"
-            )
+    if min_size is not None and max_size is not None and min_size > max_size:
+        raise HTTPException(status_code=422, detail="min_size must not exceed max_size")
 
-        directory_path = Path(directory).resolve() if directory else None
-        paginated_files = []
-        total_files = 0
-        total_size = 0
-        async for file_info, download in repos["download_files"].iter_completed_files():
-            try:
-                file_path = _resolve_download_path(file_info.filepath)
-            except (HTTPException, OSError):
-                continue
-            if directory_path and not file_path.is_relative_to(directory_path):
-                continue
-            if (
-                extension
-                and file_path.suffix.lower() != f".{extension.lstrip('.').lower()}"
-            ):
-                continue
-            if min_size is not None and file_info.file_size < min_size:
-                continue
-            if max_size is not None and file_info.file_size > max_size:
-                continue
-            if not file_path.is_file():
-                continue
+    directory_path = Path(directory).resolve() if directory else None
+    paginated_files = []
+    total_files = 0
+    total_size = 0
+    async for file_info, download in repos["download_files"].iter_completed_files():
+        try:
+            file_path = _resolve_download_path(file_info.filepath)
+        except (HTTPException, OSError):
+            continue
+        if directory_path and not file_path.is_relative_to(directory_path):
+            continue
+        if (
+            extension
+            and file_path.suffix.lower() != f".{extension.lstrip('.').lower()}"
+        ):
+            continue
+        if min_size is not None and file_info.file_size < min_size:
+            continue
+        if max_size is not None and file_info.file_size > max_size:
+            continue
+        if not file_path.is_file():
+            continue
 
-            if offset <= total_files < offset + limit:
-                paginated_files.append(
-                    DownloadedFile(
-                        filename=file_info.filename,
-                        filepath=file_info.filepath,
-                        size=file_info.file_size,
-                        created_at=file_info.created_at,
-                        video_info={
-                            "url": download.url,
-                            "title": download.title,
-                            "duration": download.duration,
-                        },
-                    )
+        if offset <= total_files < offset + limit:
+            paginated_files.append(
+                DownloadedFile(
+                    filename=file_info.filename,
+                    filepath=file_info.filepath,
+                    size=file_info.file_size,
+                    created_at=file_info.created_at,
+                    video_info={
+                        "url": download.url,
+                        "title": download.title,
+                        "duration": download.duration,
+                    },
                 )
-            total_files += 1
-            total_size += file_info.file_size
+            )
+        total_files += 1
+        total_size += file_info.file_size
 
-        return FileList(
-            total_files=total_files, total_size=total_size, files=paginated_files
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("Failed to list downloaded files", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to list files: {str(e)}")
+    return FileList(
+        total_files=total_files, total_size=total_size, files=paginated_files
+    )
 
 
 @router.delete("/")
 async def delete_downloaded_files(
     request: DeleteFilesRequest,
     db_session: AsyncSession = Depends(get_database_session),
-    principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.WRITE)),
+    principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.ADMIN)),
 ) -> DeleteFilesResponse:
     """Delete one or more downloaded files from storage."""
-    try:
-        if not request.confirm:
-            raise HTTPException(
-                status_code=400,
-                detail="Confirmation required for destructive operations. "
-                "Set 'confirm' to true.",
+    if not request.confirm:
+        raise HTTPException(
+            status_code=400,
+            detail="Confirmation required for destructive operations. "
+            "Set 'confirm' to true.",
+        )
+
+    logger.info("Deleting downloaded files", files_count=len(request.files))
+
+    deleted_files = 0
+    failed_files = []
+    total_freed = 0
+
+    repos = get_repositories_from_session(db_session)
+
+    for file_path in request.files:
+        try:
+            resolved_path = _resolve_download_path(file_path)
+            managed_file = await _get_managed_file(
+                resolved_path, repos["download_files"]
             )
 
-        logger.info("Deleting downloaded files", files_count=len(request.files))
+            # Delete the physical file
+            if resolved_path.exists():
+                file_size = resolved_path.stat().st_size
+                resolved_path.unlink()
+                total_freed += file_size
+                deleted_files += 1
+                logger.info(f"Deleted file: {resolved_path}")
+            else:
+                failed_files.append(f"{file_path} (file not found)")
+                logger.warning(f"File not found: {file_path}")
 
-        deleted_files = 0
-        failed_files = []
-        total_freed = 0
+            await repos["download_files"].delete(managed_file.id)
 
-        repos = get_repositories_from_session(db_session)
+            # Also delete the database record for this download
+            # Find downloads with this output_path and delete them
+            downloads = await repos["downloads"].get_all()
+            for download in downloads:
+                if _paths_match(download.output_path, resolved_path):
+                    await repos["downloads"].delete(download.id)
+                    logger.info(f"Deleted download record for: {download.id}")
+                    break  # Only delete first match to avoid deleting multiple
 
-        for file_path in request.files:
-            try:
-                resolved_path = _resolve_download_path(file_path)
-                managed_file = await _get_managed_file(
-                    resolved_path, repos["download_files"]
-                )
+        except Exception as e:
+            logger.error(f"Failed to delete file {file_path}", error=str(e))
+            failed_files.append("File deletion failed")
 
-                # Delete the physical file
-                if resolved_path.exists():
-                    file_size = resolved_path.stat().st_size
-                    resolved_path.unlink()
-                    total_freed += file_size
-                    deleted_files += 1
-                    logger.info(f"Deleted file: {resolved_path}")
-                else:
-                    failed_files.append(f"{file_path} (file not found)")
-                    logger.warning(f"File not found: {file_path}")
+    logger.info(
+        "File deletion completed",
+        deleted_files=deleted_files,
+        failed_files=len(failed_files),
+        bytes_freed=total_freed,
+    )
 
-                await repos["download_files"].delete(managed_file.id)
-
-                # Also delete the database record for this download
-                # Find downloads with this output_path and delete them
-                downloads = await repos["downloads"].get_all()
-                for download in downloads:
-                    if _paths_match(download.output_path, resolved_path):
-                        await repos["downloads"].delete(download.id)
-                        logger.info(f"Deleted download record for: {download.id}")
-                        break  # Only delete first match to avoid deleting multiple
-
-            except Exception as e:
-                logger.error(f"Failed to delete file {file_path}", error=str(e))
-                failed_files.append(f"{file_path} ({str(e)})")
-
-        logger.info(
-            "File deletion completed",
-            deleted_files=deleted_files,
-            failed_files=len(failed_files),
-            bytes_freed=total_freed,
-        )
-
-        return DeleteFilesResponse(
-            deleted_files=deleted_files,
-            failed_deletions=failed_files,
-            total_freed_space=total_freed,
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("Failed to delete files", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to delete files: {str(e)}")
+    return DeleteFilesResponse(
+        deleted_files=deleted_files,
+        failed_deletions=failed_files,
+        total_freed_space=total_freed,
+    )

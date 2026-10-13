@@ -4,7 +4,7 @@ import os
 import re
 from typing import Any, Optional
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -21,7 +21,7 @@ class CustomEnvSettingsSource(EnvSettingsSource):
     ) -> Any:
         """Override to handle list fields with custom parsing."""
         # Fields that should be parsed as flexible lists
-        LIST_FIELDS = {"allowed_origins", "api_keys"}
+        LIST_FIELDS = {"allowed_origins", "api_keys", "trusted_proxy_hosts"}
 
         if field_name in LIST_FIELDS and isinstance(value, str):
             # Handle empty strings
@@ -103,12 +103,13 @@ class Settings(BaseSettings):
         description="JWT secret key for token signing. Must be set via HERMES_SECRET_KEY environment variable.",
     )
     algorithm: str = Field(default="HS256")
-    access_token_expire_minutes: int = Field(default=1440)  # 24 hours for testing
-    refresh_token_expire_days: int = Field(default=30)  # 30 days for testing
+    access_token_expire_minutes: int = Field(default=15, ge=1)
+    refresh_token_expire_days: int = Field(default=7, ge=1)
 
     # File Storage
     download_dir: str = Field(default="./downloads")
     temp_dir: str = Field(default="./temp")
+    download_retention_days: int | None = Field(default=None, ge=1)
 
     # API Keys
     api_keys: list[str] = Field(default_factory=list)
@@ -117,14 +118,14 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = Field(default=60)
 
     # Security Settings
-    enable_token_blacklist: bool = Field(default=True)
     enable_rate_limiting: bool = Field(default=True)
-    max_login_attempts: int = Field(default=5)
-    login_attempt_window_minutes: int = Field(default=15)
+    trusted_proxy_hosts: list[str] = Field(default_factory=list)
+    max_login_attempts: int = Field(default=5, ge=1)
+    login_attempt_window_minutes: int = Field(default=15, ge=1)
 
     # Signup Control Settings
     allow_public_signup: bool = Field(
-        default=True,
+        default=False,
         description="Allow public user registration. When False, only admins can create users.",
     )
     initial_admin_username: Optional[str] = Field(
@@ -166,6 +167,12 @@ class Settings(BaseSettings):
     sse_connection_timeout: int = Field(
         default=300, description="SSE connection timeout in seconds"
     )
+
+    @model_validator(mode="after")
+    def validate_cors(self):
+        if self.allow_credentials and "*" in self.allowed_origins:
+            raise ValueError("Wildcard CORS origins cannot allow credentials")
+        return self
 
     model_config = SettingsConfigDict(env_prefix="HERMES_", case_sensitive=False)
 

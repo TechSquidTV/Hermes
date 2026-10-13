@@ -2,10 +2,13 @@
 Video information extraction endpoints.
 """
 
-from fastapi import APIRouter, HTTPException, Query
+import asyncio
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from yt_dlp.utils import ExtractorError
 
 from app.core.logging import get_logger
+from app.core.security import ApiKeyPermission, AuthPrincipal, require_api_permission
 from app.models.pydantic.response import (
     FormatDetail,
     PlaylistEntry,
@@ -14,6 +17,7 @@ from app.models.pydantic.response import (
     VideoInfo,
 )
 from app.services.yt_dlp_service import YTDLPService
+from app.utils.urls import validate_public_url
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -22,17 +26,24 @@ yt_service = YTDLPService()
 
 @router.get("/", response_model=VideoInfo)
 async def extract_video_info(
-    url: str = Query(..., description="Video URL to extract information from"),
+    url: str = Query(
+        ..., max_length=2048, description="Video URL to extract information from"
+    ),
     include_formats: bool = Query(
         True, description="Whether to include available formats in response"
     ),
+    principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.READ)),
 ):
     """
     Extract metadata and available formats for a video without downloading it.
     Useful for previewing video details and format options.
     """
     try:
-        logger.info("Extracting video info", url=url)
+        await asyncio.to_thread(validate_public_url, url)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    try:
+        logger.info("Extracting video info")
 
         # Extract with flat mode first to quickly detect if it's a playlist
         # This avoids fetching full metadata twice
@@ -192,14 +203,7 @@ async def extract_video_info(
             return response
 
     except ExtractorError as e:
-        logger.error("Extractor error", url=url, error=str(e))
-        raise HTTPException(
-            status_code=400, detail=f"Failed to extract information: {str(e)}"
-        )
+        logger.error("Extractor error", error=str(e))
+        raise HTTPException(status_code=400, detail="Failed to extract information")
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error("Failed to extract video info", url=url, error=str(e))
-        raise HTTPException(
-            status_code=500, detail=f"Failed to extract video information: {str(e)}"
-        )

@@ -80,7 +80,7 @@ class RedisProgressService:
         """
         try:
             r = self.get_sync_redis()
-            key = f"download:{download_id}:progress"
+            key = f"hermes:download:{download_id}:progress"
             r.setex(key, ttl, json.dumps(progress_data))
         except Exception as e:
             logger.error(
@@ -101,7 +101,7 @@ class RedisProgressService:
         """
         try:
             r = await self.get_async_redis()
-            key = f"download:{download_id}:progress"
+            key = f"hermes:download:{download_id}:progress"
             data = await r.get(key)
             if data:
                 return json.loads(data)
@@ -123,7 +123,7 @@ class RedisProgressService:
         """
         try:
             r = await self.get_async_redis()
-            key = f"download:{download_id}:progress"
+            key = f"hermes:download:{download_id}:progress"
             await r.delete(key)
         except Exception as e:
             logger.error(
@@ -142,7 +142,7 @@ class RedisProgressService:
         """
         try:
             r = self.get_sync_redis()
-            key = f"download:{download_id}:progress"
+            key = f"hermes:download:{download_id}:progress"
             r.delete(key)
         except Exception as e:
             logger.error(
@@ -277,7 +277,7 @@ class RedisProgressService:
             progress_data: Progress information
         """
         await self.publish_event(
-            channel="download:updates",
+            channel="hermes:download:updates",
             event_type="download_progress",
             data={"download_id": download_id, **progress_data},
         )
@@ -294,7 +294,7 @@ class RedisProgressService:
             data: Additional data
         """
         await self.publish_event(
-            channel="queue:updates",
+            channel="hermes:queue:updates",
             event_type="queue_update",
             data={"action": action, "download_id": download_id, **(data or {})},
         )
@@ -314,7 +314,7 @@ class RedisProgressService:
             data: Additional data
         """
         await self.publish_event(
-            channel="system:notifications",
+            channel="hermes:system:notifications",
             event_type="system_notification",
             data={
                 "notification_type": notification_type,
@@ -331,7 +331,7 @@ class RedisProgressService:
             stats_data: Statistics data to publish
         """
         await self.publish_event(
-            channel="stats:updates",
+            channel="hermes:stats:updates",
             event_type="stats_update",
             data=stats_data,
         )
@@ -353,7 +353,7 @@ class RedisProgressService:
         """
         try:
             r = await self.get_async_redis()
-            key = f"sse:token:{token}"
+            key = f"hermes:sse:token:{token}"
             # Serialize datetime objects
             serialized_data = self._serialize_data(data)
             await r.setex(key, ttl, json.dumps(serialized_data))
@@ -383,7 +383,7 @@ class RedisProgressService:
         """
         try:
             r = await self.get_async_redis()
-            key = f"sse:token:{token}"
+            key = f"hermes:sse:token:{token}"
             data = await r.get(key)
             if data:
                 return json.loads(data)
@@ -405,7 +405,7 @@ class RedisProgressService:
         """
         try:
             r = await self.get_async_redis()
-            key = f"sse:token:{token}"
+            key = f"hermes:sse:token:{token}"
             await r.delete(key)
             logger.info("Deleted SSE token", token_prefix=token[:12])
         except Exception as e:
@@ -432,7 +432,7 @@ class RedisProgressService:
             r = await self.get_async_redis()
 
             # Scan for all SSE tokens
-            pattern = "sse:token:*"
+            pattern = "hermes:sse:token:*"
             revoked = 0
 
             async for key in r.scan_iter(match=pattern):

@@ -60,15 +60,11 @@ async def client(setup_test_database) -> AsyncGenerator[AsyncClient, None]:
     """Create an async HTTP client for testing with auth mocked."""
     from app.core.security import (
         AuthPrincipal,
-        get_current_api_key,
         get_current_principal,
     )
     from app.main import app
 
     # Override authentication dependency for testing
-    async def mock_get_api_key():
-        return "test-api-key"
-
     async def mock_get_principal():
         return AuthPrincipal(
             kind="api_key",
@@ -76,10 +72,9 @@ async def client(setup_test_database) -> AsyncGenerator[AsyncClient, None]:
             permissions=["admin"],
         )
 
-    app.dependency_overrides[get_current_api_key] = mock_get_api_key
     app.dependency_overrides[get_current_principal] = mock_get_principal
 
-    transport = ASGITransport(app=app)
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         yield client
 
@@ -185,3 +180,24 @@ def admin_auth_token(test_admin_user):
     )
 
     return token
+
+
+@pytest.fixture(autouse=True)
+def isolated_external_services(monkeypatch, tmp_path):
+    import socket
+
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "enable_rate_limiting", False)
+    monkeypatch.setattr(settings, "allow_public_signup", True)
+    monkeypatch.setattr(settings, "download_dir", str(tmp_path))
+    original = socket.getaddrinfo
+
+    def resolve_test_hosts(host, port, *args, **kwargs):
+        if host.endswith(".test") or host == "example.com":
+            return [
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", port))
+            ]
+        return original(host, port, *args, **kwargs)
+
+    monkeypatch.setattr(socket, "getaddrinfo", resolve_test_hosts)

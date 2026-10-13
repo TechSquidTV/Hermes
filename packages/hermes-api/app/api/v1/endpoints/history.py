@@ -8,7 +8,7 @@ from datetime import date as date_type
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import Integer, and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -132,130 +132,121 @@ async def get_download_history(
 
     Returns paginated results with comprehensive statistics.
     """
-    try:
-        # Build query filters
-        filters = []
-        if start_date:
-            filters.append(
-                DownloadHistoryModel.started_at
-                >= datetime.combine(start_date, datetime.min.time())
+    # Build query filters
+    filters = []
+    if start_date:
+        filters.append(
+            DownloadHistoryModel.started_at
+            >= datetime.combine(start_date, datetime.min.time())
+        )
+    if end_date:
+        filters.append(
+            DownloadHistoryModel.completed_at
+            <= datetime.combine(end_date, datetime.max.time())
+        )
+    if extractor:
+        filters.append(DownloadHistoryModel.extractor == extractor)
+    if status:
+        filters.append(DownloadHistoryModel.status == status)
+
+    # Get total count
+    count_query = select(func.count()).select_from(DownloadHistoryModel)
+    if filters:
+        count_query = count_query.where(and_(*filters))
+    result = await db_session.execute(count_query)
+    total_count = result.scalar() or 0
+
+    # Get history items
+    query = select(DownloadHistoryModel)
+    if filters:
+        query = query.where(and_(*filters))
+    query = (
+        query.order_by(DownloadHistoryModel.completed_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+
+    result = await db_session.execute(query)
+    history_records = result.scalars().all()
+
+    # Convert to response items
+    items = [
+        HistoryItem(
+            download_id=record.download_id,
+            url=record.url,
+            status=record.status,
+            started_at=record.started_at,
+            completed_at=record.completed_at,
+            duration=record.duration or 0,
+            file_size=record.file_size,
+            extractor=record.extractor or "unknown",
+            title=None,  # Not stored in history table
+            error_message=record.error_message,
+        )
+        for record in history_records
+    ]
+
+    # Calculate statistics for all matching records, not just current page.
+    stats_query = select(
+        func.count().label("total"),
+        func.avg(DownloadHistoryModel.duration).label("avg_duration"),
+        func.sum(DownloadHistoryModel.file_size).label("total_size"),
+        func.sum(
+            func.cast(DownloadHistoryModel.status == "completed", type_=Integer)
+        ).label("successful"),
+    ).select_from(DownloadHistoryModel)
+    if filters:
+        stats_query = stats_query.where(and_(*filters))
+
+    stats_result = await db_session.execute(stats_query)
+    stats = stats_result.one()
+
+    total_downloads = stats.total or 0
+    successful_downloads = stats.successful or 0
+    success_rate = (
+        successful_downloads / total_downloads if total_downloads > 0 else 0.0
+    )
+    avg_time = stats.avg_duration or 0.0
+    total_size = stats.total_size or 0
+
+    # Get popular extractors for all matching records.
+    extractor_query = select(
+        DownloadHistoryModel.extractor,
+        func.count().label("count"),
+    ).select_from(DownloadHistoryModel)
+    if filters:
+        extractor_query = extractor_query.where(and_(*filters))
+    extractor_query = (
+        extractor_query.group_by(DownloadHistoryModel.extractor)
+        .order_by(func.count().desc())
+        .limit(5)
+    )
+
+    extractor_result = await db_session.execute(extractor_query)
+    popular_extractors = []
+    for extractor, count in extractor_result.all():
+        popular_extractors.append(
+            PopularExtractor(
+                extractor=extractor or "unknown",
+                count=count,
+                percentage=(
+                    round((count / total_downloads) * 100, 2) if total_downloads else 0
+                ),
             )
-        if end_date:
-            filters.append(
-                DownloadHistoryModel.completed_at
-                <= datetime.combine(end_date, datetime.max.time())
-            )
-        if extractor:
-            filters.append(DownloadHistoryModel.extractor == extractor)
-        if status:
-            filters.append(DownloadHistoryModel.status == status)
-
-        # Get total count
-        count_query = select(func.count()).select_from(DownloadHistoryModel)
-        if filters:
-            count_query = count_query.where(and_(*filters))
-        result = await db_session.execute(count_query)
-        total_count = result.scalar() or 0
-
-        # Get history items
-        query = select(DownloadHistoryModel)
-        if filters:
-            query = query.where(and_(*filters))
-        query = (
-            query.order_by(DownloadHistoryModel.completed_at.desc())
-            .limit(limit)
-            .offset(offset)
         )
 
-        result = await db_session.execute(query)
-        history_records = result.scalars().all()
+    # Calculate daily stats
+    daily_stats = await calculate_daily_stats(filters, db_session, start_date, end_date)
 
-        # Convert to response items
-        items = [
-            HistoryItem(
-                download_id=record.download_id,
-                url=record.url,
-                status=record.status,
-                started_at=record.started_at,
-                completed_at=record.completed_at,
-                duration=record.duration or 0,
-                file_size=record.file_size,
-                extractor=record.extractor or "unknown",
-                title=None,  # Not stored in history table
-                error_message=record.error_message,
-            )
-            for record in history_records
-        ]
-
-        # Calculate statistics for all matching records, not just current page.
-        stats_query = select(
-            func.count().label("total"),
-            func.avg(DownloadHistoryModel.duration).label("avg_duration"),
-            func.sum(DownloadHistoryModel.file_size).label("total_size"),
-            func.sum(
-                func.cast(DownloadHistoryModel.status == "completed", type_=Integer)
-            ).label("successful"),
-        ).select_from(DownloadHistoryModel)
-        if filters:
-            stats_query = stats_query.where(and_(*filters))
-
-        stats_result = await db_session.execute(stats_query)
-        stats = stats_result.one()
-
-        total_downloads = stats.total or 0
-        successful_downloads = stats.successful or 0
-        success_rate = (
-            successful_downloads / total_downloads if total_downloads > 0 else 0.0
-        )
-        avg_time = stats.avg_duration or 0.0
-        total_size = stats.total_size or 0
-
-        # Get popular extractors for all matching records.
-        extractor_query = select(
-            DownloadHistoryModel.extractor,
-            func.count().label("count"),
-        ).select_from(DownloadHistoryModel)
-        if filters:
-            extractor_query = extractor_query.where(and_(*filters))
-        extractor_query = (
-            extractor_query.group_by(DownloadHistoryModel.extractor)
-            .order_by(func.count().desc())
-            .limit(5)
-        )
-
-        extractor_result = await db_session.execute(extractor_query)
-        popular_extractors = []
-        for extractor, count in extractor_result.all():
-            popular_extractors.append(
-                PopularExtractor(
-                    extractor=extractor or "unknown",
-                    count=count,
-                    percentage=(
-                        round((count / total_downloads) * 100, 2)
-                        if total_downloads
-                        else 0
-                    ),
-                )
-            )
-
-        # Calculate daily stats
-        daily_stats = await calculate_daily_stats(
-            filters, db_session, start_date, end_date
-        )
-
-        return DownloadHistory(
-            total_downloads=total_downloads,
-            success_rate=round(success_rate, 3),
-            average_download_time=round(avg_time, 2),
-            total_size=total_size,
-            popular_extractors=popular_extractors,
-            daily_stats=daily_stats,
-            items=items,
-            total_items=total_count,
-            page=(offset // limit) + 1,
-            per_page=limit,
-        )
-
-    except Exception as e:
-        logger.error("Failed to get download history", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to get history: {str(e)}")
+    return DownloadHistory(
+        total_downloads=total_downloads,
+        success_rate=round(success_rate, 3),
+        average_download_time=round(avg_time, 2),
+        total_size=total_size,
+        popular_extractors=popular_extractors,
+        daily_stats=daily_stats,
+        items=items,
+        total_items=total_count,
+        page=(offset // limit) + 1,
+        per_page=limit,
+    )

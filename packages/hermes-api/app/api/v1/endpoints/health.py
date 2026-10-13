@@ -10,10 +10,16 @@ from fastapi import APIRouter
 from sqlalchemy import text
 
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.db.base import engine
-from app.models.pydantic.response import DetailedHealthResponse, HealthResponse
+from app.models.pydantic.response import (
+    DetailedHealthResponse,
+    HealthDependency,
+    HealthResponse,
+)
 
 router = APIRouter()
+logger = get_logger(__name__)
 
 
 @router.get("/", response_model=HealthResponse)
@@ -30,13 +36,12 @@ async def get_health():
 @router.get("/detailed", response_model=DetailedHealthResponse)
 async def get_detailed_health():
     """Get detailed health information including dependencies."""
-    health_info = {
-        "status": "healthy",
-        "timestamp": datetime.now(timezone.utc),
-        "version": settings.api_version,
-        "environment": "development" if settings.debug else "production",
-        "dependencies": {},
-    }
+    health_info = DetailedHealthResponse(
+        status="healthy",
+        timestamp=datetime.now(timezone.utc),
+        version=settings.api_version,
+        environment="development" if settings.debug else "production",
+    )
 
     # Check database connectivity
     try:
@@ -46,17 +51,18 @@ async def get_detailed_health():
             result.fetchone()
 
         response_time_ms = round((time.time() - start_time) * 1000, 2)
-        health_info["dependencies"]["database"] = {
-            "status": "healthy",
-            "response_time_ms": response_time_ms,
-            "message": "Database connection successful",
-        }
+        health_info.dependencies["database"] = HealthDependency(
+            status="healthy",
+            response_time_ms=response_time_ms,
+            message="Database connection successful",
+        )
     except Exception as e:
-        health_info["dependencies"]["database"] = {
-            "status": "error",
-            "message": f"Database connection failed: {str(e)}",
-        }
-        health_info["status"] = "unhealthy"
+        logger.error("Dependency health check failed", error=str(e))
+        health_info.dependencies["database"] = HealthDependency(
+            status="error",
+            message="Database connection failed",
+        )
+        health_info.status = "unhealthy"
 
     # Check Redis connectivity
     try:
@@ -66,16 +72,17 @@ async def get_detailed_health():
         await redis_client.close()
 
         response_time_ms = round((time.time() - start_time) * 1000, 2)
-        health_info["dependencies"]["redis"] = {
-            "status": "healthy",
-            "response_time_ms": response_time_ms,
-            "message": "Redis connection successful",
-        }
+        health_info.dependencies["redis"] = HealthDependency(
+            status="healthy",
+            response_time_ms=response_time_ms,
+            message="Redis connection successful",
+        )
     except Exception as e:
-        health_info["dependencies"]["redis"] = {
-            "status": "error",
-            "message": f"Redis connection failed: {str(e)}",
-        }
-        health_info["status"] = "unhealthy"
+        logger.error("Dependency health check failed", error=str(e))
+        health_info.dependencies["redis"] = HealthDependency(
+            status="error",
+            message="Redis connection failed",
+        )
+        health_info.status = "unhealthy"
 
     return health_info

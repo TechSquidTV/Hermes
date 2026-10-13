@@ -59,7 +59,7 @@ class TestEventServiceConnectionManagement:
             side_effect=mock_subscribe,
         ):
             # Start event stream
-            stream = event_service.event_stream(channels=["download:updates"])
+            stream = event_service.event_stream(channels=["hermes:download:updates"])
 
             # Consume first event (should be 'connected')
             try:
@@ -87,7 +87,7 @@ class TestEventServiceConnectionManagement:
 
         try:
             # Try to create a new connection when at max
-            stream = event_service.event_stream(channels=["download:updates"])
+            stream = event_service.event_stream(channels=["hermes:download:updates"])
 
             # First event should be error
             event = await anext(stream)
@@ -123,7 +123,7 @@ class TestEventServiceConnectionManagement:
             "subscribe_to_channels",
             side_effect=mock_subscribe_error,
         ):
-            stream = event_service.event_stream(channels=["download:updates"])
+            stream = event_service.event_stream(channels=["hermes:download:updates"])
 
             try:
                 # Consume connected event
@@ -163,7 +163,7 @@ class TestEventServiceStreaming:
             "subscribe_to_channels",
             side_effect=mock_subscribe,
         ):
-            stream = event_service.event_stream(channels=["download:updates"])
+            stream = event_service.event_stream(channels=["hermes:download:updates"])
 
             # First event should be connected
             event = await anext(stream)
@@ -201,7 +201,7 @@ class TestEventServiceStreaming:
             "subscribe_to_channels",
             side_effect=mock_subscribe,
         ):
-            stream = event_service.event_stream(channels=["download:updates"])
+            stream = event_service.event_stream(channels=["hermes:download:updates"])
 
             # Skip connected event
             await anext(stream)
@@ -241,7 +241,7 @@ class TestEventServiceStreaming:
             "subscribe_to_channels",
             side_effect=mock_subscribe_infinite,
         ):
-            stream = event_service.event_stream(channels=["download:updates"])
+            stream = event_service.event_stream(channels=["hermes:download:updates"])
 
             # Get connected event
             await anext(stream)
@@ -283,7 +283,7 @@ class TestEventServiceFiltering:
             side_effect=mock_subscribe,
         ):
             stream = event_service.event_stream(
-                channels=["download:updates"],
+                channels=["hermes:download:updates"],
                 filters={"download_id": "test-123"},
             )
 
@@ -343,7 +343,7 @@ class TestEventServiceFiltering:
             side_effect=mock_subscribe,
         ):
             stream = event_service.event_stream(
-                channels=["download:updates"],
+                channels=["hermes:download:updates"],
                 filters={"download_id": "test-123", "status": "downloading"},
             )
 
@@ -381,7 +381,7 @@ class TestEventServiceFiltering:
             side_effect=mock_subscribe,
         ):
             stream = event_service.event_stream(
-                channels=["download:updates"],
+                channels=["hermes:download:updates"],
                 filters=None,  # No filters
             )
 
@@ -428,7 +428,9 @@ class TestEventServiceHeartbeat:
                 "subscribe_to_channels",
                 side_effect=mock_subscribe_with_events,
             ):
-                stream = event_service.event_stream(channels=["download:updates"])
+                stream = event_service.event_stream(
+                    channels=["hermes:download:updates"]
+                )
 
                 # Skip connected event
                 await anext(stream)
@@ -471,7 +473,7 @@ class TestEventServiceErrorHandling:
             "subscribe_to_channels",
             side_effect=mock_subscribe_error,
         ):
-            stream = event_service.event_stream(channels=["download:updates"])
+            stream = event_service.event_stream(channels=["hermes:download:updates"])
 
             # Skip connected event
             await anext(stream)
@@ -505,7 +507,9 @@ class TestEventServiceErrorHandling:
         ):
             # Create multiple connections
             for _ in range(3):
-                stream = event_service.event_stream(channels=["download:updates"])
+                stream = event_service.event_stream(
+                    channels=["hermes:download:updates"]
+                )
                 event = await anext(stream)
                 data = json.loads(event["data"])
                 connection_ids.append(data["connection_id"])
@@ -541,7 +545,7 @@ class TestEventServiceDataIntegrity:
             "subscribe_to_channels",
             side_effect=mock_subscribe,
         ):
-            stream = event_service.event_stream(channels=["download:updates"])
+            stream = event_service.event_stream(channels=["hermes:download:updates"])
 
             # Skip connected event
             await anext(stream)

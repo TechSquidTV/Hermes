@@ -3,6 +3,7 @@
 import type { User, LoginCredentials, SignupCredentials, AuthResponse } from '@/types/auth'
 import { TokenStorage } from '@/utils/tokenStorage'
 import { getApiBaseUrl } from '@/lib/config'
+import { refreshSession } from './session'
 
 class AuthService {
   private baseURL: string
@@ -81,6 +82,9 @@ class AuthService {
 
   async logout(): Promise<void> {
     try {
+      if (!TokenStorage.getAccessToken() && TokenStorage.getRefreshToken()) {
+        await refreshSession()
+      }
       await this.request<void>('/auth/logout', {
         method: 'POST',
       })
@@ -93,22 +97,8 @@ class AuthService {
     TokenStorage.clearTokens()
   }
 
-  async refreshToken(): Promise<AuthResponse> {
-    const refreshToken = TokenStorage.getRefreshToken()
-    if (!refreshToken) {
-      throw new Error('No refresh token available')
-    }
-
-    const response = await this.request<AuthResponse>('/auth/refresh', {
-      method: 'POST',
-      body: JSON.stringify({ refreshToken }),
-    })
-
-    // Store new tokens securely
-    TokenStorage.setAccessToken(response.accessToken, 15) // 15 minutes expiry
-    TokenStorage.setRefreshToken(response.refreshToken)
-
-    return response
+  refreshToken(): ReturnType<typeof refreshSession> {
+    return refreshSession()
   }
 
   async getCurrentUser(): Promise<User> {

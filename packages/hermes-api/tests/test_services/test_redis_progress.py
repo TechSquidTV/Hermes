@@ -66,7 +66,7 @@ class TestRedisProgressServiceSync:
         # Verify Redis setex was called with correct parameters
         mock_sync_redis.setex.assert_called_once()
         call_args = mock_sync_redis.setex.call_args
-        assert call_args[0][0] == f"download:{download_id}:progress"
+        assert call_args[0][0] == f"hermes:download:{download_id}:progress"
         assert call_args[0][1] == 1800
         stored_data = json.loads(call_args[0][2])
         assert stored_data == progress_data
@@ -123,7 +123,7 @@ class TestRedisProgressServiceAsync:
 
         # Verify async delete was called
         mock_async_redis.delete.assert_called_once_with(
-            f"download:{download_id}:progress"
+            f"hermes:download:{download_id}:progress"
         )
 
     @pytest.mark.asyncio
@@ -146,7 +146,9 @@ class TestRedisProgressServiceAsync:
         result = await redis_service.get_progress(download_id)
 
         assert result == expected_data
-        mock_redis.get.assert_called_once_with(f"download:{download_id}:progress")
+        mock_redis.get.assert_called_once_with(
+            f"hermes:download:{download_id}:progress"
+        )
 
     @pytest.mark.asyncio
     async def test_get_progress_not_found(self, redis_service, mock_async_redis):
@@ -192,7 +194,7 @@ class TestRedisProgressServiceAsync:
         await redis_service.delete_progress(download_id)
 
         mock_async_redis.delete.assert_called_once_with(
-            f"download:{download_id}:progress"
+            f"hermes:download:{download_id}:progress"
         )
 
     @pytest.mark.asyncio
@@ -235,7 +237,7 @@ class TestRedisProgressServiceKeys:
         await redis_service.get_progress(download_id)
 
         # Should use format: download:{id}:progress
-        expected_key = "download:abc-123-def-456:progress"
+        expected_key = "hermes:download:abc-123-def-456:progress"
         mock_async_redis.get.assert_called_once_with(expected_key)
 
     def test_sync_progress_key_format(self, redis_service, mock_sync_redis):
@@ -247,7 +249,7 @@ class TestRedisProgressServiceKeys:
 
         # Should use format: download:{id}:progress
         call_args = mock_sync_redis.setex.call_args
-        assert call_args[0][0] == "download:xyz-789-abc-012:progress"
+        assert call_args[0][0] == "hermes:download:xyz-789-abc-012:progress"
 
 
 class TestRedisProgressServiceDataIntegrity:
@@ -324,7 +326,7 @@ class TestRedisSSETokenStorage:
         # Verify Redis setex was called
         mock_async_redis.setex.assert_called_once()
         call_args = mock_async_redis.setex.call_args
-        assert call_args[0][0] == f"sse:token:{token}"
+        assert call_args[0][0] == f"hermes:sse:token:{token}"
         assert call_args[0][1] == ttl
         stored_data = json.loads(call_args[0][2])
         assert stored_data["scope"] == token_data["scope"]
@@ -379,7 +381,7 @@ class TestRedisSSETokenStorage:
         result = await redis_service.get_sse_token(token)
 
         # Verify Redis get was called with correct key
-        mock_async_redis.get.assert_called_once_with(f"sse:token:{token}")
+        mock_async_redis.get.assert_called_once_with(f"hermes:sse:token:{token}")
         assert result == token_data
         assert result["scope"] == "download:test-123"
         assert result["user_id"] == "user789"
@@ -407,7 +409,7 @@ class TestRedisSSETokenStorage:
         await redis_service.delete_sse_token(token)
 
         # Verify Redis delete was called with correct key
-        mock_async_redis.delete.assert_called_once_with(f"sse:token:{token}")
+        mock_async_redis.delete.assert_called_once_with(f"hermes:sse:token:{token}")
 
     @pytest.mark.asyncio
     async def test_revoke_user_sse_tokens_by_scope(
@@ -590,7 +592,7 @@ class TestRedisProgressServicePubSub:
         setup_async_redis_mock(redis_service, mock_async_redis)
         mock_async_redis.publish = AsyncMock()
 
-        channel = "download:updates"
+        channel = "hermes:download:updates"
         event_type = "download_progress"
         data = {"download_id": "test-123", "progress": 50}
 
@@ -621,7 +623,9 @@ class TestRedisProgressServicePubSub:
             "started_at": datetime(2025, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
         }
 
-        await redis_service.publish_event("download:updates", "download_started", data)
+        await redis_service.publish_event(
+            "hermes:download:updates", "download_started", data
+        )
 
         # Verify datetime was serialized before publishing
         call_args = mock_async_redis.publish.call_args
@@ -640,7 +644,7 @@ class TestRedisProgressServicePubSub:
 
         # Should not raise exception, just log error
         await redis_service.publish_event(
-            "download:updates", "test_event", {"test": "data"}
+            "hermes:download:updates", "test_event", {"test": "data"}
         )
 
         # Verify publish was attempted
@@ -661,11 +665,11 @@ class TestRedisProgressServicePubSub:
         # Mock pubsub.listen() to yield test messages
         async def mock_listen():
             # First message: subscription confirmation (skip)
-            yield {"type": "subscribe", "channel": "download:updates"}
+            yield {"type": "subscribe", "channel": "hermes:download:updates"}
             # Second message: actual message
             yield {
                 "type": "message",
-                "channel": "download:updates",
+                "channel": "hermes:download:updates",
                 "data": json.dumps(
                     {
                         "type": "download_progress",
@@ -678,7 +682,7 @@ class TestRedisProgressServicePubSub:
         mock_pubsub.listen = mock_listen
 
         # Subscribe and consume messages
-        channels = ["download:updates", "queue:updates"]
+        channels = ["hermes:download:updates", "hermes:queue:updates"]
         messages = []
         async for message in redis_service.subscribe_to_channels(channels):
             messages.append(message)
@@ -743,7 +747,7 @@ class TestRedisProgressServicePubSub:
         call_args = mock_async_redis.publish.call_args
 
         # Verify correct channel
-        assert call_args[0][0] == "download:updates"
+        assert call_args[0][0] == "hermes:download:updates"
 
         # Verify message format
         message = json.loads(call_args[0][1])
@@ -770,7 +774,7 @@ class TestRedisProgressServicePubSub:
         call_args = mock_async_redis.publish.call_args
 
         # Verify correct channel
-        assert call_args[0][0] == "queue:updates"
+        assert call_args[0][0] == "hermes:queue:updates"
 
         # Verify message format
         message = json.loads(call_args[0][1])
@@ -816,7 +820,7 @@ class TestRedisProgressServicePubSub:
         call_args = mock_async_redis.publish.call_args
 
         # Verify correct channel
-        assert call_args[0][0] == "system:notifications"
+        assert call_args[0][0] == "hermes:system:notifications"
 
         # Verify message format
         message = json.loads(call_args[0][1])

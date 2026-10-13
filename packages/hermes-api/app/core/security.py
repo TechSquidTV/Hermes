@@ -3,7 +3,9 @@ Security utilities for API authentication and authorization.
 """
 
 import hashlib
+import hmac
 import secrets
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
@@ -23,6 +25,7 @@ from app.db.repositories import (
     UserRepository,
 )
 from app.db.session import get_database_session
+from app.utils.dates import as_utc
 
 logger = get_logger(__name__)
 
@@ -57,18 +60,10 @@ class AuthPrincipal:
     created_at: Optional[str] = None
     last_login: Optional[str] = None
     token_id: Optional[str] = None
+    session_id: Optional[str] = None
     api_key_id: Optional[str] = None
     api_key_name: Optional[str] = None
     permissions: list[str] = field(default_factory=list)
-
-    @property
-    def legacy_identifier(self) -> str:
-        """Stable string for routes that only need to know auth succeeded."""
-        if self.kind == "user" and self.user_id:
-            return f"user:{self.user_id}"
-        if self.api_key_id:
-            return f"db_api_key:{self.api_key_id}"
-        return self.subject
 
     def as_user_dict(self) -> dict:
         """Return the historical user dict shape used by auth/admin endpoints."""
@@ -89,6 +84,7 @@ class AuthPrincipal:
             "created_at": self.created_at,
             "last_login": self.last_login,
             "token_id": self.token_id,
+            "session_id": self.session_id,
         }
 
 
@@ -104,12 +100,13 @@ def hash_api_key(api_key: str) -> str:
 
 def verify_api_key(plain_key: str, hashed_key: str) -> bool:
     """Verify a plain API key against its hash."""
-    return hash_api_key(plain_key) == hashed_key
+    return hmac.compare_digest(hash_api_key(plain_key), hashed_key)
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Create a JWT access token."""
     to_encode = data.copy()
+    to_encode.setdefault("sid", str(uuid.uuid4()))
 
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
@@ -119,8 +116,6 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
         )
 
     # Add JWT ID for token tracking and blacklisting
-    import uuid
-
     jti = str(uuid.uuid4())
 
     to_encode.update(
@@ -140,9 +135,10 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 
-def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None):
+def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Create a JWT refresh token."""
     to_encode = data.copy()
+    to_encode.setdefault("sid", str(uuid.uuid4()))
 
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
@@ -152,8 +148,6 @@ def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None):
         )
 
     # Add JWT ID for token tracking and blacklisting
-    import uuid
-
     jti = str(uuid.uuid4())
 
     to_encode.update(
@@ -173,6 +167,12 @@ def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 
+def create_token_pair(data: dict[str, str]) -> tuple[str, str]:
+    """Mint access and refresh credentials with a shared session revocation ID."""
+    claims = {**data, "sid": data.get("sid") or str(uuid.uuid4())}
+    return create_access_token(claims), create_refresh_token(claims)
+
+
 def verify_token(token: str) -> Optional[dict]:
     """Verify and decode a JWT token."""
     try:
@@ -182,6 +182,7 @@ def verify_token(token: str) -> Optional[dict]:
             algorithms=[settings.algorithm],
             audience=["hermes-app", "hermes-api"],  # Accept tokens for app or API
             issuer="hermes-api",
+            options={"require": ["exp", "iat", "jti", "type", "sid", "sub", "user_id"]},
         )
         return payload
     except jwt.ExpiredSignatureError as e:
@@ -202,6 +203,12 @@ async def _principal_from_jwt(
     payload = verify_token(token)
     if not payload:
         return None
+    if (
+        payload.get("type") != "access"
+        or not isinstance(payload.get("sid"), str)
+        or not isinstance(payload.get("jti"), str)
+    ):
+        raise HTTPException(status_code=401, detail="Access token required")
 
     username: str = payload.get("sub")
     user_id: str = payload.get("user_id")
@@ -217,7 +224,9 @@ async def _principal_from_jwt(
 
     if token_id:
         token_blacklist_repo = TokenBlacklistRepository(db_session)
-        if await token_blacklist_repo.is_blacklisted(token_id):
+        if await token_blacklist_repo.is_blacklisted(
+            token_id
+        ) or await token_blacklist_repo.is_blacklisted(payload["sid"]):
             logger.warning(f"Token is blacklisted: {token_id}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -255,6 +264,7 @@ async def _principal_from_jwt(
         created_at=user.created_at.isoformat() if user.created_at else None,
         last_login=user.last_login.isoformat() if user.last_login else None,
         token_id=token_id,
+        session_id=payload["sid"],
     )
 
 
@@ -279,7 +289,9 @@ async def _principal_from_api_key(
         logger.warning(f"Inactive API key used: {db_api_key.id}")
         return None
 
-    if db_api_key.expires_at and datetime.now(timezone.utc) > db_api_key.expires_at:
+    if db_api_key.expires_at and datetime.now(timezone.utc) >= as_utc(
+        db_api_key.expires_at
+    ):
         logger.warning(f"Expired API key used: {db_api_key.id}")
         return None
 
@@ -344,37 +356,6 @@ async def get_current_principal_optional(
         return jwt_principal
 
     return await _principal_from_api_key(auth_token, db_session)
-
-
-async def get_current_api_key_optional(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
-    token: Optional[str] = Query(None),
-    db_session: AsyncSession = Depends(get_database_session),
-) -> Optional[str]:
-    """
-    Extract and validate API key from Authorization header or query param.
-
-    For SSE endpoints where EventSource cannot send custom headers,
-    accepts token as query parameter as fallback.
-
-    Args:
-        credentials: HTTP Bearer token from Authorization header
-        token: Optional token from query parameter (for SSE)
-
-    Returns:
-        Validated API key/user marker or None if no auth provided
-    """
-    principal = await get_current_principal_optional(credentials, token, db_session)
-    return principal.legacy_identifier if principal else None
-
-
-async def get_current_api_key(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db_session: AsyncSession = Depends(get_database_session),
-) -> str:
-    """Extract and validate API key from Authorization header."""
-    principal = await get_current_principal(credentials, db_session)
-    return principal.legacy_identifier
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -447,6 +428,8 @@ def require_api_permission(required_permission: ApiKeyPermission | str):
         principal: AuthPrincipal = Depends(get_current_principal),
     ) -> AuthPrincipal:
         if principal.kind == "user":
+            if required_permission_value == "admin" and not principal.is_admin:
+                raise HTTPException(status_code=403, detail="Admin access required")
             return principal
 
         PermissionChecker.require_permission(

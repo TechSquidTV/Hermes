@@ -389,7 +389,7 @@ class SystemSettings(Base):
     __tablename__ = "system_settings"
 
     id = Column(Integer, primary_key=True, default=1)  # Always 1 (singleton)
-    allow_public_signup = Column(Boolean, default=True, nullable=False)
+    allow_public_signup = Column(Boolean, default=False, nullable=False)
     updated_by_user_id = Column(String, nullable=True)  # User who last updated
 
     # Timestamps
