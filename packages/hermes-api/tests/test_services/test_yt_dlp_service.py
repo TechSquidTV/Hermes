@@ -174,7 +174,7 @@ async def test_download_video_preserves_yt_dlp_errors_and_format_selection(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("info", [None, {"id": "test-video"}])
 async def test_download_video_rejects_results_without_downloaded_media(
-    tmp_path: Path, info: dict[str, object]
+    tmp_path: Path, info: dict[str, object] | None
 ) -> None:
     with (
         patch.object(FakeYoutubeDL, "extract_info", return_value=info),

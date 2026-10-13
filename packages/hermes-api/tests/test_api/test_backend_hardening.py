@@ -111,7 +111,7 @@ async def test_api_key_expiry_survives_sqlite_roundtrip(
     auth_token: str,
     db_session: AsyncSession,
     delta: timedelta,
-    expected: bool,
+    expected: int,
 ) -> None:
     app.dependency_overrides.clear()
     created = await client.post(
@@ -191,7 +191,7 @@ async def test_local_path_inputs_cannot_reach_workers(
     client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
     field: str,
-    value: float | None,
+    value: str | dict[str, str],
 ) -> None:
     enqueue = Mock()
     monkeypatch.setattr(
