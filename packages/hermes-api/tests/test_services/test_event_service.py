@@ -2,6 +2,15 @@
 Tests for SSE event service and streaming functionality.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
+    from unittest.mock import AsyncMock
+
+
 import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -11,7 +20,7 @@ import pytest_asyncio
 
 
 @pytest_asyncio.fixture
-async def mock_redis_pubsub():
+async def mock_redis_pubsub() -> AsyncGenerator[tuple[MagicMock, MagicMock], None]:
     """Mock Redis pub/sub for SSE event tests."""
     from app.services import redis_progress
 
@@ -25,7 +34,7 @@ async def mock_redis_pubsub():
     mock_redis = MagicMock()
     mock_redis.pubsub = MagicMock(return_value=mock_pubsub)
 
-    async def mock_get_async_redis():
+    async def mock_get_async_redis() -> MagicMock:
         return mock_redis
 
     with patch.object(
@@ -40,14 +49,16 @@ class TestEventServiceConnectionManagement:
     """Test event service connection tracking and limits."""
 
     @pytest.mark.asyncio
-    async def test_tracks_active_connections(self, mock_redis_pubsub):
+    async def test_tracks_active_connections(
+        self, mock_redis_pubsub: tuple[MagicMock, MagicMock]
+    ) -> None:
         """Test that active connections are tracked correctly."""
         from app.services.event_service import event_service
 
         initial_count = event_service.active_connections
 
         # Mock subscribe_to_channels to yield nothing and then stop
-        async def mock_subscribe(channels):
+        async def mock_subscribe(channels: list[str]) -> AsyncGenerator[None, None]:
             yield  # Immediate stop
             return
 
@@ -59,7 +70,7 @@ class TestEventServiceConnectionManagement:
             side_effect=mock_subscribe,
         ):
             # Start event stream
-            stream = event_service.event_stream(channels=["download:updates"])
+            stream = event_service.event_stream(channels=["hermes:download:updates"])
 
             # Consume first event (should be 'connected')
             try:
@@ -76,7 +87,9 @@ class TestEventServiceConnectionManagement:
         assert event_service.active_connections == initial_count
 
     @pytest.mark.asyncio
-    async def test_enforces_max_connections_limit(self, mock_redis_pubsub):
+    async def test_enforces_max_connections_limit(
+        self, mock_redis_pubsub: tuple[MagicMock, MagicMock]
+    ) -> None:
         """Test that max connections limit is enforced."""
         from app.services.event_service import event_service
 
@@ -87,7 +100,7 @@ class TestEventServiceConnectionManagement:
 
         try:
             # Try to create a new connection when at max
-            stream = event_service.event_stream(channels=["download:updates"])
+            stream = event_service.event_stream(channels=["hermes:download:updates"])
 
             # First event should be error
             event = await anext(stream)
@@ -106,7 +119,9 @@ class TestEventServiceConnectionManagement:
             event_service.active_connections = 0
 
     @pytest.mark.asyncio
-    async def test_decrements_connection_on_error(self, mock_redis_pubsub):
+    async def test_decrements_connection_on_error(
+        self, mock_redis_pubsub: tuple[MagicMock, MagicMock]
+    ) -> None:
         """Test that connection count decrements when stream encounters error."""
         from app.services import redis_progress
         from app.services.event_service import event_service
@@ -114,7 +129,9 @@ class TestEventServiceConnectionManagement:
         initial_count = event_service.active_connections
 
         # Mock subscribe_to_channels to raise an error
-        async def mock_subscribe_error(channels):
+        async def mock_subscribe_error(
+            channels: list[str],
+        ) -> AsyncGenerator[None, None]:
             raise Exception("Redis connection failed")
             yield  # Never reached
 
@@ -123,7 +140,7 @@ class TestEventServiceConnectionManagement:
             "subscribe_to_channels",
             side_effect=mock_subscribe_error,
         ):
-            stream = event_service.event_stream(channels=["download:updates"])
+            stream = event_service.event_stream(channels=["hermes:download:updates"])
 
             try:
                 # Consume connected event
@@ -148,13 +165,15 @@ class TestEventServiceStreaming:
     """Test SSE event streaming functionality."""
 
     @pytest.mark.asyncio
-    async def test_sends_connected_event_on_start(self, mock_redis_pubsub):
+    async def test_sends_connected_event_on_start(
+        self, mock_redis_pubsub: tuple[MagicMock, MagicMock]
+    ) -> None:
         """Test that 'connected' event is sent when stream starts."""
         from app.services import redis_progress
         from app.services.event_service import event_service
 
         # Mock subscribe to stop immediately
-        async def mock_subscribe(channels):
+        async def mock_subscribe(channels: list[str]) -> AsyncGenerator[None, None]:
             return
             yield  # Never reached
 
@@ -163,7 +182,7 @@ class TestEventServiceStreaming:
             "subscribe_to_channels",
             side_effect=mock_subscribe,
         ):
-            stream = event_service.event_stream(channels=["download:updates"])
+            stream = event_service.event_stream(channels=["hermes:download:updates"])
 
             # First event should be connected
             event = await anext(stream)
@@ -176,13 +195,17 @@ class TestEventServiceStreaming:
             await stream.aclose()
 
     @pytest.mark.asyncio
-    async def test_streams_redis_events(self, mock_redis_pubsub):
+    async def test_streams_redis_events(
+        self, mock_redis_pubsub: tuple[MagicMock, MagicMock]
+    ) -> None:
         """Test that events from Redis are streamed to client."""
         from app.services import redis_progress
         from app.services.event_service import event_service
 
         # Mock subscribe_to_channels to yield test events
-        async def mock_subscribe(channels):
+        async def mock_subscribe(
+            channels: list[str],
+        ) -> AsyncGenerator[dict[str, object], None]:
             yield {
                 "type": "download_progress",
                 "data": {
@@ -201,7 +224,7 @@ class TestEventServiceStreaming:
             "subscribe_to_channels",
             side_effect=mock_subscribe,
         ):
-            stream = event_service.event_stream(channels=["download:updates"])
+            stream = event_service.event_stream(channels=["hermes:download:updates"])
 
             # Skip connected event
             await anext(stream)
@@ -222,13 +245,17 @@ class TestEventServiceStreaming:
             await stream.aclose()
 
     @pytest.mark.asyncio
-    async def test_handles_stream_cancellation(self, mock_redis_pubsub):
+    async def test_handles_stream_cancellation(
+        self, mock_redis_pubsub: tuple[MagicMock, MagicMock]
+    ) -> None:
         """Test that stream handles cancellation gracefully."""
         from app.services import redis_progress
         from app.services.event_service import event_service
 
         # Mock subscribe that never stops
-        async def mock_subscribe_infinite(channels):
+        async def mock_subscribe_infinite(
+            channels: list[str],
+        ) -> AsyncGenerator[dict[str, object], None]:
             while True:
                 await asyncio.sleep(0.01)
                 yield {
@@ -241,7 +268,7 @@ class TestEventServiceStreaming:
             "subscribe_to_channels",
             side_effect=mock_subscribe_infinite,
         ):
-            stream = event_service.event_stream(channels=["download:updates"])
+            stream = event_service.event_stream(channels=["hermes:download:updates"])
 
             # Get connected event
             await anext(stream)
@@ -257,13 +284,17 @@ class TestEventServiceFiltering:
     """Test event filtering functionality."""
 
     @pytest.mark.asyncio
-    async def test_filters_events_by_download_id(self, mock_redis_pubsub):
+    async def test_filters_events_by_download_id(
+        self, mock_redis_pubsub: tuple[MagicMock, MagicMock]
+    ) -> None:
         """Test that events are filtered by download_id."""
         from app.services import redis_progress
         from app.services.event_service import event_service
 
         # Mock subscribe to yield events with different download_ids
-        async def mock_subscribe(channels):
+        async def mock_subscribe(
+            channels: list[str],
+        ) -> AsyncGenerator[dict[str, object], None]:
             yield {
                 "type": "download_progress",
                 "data": {"download_id": "test-123", "progress": 50},
@@ -283,7 +314,7 @@ class TestEventServiceFiltering:
             side_effect=mock_subscribe,
         ):
             stream = event_service.event_stream(
-                channels=["download:updates"],
+                channels=["hermes:download:updates"],
                 filters={"download_id": "test-123"},
             )
 
@@ -305,13 +336,17 @@ class TestEventServiceFiltering:
             await stream.aclose()
 
     @pytest.mark.asyncio
-    async def test_filters_with_multiple_criteria(self, mock_redis_pubsub):
+    async def test_filters_with_multiple_criteria(
+        self, mock_redis_pubsub: tuple[MagicMock, MagicMock]
+    ) -> None:
         """Test filtering with multiple filter criteria."""
         from app.services import redis_progress
         from app.services.event_service import event_service
 
         # Mock subscribe to yield events with various attributes
-        async def mock_subscribe(channels):
+        async def mock_subscribe(
+            channels: list[str],
+        ) -> AsyncGenerator[dict[str, object], None]:
             yield {
                 "type": "download_progress",
                 "data": {
@@ -343,7 +378,7 @@ class TestEventServiceFiltering:
             side_effect=mock_subscribe,
         ):
             stream = event_service.event_stream(
-                channels=["download:updates"],
+                channels=["hermes:download:updates"],
                 filters={"download_id": "test-123", "status": "downloading"},
             )
 
@@ -364,13 +399,17 @@ class TestEventServiceFiltering:
             await stream.aclose()
 
     @pytest.mark.asyncio
-    async def test_no_filters_passes_all_events(self, mock_redis_pubsub):
+    async def test_no_filters_passes_all_events(
+        self, mock_redis_pubsub: tuple[MagicMock, MagicMock]
+    ) -> None:
         """Test that no filters allows all events through."""
         from app.services import redis_progress
         from app.services.event_service import event_service
 
         # Mock subscribe to yield various events
-        async def mock_subscribe(channels):
+        async def mock_subscribe(
+            channels: list[str],
+        ) -> AsyncGenerator[dict[str, object], None]:
             yield {"type": "event1", "data": {"id": 1}}
             yield {"type": "event2", "data": {"id": 2}}
             yield {"type": "event3", "data": {"id": 3}}
@@ -381,7 +420,7 @@ class TestEventServiceFiltering:
             side_effect=mock_subscribe,
         ):
             stream = event_service.event_stream(
-                channels=["download:updates"],
+                channels=["hermes:download:updates"],
                 filters=None,  # No filters
             )
 
@@ -405,14 +444,20 @@ class TestEventServiceHeartbeat:
     """Test heartbeat functionality."""
 
     @pytest.mark.asyncio
-    async def test_sends_heartbeat_after_interval(self, mock_redis_pubsub):
+    async def test_sends_heartbeat_after_interval(
+        self,
+        mock_redis_pubsub: tuple[MagicMock, MagicMock],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         """Test that heartbeats are sent at configured intervals."""
         from app.core import config
         from app.services import redis_progress
         from app.services.event_service import event_service
 
         # Mock subscribe that yields events quickly to allow heartbeat checks
-        async def mock_subscribe_with_events(channels):
+        async def mock_subscribe_with_events(
+            channels: list[str],
+        ) -> AsyncGenerator[dict[str, object], None]:
             # Yield events at short intervals to allow heartbeat logic to run
             for i in range(20):
                 await asyncio.sleep(0.1)  # Short delay between events
@@ -420,7 +465,9 @@ class TestEventServiceHeartbeat:
 
         # Patch heartbeat interval to be testable
         original_interval = config.settings.sse_heartbeat_interval
-        config.settings.sse_heartbeat_interval = 0.5  # 500ms for testing
+        monkeypatch.setattr(
+            config.settings, "sse_heartbeat_interval", 0.5
+        )  # 500ms for testing
 
         try:
             with patch.object(
@@ -428,7 +475,9 @@ class TestEventServiceHeartbeat:
                 "subscribe_to_channels",
                 side_effect=mock_subscribe_with_events,
             ):
-                stream = event_service.event_stream(channels=["download:updates"])
+                stream = event_service.event_stream(
+                    channels=["hermes:download:updates"]
+                )
 
                 # Skip connected event
                 await anext(stream)
@@ -456,13 +505,17 @@ class TestEventServiceErrorHandling:
     """Test error handling in event service."""
 
     @pytest.mark.asyncio
-    async def test_handles_redis_exception(self, mock_redis_pubsub):
+    async def test_handles_redis_exception(
+        self, mock_redis_pubsub: tuple[MagicMock, MagicMock]
+    ) -> None:
         """Test that Redis exceptions are handled gracefully."""
         from app.services import redis_progress
         from app.services.event_service import event_service
 
         # Mock subscribe to raise exception
-        async def mock_subscribe_error(channels):
+        async def mock_subscribe_error(
+            channels: list[str],
+        ) -> AsyncGenerator[None, None]:
             raise Exception("Redis connection lost")
             yield  # Never reached
 
@@ -471,7 +524,7 @@ class TestEventServiceErrorHandling:
             "subscribe_to_channels",
             side_effect=mock_subscribe_error,
         ):
-            stream = event_service.event_stream(channels=["download:updates"])
+            stream = event_service.event_stream(channels=["hermes:download:updates"])
 
             # Skip connected event
             await anext(stream)
@@ -486,13 +539,15 @@ class TestEventServiceErrorHandling:
             await stream.aclose()
 
     @pytest.mark.asyncio
-    async def test_generates_unique_connection_ids(self, mock_redis_pubsub):
+    async def test_generates_unique_connection_ids(
+        self, mock_redis_pubsub: tuple[MagicMock, MagicMock]
+    ) -> None:
         """Test that each connection gets a unique connection_id."""
         from app.services import redis_progress
         from app.services.event_service import event_service
 
         # Mock subscribe to stop immediately
-        async def mock_subscribe(channels):
+        async def mock_subscribe(channels: list[str]) -> AsyncGenerator[None, None]:
             return
             yield
 
@@ -505,7 +560,9 @@ class TestEventServiceErrorHandling:
         ):
             # Create multiple connections
             for _ in range(3):
-                stream = event_service.event_stream(channels=["download:updates"])
+                stream = event_service.event_stream(
+                    channels=["hermes:download:updates"]
+                )
                 event = await anext(stream)
                 data = json.loads(event["data"])
                 connection_ids.append(data["connection_id"])
@@ -521,7 +578,9 @@ class TestEventServiceDataIntegrity:
     """Test data formatting and integrity."""
 
     @pytest.mark.asyncio
-    async def test_data_is_json_serialized(self, mock_redis_pubsub):
+    async def test_data_is_json_serialized(
+        self, mock_redis_pubsub: tuple[MagicMock, MagicMock]
+    ) -> None:
         """Test that event data is properly JSON serialized."""
         from app.services import redis_progress
         from app.services.event_service import event_service
@@ -533,7 +592,9 @@ class TestEventServiceDataIntegrity:
             "nested": {"key": "value"},
         }
 
-        async def mock_subscribe(channels):
+        async def mock_subscribe(
+            channels: list[str],
+        ) -> AsyncGenerator[dict[str, object], None]:
             yield {"type": "download_progress", "data": test_data}
 
         with patch.object(
@@ -541,7 +602,7 @@ class TestEventServiceDataIntegrity:
             "subscribe_to_channels",
             side_effect=mock_subscribe,
         ):
-            stream = event_service.event_stream(channels=["download:updates"])
+            stream = event_service.event_stream(channels=["hermes:download:updates"])
 
             # Skip connected event
             await anext(stream)

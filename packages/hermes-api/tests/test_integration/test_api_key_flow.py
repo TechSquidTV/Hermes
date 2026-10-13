@@ -2,6 +2,16 @@
 Integration tests for API key functionality end-to-end.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.db.models import User
+
+
+from unittest.mock import Mock
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -12,13 +22,16 @@ class TestApiKeyIntegration:
     """Test API key integration with download system."""
 
     @pytest.fixture
-    def client(self):
+    def client(self, monkeypatch: pytest.MonkeyPatch) -> TestClient:
         """Test client fixture."""
+        from app.tasks.download_tasks import download_video_task
+
+        monkeypatch.setattr(download_video_task, "apply_async", Mock())
         return TestClient(app)
 
     async def test_api_key_full_lifecycle(
-        self, client: TestClient, test_user, auth_token
-    ):
+        self, client: TestClient, test_user: User, auth_token: str
+    ) -> None:
         """Test complete API key lifecycle: create, use, revoke."""
         # 1. Create API key
         create_response = client.post(
@@ -51,11 +64,11 @@ class TestApiKeyIntegration:
         download_response = client.post(
             "/api/v1/download",
             headers={"Authorization": f"Bearer {api_key}"},
-            json={"url": "https://youtube.com/watch?v=test"},
+            json={"url": "https://example.test/watch"},
         )
 
         # Should not fail with 401 (unauthorized) - API key should be accepted
-        assert download_response.status_code != 401
+        assert download_response.status_code == 200
 
         # 4. Revoke API key
         revoke_response = client.delete(
@@ -75,15 +88,15 @@ class TestApiKeyIntegration:
         # or mark them as inactive in the response
 
     async def test_jwt_token_vs_api_key_authentication(
-        self, client: TestClient, test_user, auth_token
-    ):
+        self, client: TestClient, test_user: User, auth_token: str
+    ) -> None:
         """Test that both JWT tokens and API keys work for authentication."""
         # Test 1: JWT token authentication (should work)
         jwt_response = client.get(
             "/api/v1/auth/me", headers={"Authorization": f"Bearer {auth_token}"}
         )
         # This should work with JWT tokens
-        assert jwt_response.status_code in [200, 401]  # 200 if user exists, 401 if not
+        assert jwt_response.status_code == 200
 
         # Test 2: API key authentication (should also work for some endpoints)
         # Create API key first
@@ -98,13 +111,13 @@ class TestApiKeyIntegration:
         api_key_response = client.post(
             "/api/v1/download",
             headers={"Authorization": f"Bearer {api_key}"},
-            json={"url": "https://youtube.com/watch?v=test"},
+            json={"url": "https://example.test/watch"},
         )
-        assert api_key_response.status_code != 401
+        assert api_key_response.status_code == 200
 
     async def test_multiple_users_api_key_isolation(
-        self, client: TestClient, test_user, auth_token
-    ):
+        self, client: TestClient, test_user: User, auth_token: str
+    ) -> None:
         """Test that multiple users have isolated API keys."""
         # Create API key for first user
         create_response1 = client.post(

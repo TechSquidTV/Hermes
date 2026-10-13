@@ -4,7 +4,7 @@ Logging configuration for the Hermes API.
 
 import logging
 import sys
-from typing import Any, Dict
+from typing import cast
 
 import structlog
 
@@ -47,12 +47,12 @@ def setup_logging(debug: bool = False) -> None:
 
 def get_logger(name: str) -> structlog.stdlib.BoundLogger:
     """Get a structured logger instance."""
-    return structlog.get_logger(name)
+    return cast(structlog.stdlib.BoundLogger, structlog.get_logger(name))
 
 
 # Convenience functions for common logging patterns
 def log_request(
-    logger: structlog.stdlib.BoundLogger, method: str, path: str, **kwargs
+    logger: structlog.stdlib.BoundLogger, method: str, path: str, **kwargs: object
 ) -> None:
     """Log an incoming request."""
     logger.info("Request received", method=method, path=path, **kwargs)
@@ -64,7 +64,7 @@ def log_response(
     path: str,
     status_code: int,
     duration_ms: float,
-    **kwargs,
+    **kwargs: object,
 ) -> None:
     """Log a response."""
     logger.info(
@@ -80,7 +80,7 @@ def log_response(
 def log_error(
     logger: structlog.stdlib.BoundLogger,
     error: Exception,
-    context: Dict[str, Any] = None,
+    context: dict[str, object] | None = None,
 ) -> None:
     """Log an error with context."""
     context = context or {}

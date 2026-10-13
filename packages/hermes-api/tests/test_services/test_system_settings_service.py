@@ -2,6 +2,16 @@
 Tests for system settings service.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from unittest.mock import AsyncMock
+
+    from app.services.system_settings_service import SystemSettingsService
+
+
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -12,13 +22,13 @@ from app.services.system_settings_service import SystemSettingsService
 
 
 @pytest.fixture
-def mock_settings_repo():
+def mock_settings_repo() -> AsyncMock:
     """Mock SystemSettingsRepository for tests."""
     return MagicMock()
 
 
 @pytest.fixture
-def service():
+def service() -> SystemSettingsService:
     """Create a fresh service instance for each test."""
     return SystemSettingsService()
 
@@ -28,8 +38,8 @@ class TestSystemSettingsServiceCaching:
     """Test caching behavior of the system settings service."""
 
     async def test_get_allow_public_signup_uses_cache(
-        self, service, mock_settings_repo
-    ):
+        self, service: SystemSettingsService, mock_settings_repo: AsyncMock
+    ) -> None:
         """Test that cached values are returned without DB calls."""
         # Setup
         settings_obj = SystemSettings(
@@ -60,7 +70,9 @@ class TestSystemSettingsServiceCaching:
                     mock_settings_repo.get_settings.call_count == 1
                 )  # Not called again
 
-    async def test_cache_invalidation_on_update(self, service, mock_settings_repo):
+    async def test_cache_invalidation_on_update(
+        self, service: SystemSettingsService, mock_settings_repo: AsyncMock
+    ) -> None:
         """Test that cache is invalidated when settings are updated."""
         settings_obj = SystemSettings(
             id=1,
@@ -88,7 +100,9 @@ class TestSystemSettingsServiceCaching:
                 assert service._cache is None
                 assert service._cache_timestamp is None
 
-    async def test_fallback_to_env_var_on_db_failure(self, service):
+    async def test_fallback_to_env_var_on_db_failure(
+        self, service: SystemSettingsService
+    ) -> None:
         """Test fallback to environment variable when DB is unavailable."""
         with patch(
             "app.services.system_settings_service.async_session_maker"
@@ -113,8 +127,8 @@ class TestSystemSettingsServiceUpdate:
     """Test update operations."""
 
     async def test_update_allow_public_signup_success(
-        self, service, mock_settings_repo
-    ):
+        self, service: SystemSettingsService, mock_settings_repo: AsyncMock
+    ) -> None:
         """Test successful signup setting update."""
         updated_obj = SystemSettings(
             id=1,
@@ -144,7 +158,9 @@ class TestSystemSettingsServiceUpdate:
                     False, "admin123"
                 )
 
-    async def test_update_raises_on_db_error(self, service, mock_settings_repo):
+    async def test_update_raises_on_db_error(
+        self, service: SystemSettingsService, mock_settings_repo: AsyncMock
+    ) -> None:
         """Test that update raises exception on DB error."""
         mock_settings_repo.update_allow_public_signup = AsyncMock(
             side_effect=Exception("DB error")
@@ -167,7 +183,9 @@ class TestSystemSettingsServiceUpdate:
 class TestSystemSettingsServiceGetAll:
     """Test getting all settings."""
 
-    async def test_get_all_settings_from_db(self, service, mock_settings_repo):
+    async def test_get_all_settings_from_db(
+        self, service: SystemSettingsService, mock_settings_repo: AsyncMock
+    ) -> None:
         """Test getting all settings from database."""
         settings_obj = SystemSettings(
             id=1,
@@ -192,7 +210,9 @@ class TestSystemSettingsServiceGetAll:
                 assert result["updated_by_user_id"] == "admin123"
                 assert result["updated_at"] is not None
 
-    async def test_get_all_settings_fallback_to_env(self, service):
+    async def test_get_all_settings_fallback_to_env(
+        self, service: SystemSettingsService
+    ) -> None:
         """Test fallback to environment variables when DB fails."""
         with patch(
             "app.services.system_settings_service.async_session_maker"

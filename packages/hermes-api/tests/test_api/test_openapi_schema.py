@@ -4,13 +4,15 @@ Tests for OpenAPI schema validation.
 Ensures that all API models follow the camelCase convention for JSON fields.
 """
 
+from __future__ import annotations
+
 import pytest
 
 
 class TestOpenAPISchema:
     """Test OpenAPI schema conventions."""
 
-    def _find_snake_case_fields(self, node, path="schema"):
+    def _find_snake_case_fields(self, node: object, path: str = "schema") -> list[str]:
         """Find snake_case property names anywhere in an OpenAPI schema node."""
         errors = []
 
@@ -39,7 +41,7 @@ class TestOpenAPISchema:
         return errors
 
     @pytest.mark.asyncio
-    async def test_all_fields_use_camelcase(self):
+    async def test_all_fields_use_camelcase(self) -> None:
         """Test that all OpenAPI schema fields use camelCase (not snake_case)."""
         from app.main import app
 
@@ -101,7 +103,7 @@ class TestOpenAPISchema:
             )
 
     @pytest.mark.asyncio
-    async def test_standard_error_responses_use_error_response_schema(self):
+    async def test_standard_error_responses_use_error_response_schema(self) -> None:
         """Common HTTP errors should document the runtime ErrorResponse wrapper."""
         from app.main import STANDARD_ERROR_RESPONSES, app
 

@@ -4,6 +4,19 @@ These tests mock external boundaries (yt-dlp, Redis, webhooks, and database
 writes) so they exercise Hermes' own task state machine and data shaping.
 """
 
+from __future__ import annotations
+
+import time
+from collections.abc import Coroutine
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+
 import asyncio
 import os
 from unittest.mock import AsyncMock, Mock, call, patch
@@ -14,23 +27,23 @@ from yt_dlp.utils import DownloadError
 from app.tasks import download_tasks
 
 
-def test_sanitize_filename_removes_invalid_characters_and_normalizes_spaces():
+def test_sanitize_filename_removes_invalid_characters_and_normalizes_spaces() -> None:
     assert (
         download_tasks.sanitize_filename(' My <Great>: "Video" / Part 1?.mp4 ')
         == "My_Great_Video_Part_1.mp4"
     )
 
 
-def test_sanitize_filename_returns_default_for_empty_result():
+def test_sanitize_filename_returns_default_for_empty_result() -> None:
     assert download_tasks.sanitize_filename(' <>:"/\\|?* .. ') == "video"
 
 
-def test_sanitize_filename_limits_very_long_names():
+def test_sanitize_filename_limits_very_long_names() -> None:
     assert len(download_tasks.sanitize_filename("a" * 250)) == 200
 
 
 @pytest.mark.asyncio
-async def test_publish_sse_progress_shapes_download_status_payload():
+async def test_publish_sse_progress_shapes_download_status_payload() -> None:
     mock_progress_service = AsyncMock()
 
     with patch.object(download_tasks, "redis_progress_service", mock_progress_service):
@@ -64,7 +77,7 @@ async def test_publish_sse_progress_shapes_download_status_payload():
 
 
 @pytest.mark.asyncio
-async def test_publish_sse_progress_keeps_zero_percent_message():
+async def test_publish_sse_progress_keeps_zero_percent_message() -> None:
     mock_progress_service = AsyncMock()
 
     with patch.object(download_tasks, "redis_progress_service", mock_progress_service):
@@ -85,8 +98,8 @@ async def test_publish_sse_progress_keeps_zero_percent_message():
 
 @pytest.mark.asyncio
 async def test_update_download_status_publishes_cached_db_progress_for_active_status(
-    db_session,
-):
+    db_session: AsyncSession,
+) -> None:
     from app.db.repositories import DownloadRepository
 
     repo = DownloadRepository(db_session)
@@ -134,8 +147,8 @@ async def test_update_download_status_publishes_cached_db_progress_for_active_st
 @pytest.mark.asyncio
 @pytest.mark.parametrize("extension", ["mp4", "m4a", "opus", ""])
 async def test_download_video_task_success_updates_metadata_and_cleans_up(
-    tmp_path, extension
-):
+    tmp_path: Path, extension: str
+) -> None:
     filename = f"Dangerous_Title.{extension}" if extension else "Dangerous_Title"
     download_file = tmp_path / filename
     yt_service = AsyncMock()
@@ -148,10 +161,16 @@ async def test_download_video_task_success_updates_metadata_and_cleans_up(
     }
 
     async def fake_download_video(
-        url, output_path, format_spec, progress_callback=None, **kwargs
-    ):
+        url: str,
+        output_path: str,
+        format_spec: str,
+        progress_callback: Callable[[dict[str, object]], None] | None = None,
+        **kwargs: object,
+    ) -> str:
         assert url == "https://example.test/watch"
-        assert output_path == os.path.join(str(tmp_path), "Dangerous_Title.%(ext)s")
+        assert output_path == os.path.join(
+            str(tmp_path), "download-123_Dangerous_Title.%(ext)s"
+        )
         assert format_spec == "bestvideo+bestaudio"
         assert kwargs == {"merge_output_format": "mp4"}
         download_file.write_bytes(b"video")
@@ -227,6 +246,7 @@ async def test_download_video_task_success_updates_metadata_and_cleans_up(
     }
 
     create_history.assert_awaited_once()
+    assert create_history.await_args is not None
     assert create_history.await_args.kwargs["download_id"] == "download-123"
     assert create_history.await_args.kwargs["status"] == "completed"
     assert create_history.await_args.kwargs["file_size"] == 5
@@ -251,7 +271,7 @@ async def test_download_video_task_success_updates_metadata_and_cleans_up(
 
 
 @pytest.mark.asyncio
-async def test_download_video_task_extract_failure_marks_failed_and_cleans_up():
+async def test_download_video_task_extract_failure_marks_failed_and_cleans_up() -> None:
     yt_service = AsyncMock()
     yt_service.extract_info.return_value = None
 
@@ -276,26 +296,30 @@ async def test_download_video_task_extract_failure_marks_failed_and_cleans_up():
     assert result == {
         "success": False,
         "download_id": "download-123",
-        "error": "Failed to extract video information",
+        "error": "Download failed; see server logs for details",
     }
     yt_service.download_video.assert_not_awaited()
 
     failed_call = update_status.await_args_list[-1]
     assert failed_call.args == ("download-123", "failed")
-    assert failed_call.kwargs["error_message"] == "Failed to extract video information"
+    assert (
+        failed_call.kwargs["error_message"]
+        == "Download failed; see server logs for details"
+    )
 
     create_history.assert_awaited_once()
+    assert create_history.await_args is not None
     assert create_history.await_args.kwargs["status"] == "failed"
     assert (
         create_history.await_args.kwargs["error_message"]
-        == "Failed to extract video information"
+        == "Download failed; see server logs for details"
     )
     assert trigger_webhooks.await_args_list[-1] == call(
         "download_failed",
         "download-123",
         {
             "url": "https://example.test/watch",
-            "error": "Failed to extract video information",
+            "error": "Download failed; see server logs for details",
         },
     )
     redis_progress_service.delete_progress.assert_awaited_once_with("download-123")
@@ -305,7 +329,9 @@ async def test_download_video_task_extract_failure_marks_failed_and_cleans_up():
 
 
 @pytest.mark.asyncio
-async def test_download_video_task_uses_output_template_and_forwarded_options(tmp_path):
+async def test_download_video_task_uses_output_template_and_forwarded_options(
+    tmp_path: Path,
+) -> None:
     download_file = tmp_path / "custom-name.mp4"
     yt_service = AsyncMock()
     yt_service.extract_info.return_value = {
@@ -314,9 +340,15 @@ async def test_download_video_task_uses_output_template_and_forwarded_options(tm
     }
 
     async def fake_download_video(
-        url, output_path, format_spec, progress_callback=None, **kwargs
-    ):
-        assert output_path == os.path.join(str(tmp_path), "custom-name.%(ext)s")
+        url: str,
+        output_path: str,
+        format_spec: str,
+        progress_callback: Callable[[dict[str, object]], None] | None = None,
+        **kwargs: object,
+    ) -> str:
+        assert output_path == os.path.join(
+            str(tmp_path), "download-123_custom-name.%(ext)s"
+        )
         assert kwargs == {
             "writesubtitles": True,
             "writethumbnail": True,
@@ -357,8 +389,8 @@ async def test_download_video_task_uses_output_template_and_forwarded_options(tm
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failure", ["missing_file", "format_unavailable"])
 async def test_download_video_task_failure_preserves_error_and_cleans_up(
-    tmp_path, failure
-):
+    tmp_path: Path, failure: str
+) -> None:
     yt_service = AsyncMock()
     yt_service.extract_info.return_value = {"title": "Missing File"}
     error_message = "Downloaded file is missing"
@@ -389,26 +421,35 @@ async def test_download_video_task_failure_preserves_error_and_cleans_up(
     assert result == {
         "success": False,
         "download_id": "download-123",
-        "error": error_message,
+        "error": "Download failed; see server logs for details",
     }
     failed_call = update_status.await_args_list[-1]
     assert failed_call.args == ("download-123", "failed")
-    assert failed_call.kwargs["error_message"] == error_message
+    assert (
+        failed_call.kwargs["error_message"]
+        == "Download failed; see server logs for details"
+    )
+    assert create_history.await_args is not None
     assert create_history.await_args.kwargs["status"] == "failed"
-    assert create_history.await_args.kwargs["error_message"] == error_message
+    assert (
+        create_history.await_args.kwargs["error_message"]
+        == "Download failed; see server logs for details"
+    )
     assert trigger_webhooks.await_args_list[-1] == call(
         "download_failed",
         "download-123",
         {
             "url": "https://example.test/watch",
-            "error": error_message,
+            "error": "Download failed; see server logs for details",
         },
     )
     redis_progress_service.delete_progress.assert_awaited_once_with("download-123")
 
 
 @pytest.mark.asyncio
-async def test_download_progress_hook_normalizes_progress_and_keeps_metadata(tmp_path):
+async def test_download_progress_hook_normalizes_progress_and_keeps_metadata(
+    tmp_path: Path,
+) -> None:
     download_file = tmp_path / "Progress_Video.mp4"
     scheduled_coroutines = []
     yt_service = AsyncMock()
@@ -421,8 +462,12 @@ async def test_download_progress_hook_normalizes_progress_and_keeps_metadata(tmp
     }
 
     async def fake_download_video(
-        url, output_path, format_spec, progress_callback=None, **kwargs
-    ):
+        url: str,
+        output_path: str,
+        format_spec: str,
+        progress_callback: Callable[[dict[str, object]], None] | None = None,
+        **kwargs: object,
+    ) -> str:
         assert progress_callback is not None
         progress_callback(
             {
@@ -445,7 +490,9 @@ async def test_download_progress_hook_normalizes_progress_and_keeps_metadata(tmp
         download_file.write_bytes(b"video")
         return str(download_file)
 
-    def fake_run_coroutine_threadsafe(coro, loop):
+    def fake_run_coroutine_threadsafe(
+        coro: Coroutine[object, object, object], loop: asyncio.AbstractEventLoop
+    ) -> Mock:
         scheduled_coroutines.append(coro)
         coro.close()
         return Mock()
@@ -471,7 +518,7 @@ async def test_download_progress_hook_normalizes_progress_and_keeps_metadata(tmp
             "run_coroutine_threadsafe",
             side_effect=fake_run_coroutine_threadsafe,
         ),
-        patch.object(download_tasks.time, "time", side_effect=[10.0, 12.5]),
+        patch.object(time, "time", side_effect=[10.0, 12.5]),
     ):
         result = await download_tasks._download_video_task(
             download_id="download-123",
@@ -506,75 +553,3 @@ async def test_download_progress_hook_normalizes_progress_and_keeps_metadata(tmp
     assert second_progress["progress"]["percentage"] == 50.0
     assert second_progress["progress"]["speed"] == 8.5
     assert second_progress["progress"]["eta"] == 2.5
-
-
-@pytest.mark.asyncio
-async def test_batch_download_task_aggregates_results_and_triggers_webhooks():
-    download_task = AsyncMock(
-        side_effect=[
-            {"success": True, "download_id": "download-1", "file_size": 100},
-            {"success": False, "download_id": "download-2", "error": "failed"},
-        ]
-    )
-    trigger_webhooks = AsyncMock()
-
-    with (
-        patch.object(download_tasks, "_download_video_task", download_task),
-        patch.object(download_tasks, "_trigger_webhooks", trigger_webhooks),
-    ):
-        result = await download_tasks._batch_download_task(
-            download_ids=["download-1", "download-2"],
-            urls=["https://example.test/one", "https://example.test/two"],
-            format_spec="best",
-            output_directory="/downloads/batch",
-            write_thumbnail=True,
-        )
-
-    assert result == {
-        "batch_id": "batch_2_urls",
-        "total_downloads": 2,
-        "successful_downloads": 1,
-        "results": [
-            {"success": True, "download_id": "download-1", "file_size": 100},
-            {"success": False, "download_id": "download-2", "error": "failed"},
-        ],
-    }
-    assert download_task.await_args_list == [
-        call(
-            download_id="download-1",
-            url="https://example.test/one",
-            format_spec="best",
-            output_path="/downloads/batch",
-            write_thumbnail=True,
-        ),
-        call(
-            download_id="download-2",
-            url="https://example.test/two",
-            format_spec="best",
-            output_path="/downloads/batch",
-            write_thumbnail=True,
-        ),
-    ]
-    assert trigger_webhooks.await_args_list == [
-        call(
-            "batch_download_started",
-            "batch_2_urls",
-            {
-                "urls": ["https://example.test/one", "https://example.test/two"],
-                "total_videos": 2,
-            },
-        ),
-        call(
-            "batch_download_completed",
-            "batch_2_urls",
-            {
-                "total_videos": 2,
-                "successful_downloads": 1,
-                "failed_downloads": 1,
-                "results": [
-                    {"success": True, "download_id": "download-1", "file_size": 100},
-                    {"success": False, "download_id": "download-2", "error": "failed"},
-                ],
-            },
-        ),
-    ]

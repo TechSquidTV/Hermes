@@ -2,6 +2,17 @@
 Tests for SSE events endpoints and token authentication.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
+    from unittest.mock import AsyncMock
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -10,7 +21,7 @@ from httpx import AsyncClient
 
 
 @pytest_asyncio.fixture(autouse=True)
-async def mock_redis_for_sse():
+async def mock_redis_for_sse() -> AsyncGenerator[MagicMock, None]:
     """Mock Redis for SSE token tests to avoid requiring running Redis instance."""
     from app.services import redis_progress
 
@@ -23,7 +34,7 @@ async def mock_redis_for_sse():
     mock_redis.connection_pool = MagicMock()  # Prevent reconnection attempts
 
     # Mock get_async_redis to return our mock without connecting
-    async def mock_get_async_redis():
+    async def mock_get_async_redis() -> MagicMock:
         return mock_redis
 
     # Patch the get_async_redis method
@@ -41,8 +52,8 @@ class TestSSETokenEndpoint:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("scope", ["queue", "stats", "system"])
     async def test_create_token_for_each_global_scope(
-        self, client: AsyncClient, mock_redis_for_sse, scope: str
-    ):
+        self, client: AsyncClient, mock_redis_for_sse: MagicMock, scope: str
+    ) -> None:
         response = await client.post(
             "/api/v1/events/token", json={"scope": scope, "ttl": 600}
         )
@@ -52,14 +63,14 @@ class TestSSETokenEndpoint:
         mock_redis_for_sse.setex.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_create_token_requires_auth(self, client: AsyncClient):
+    async def test_create_token_requires_auth(self, client: AsyncClient) -> None:
         """Test that token creation requires authentication."""
         # Clear auth override to test actual auth
         from app.core.security import get_current_principal
         from app.main import app
 
         # Override with a function that raises 401
-        async def mock_no_auth():
+        async def mock_no_auth() -> None:
             from fastapi import HTTPException, status
 
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
@@ -74,7 +85,7 @@ class TestSSETokenEndpoint:
         assert response.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_create_token_download_scope(self, client: AsyncClient):
+    async def test_create_token_download_scope(self, client: AsyncClient) -> None:
         """Test creating token with download:ID scope format.
 
         Note: This test now returns 404 because the security fix requires
@@ -93,7 +104,7 @@ class TestSSETokenEndpoint:
         assert "not found" in error_message
 
     @pytest.mark.asyncio
-    async def test_create_token_queue_scope(self, client: AsyncClient):
+    async def test_create_token_queue_scope(self, client: AsyncClient) -> None:
         """Test creating token with queue scope."""
         response = await client.post(
             "/api/v1/events/token", json={"scope": "queue", "ttl": 300}
@@ -106,7 +117,7 @@ class TestSSETokenEndpoint:
         assert data["token"].startswith("sse_")
 
     @pytest.mark.asyncio
-    async def test_create_token_system_scope(self, client: AsyncClient):
+    async def test_create_token_system_scope(self, client: AsyncClient) -> None:
         """Test creating token with system scope."""
         response = await client.post(
             "/api/v1/events/token", json={"scope": "system", "ttl": 600}
@@ -117,7 +128,7 @@ class TestSSETokenEndpoint:
         assert data["scope"] == "system"
 
     @pytest.mark.asyncio
-    async def test_create_token_invalid_scope_format(self, client: AsyncClient):
+    async def test_create_token_invalid_scope_format(self, client: AsyncClient) -> None:
         """Test that invalid scope format returns 400."""
         response = await client.post(
             "/api/v1/events/token", json={"scope": "invalid:scope:format", "ttl": 600}
@@ -130,7 +141,7 @@ class TestSSETokenEndpoint:
         assert "Invalid scope format" in error_message
 
     @pytest.mark.asyncio
-    async def test_create_token_empty_download_id(self, client: AsyncClient):
+    async def test_create_token_empty_download_id(self, client: AsyncClient) -> None:
         """Test that download: without ID returns 400."""
         response = await client.post(
             "/api/v1/events/token", json={"scope": "download:", "ttl": 600}
@@ -139,7 +150,7 @@ class TestSSETokenEndpoint:
         assert response.status_code == 400
 
     @pytest.mark.asyncio
-    async def test_create_token_ttl_too_low(self, client: AsyncClient):
+    async def test_create_token_ttl_too_low(self, client: AsyncClient) -> None:
         """Test that TTL below 60s is rejected."""
         response = await client.post(
             "/api/v1/events/token", json={"scope": "queue", "ttl": 30}
@@ -150,7 +161,7 @@ class TestSSETokenEndpoint:
         assert "greater than or equal to 60" in str(data)
 
     @pytest.mark.asyncio
-    async def test_create_token_ttl_too_high(self, client: AsyncClient):
+    async def test_create_token_ttl_too_high(self, client: AsyncClient) -> None:
         """Test that TTL above 3600s is rejected."""
         response = await client.post(
             "/api/v1/events/token", json={"scope": "queue", "ttl": 7200}
@@ -161,7 +172,7 @@ class TestSSETokenEndpoint:
         assert "less than or equal to 3600" in str(data)
 
     @pytest.mark.asyncio
-    async def test_create_token_default_ttl(self, client: AsyncClient):
+    async def test_create_token_default_ttl(self, client: AsyncClient) -> None:
         """Test that default TTL is 300s (5 minutes)."""
         response = await client.post(
             "/api/v1/events/token", json={"scope": "queue"}  # No TTL specified
@@ -173,8 +184,8 @@ class TestSSETokenEndpoint:
 
     @pytest.mark.asyncio
     async def test_create_token_stored_in_redis(
-        self, client: AsyncClient, mock_redis_for_sse
-    ):
+        self, client: AsyncClient, mock_redis_for_sse: MagicMock
+    ) -> None:
         """Test that created token is stored in Redis (via mock)."""
         response = await client.post(
             "/api/v1/events/token", json={"scope": "queue", "ttl": 600}
@@ -189,12 +200,14 @@ class TestSSETokenEndpoint:
         call_args = mock_redis_for_sse.setex.call_args
 
         # Verify correct key format
-        assert call_args[0][0] == f"sse:token:{token}"
+        assert call_args[0][0] == f"hermes:sse:token:{token}"
         # Verify TTL
         assert call_args[0][1] == 600
 
     @pytest.mark.asyncio
-    async def test_create_token_redis_failure_returns_500(self, client: AsyncClient):
+    async def test_create_token_redis_failure_returns_500(
+        self, client: AsyncClient
+    ) -> None:
         """Test that Redis failure returns 500 error."""
         from app.services import redis_progress
 
@@ -211,14 +224,14 @@ class TestSSETokenEndpoint:
             assert response.status_code == 500
             data = response.json()
             error_message = data.get("detail") or str(data)
-            assert "Failed to create SSE token" in error_message
+            assert "An internal server error occurred" in error_message
 
 
 class TestSSEEndpointTokenAuth:
     """Test SSE endpoints with token authentication."""
 
     @pytest.mark.asyncio
-    async def test_download_sse_requires_token(self, client: AsyncClient):
+    async def test_download_sse_requires_token(self, client: AsyncClient) -> None:
         """Test that /events/downloads/{id} requires SSE token."""
         response = await client.get("/api/v1/events/downloads/test-123")
 
@@ -228,7 +241,9 @@ class TestSSEEndpointTokenAuth:
         assert "SSE token required" in error_message or "token" in error_message.lower()
 
     @pytest.mark.asyncio
-    async def test_download_sse_with_invalid_token_format(self, client: AsyncClient):
+    async def test_download_sse_with_invalid_token_format(
+        self, client: AsyncClient
+    ) -> None:
         """Test that invalid token format is rejected."""
         # Token that doesn't start with "sse_"
         response = await client.get(
@@ -244,7 +259,9 @@ class TestSSEEndpointTokenAuth:
         )
 
     @pytest.mark.asyncio
-    async def test_download_sse_with_nonexistent_token(self, client: AsyncClient):
+    async def test_download_sse_with_nonexistent_token(
+        self, client: AsyncClient
+    ) -> None:
         """Test that non-existent token is rejected."""
         response = await client.get(
             "/api/v1/events/downloads/test-123?token=sse_nonexistent123"
@@ -257,8 +274,8 @@ class TestSSEEndpointTokenAuth:
 
     @pytest.mark.asyncio
     async def test_download_sse_wrong_scope(
-        self, client: AsyncClient, mock_redis_for_sse
-    ):
+        self, client: AsyncClient, mock_redis_for_sse: MagicMock
+    ) -> None:
         """Test that token scope must match download_id."""
         import json
         from datetime import datetime, timedelta, timezone
@@ -285,7 +302,7 @@ class TestSSEEndpointTokenAuth:
         assert "Insufficient scope" in error_message or "scope" in error_message.lower()
 
     @pytest.mark.asyncio
-    async def test_queue_sse_requires_token(self, client: AsyncClient):
+    async def test_queue_sse_requires_token(self, client: AsyncClient) -> None:
         """Test that /events/queue requires SSE token."""
         response = await client.get("/api/v1/events/queue")
 
@@ -296,8 +313,8 @@ class TestSSEEndpointTokenAuth:
 
     @pytest.mark.asyncio
     async def test_queue_sse_requires_queue_scope(
-        self, client: AsyncClient, mock_redis_for_sse
-    ):
+        self, client: AsyncClient, mock_redis_for_sse: MagicMock
+    ) -> None:
         """Test that queue endpoint requires queue-scoped token."""
         import json
         from datetime import datetime, timedelta, timezone
@@ -329,8 +346,8 @@ class TestSSEStreamingFunctionality:
 
     @pytest.mark.asyncio
     async def test_stream_endpoint_with_valid_token(
-        self, client: AsyncClient, mock_redis_for_sse
-    ):
+        self, client: AsyncClient, mock_redis_for_sse: MagicMock
+    ) -> None:
         """Test connecting to /events/stream with valid SSE token."""
         import json
         from datetime import datetime, timedelta, timezone
@@ -349,7 +366,9 @@ class TestSSEStreamingFunctionality:
         # Mock event stream to return quickly
         from app.services import event_service
 
-        async def mock_event_stream(channels, filters=None):
+        async def mock_event_stream(
+            channels: list[str], filters: dict[str, object] | None = None
+        ) -> AsyncGenerator[dict[str, object], None]:
             # Return a simple connected event
             yield {
                 "event": "connected",
@@ -367,14 +386,18 @@ class TestSSEStreamingFunctionality:
             pass
 
     @pytest.mark.asyncio
-    async def test_stream_receives_published_events(self, mock_redis_for_sse):
+    async def test_stream_receives_published_events(
+        self, mock_redis_for_sse: MagicMock
+    ) -> None:
         """Test that published events are received through SSE stream."""
         import json
 
         from app.services import redis_progress
 
         # Mock Redis pub/sub to yield test events
-        async def mock_subscribe(channels):
+        async def mock_subscribe(
+            channels: list[str],
+        ) -> AsyncGenerator[dict[str, object], None]:
             yield {
                 "type": "download_progress",
                 "data": {"download_id": "test-123", "progress": 50},
@@ -394,7 +417,7 @@ class TestSSEStreamingFunctionality:
             # Consume events from stream
             events = []
             stream = event_service.event_stream(
-                channels=["download:updates", "queue:updates"]
+                channels=["hermes:download:updates", "hermes:queue:updates"]
             )
 
             # Get connected event
@@ -420,14 +443,18 @@ class TestSSEStreamingFunctionality:
             assert len(events) == 2
 
     @pytest.mark.asyncio
-    async def test_stream_filters_by_download_id(self, mock_redis_for_sse):
+    async def test_stream_filters_by_download_id(
+        self, mock_redis_for_sse: MagicMock
+    ) -> None:
         """Test that stream correctly filters events by download_id."""
         import json
 
         from app.services import redis_progress
 
         # Mock Redis pub/sub to yield events for different downloads
-        async def mock_subscribe(channels):
+        async def mock_subscribe(
+            channels: list[str],
+        ) -> AsyncGenerator[dict[str, object], None]:
             yield {
                 "type": "download_progress",
                 "data": {"download_id": "target-123", "progress": 25},
@@ -450,7 +477,8 @@ class TestSSEStreamingFunctionality:
 
             # Stream with filter for target-123
             stream = event_service.event_stream(
-                channels=["download:updates"], filters={"download_id": "target-123"}
+                channels=["hermes:download:updates"],
+                filters={"download_id": "target-123"},
             )
 
             # Skip connected event
@@ -471,16 +499,20 @@ class TestSSEStreamingFunctionality:
             await stream.aclose()
 
     @pytest.mark.asyncio
-    async def test_stream_handles_multiple_channels(self, mock_redis_for_sse):
+    async def test_stream_handles_multiple_channels(
+        self, mock_redis_for_sse: MagicMock
+    ) -> None:
         """Test subscribing to multiple channels simultaneously."""
         from app.services import redis_progress
 
         # Mock Redis pub/sub to yield events from different channels
-        async def mock_subscribe(channels):
+        async def mock_subscribe(
+            channels: list[str],
+        ) -> AsyncGenerator[dict[str, object], None]:
             # Verify correct channels were requested
-            assert "download:updates" in channels
-            assert "queue:updates" in channels
-            assert "system:notifications" in channels
+            assert "hermes:download:updates" in channels
+            assert "hermes:queue:updates" in channels
+            assert "hermes:system:notifications" in channels
 
             yield {
                 "type": "download_progress",
@@ -503,7 +535,11 @@ class TestSSEStreamingFunctionality:
             from app.services.event_service import event_service
 
             stream = event_service.event_stream(
-                channels=["download:updates", "queue:updates", "system:notifications"]
+                channels=[
+                    "hermes:download:updates",
+                    "hermes:queue:updates",
+                    "hermes:system:notifications",
+                ]
             )
 
             # Skip connected event
@@ -523,12 +559,14 @@ class TestSSEStreamingFunctionality:
             assert "system_notification" in event_types
 
     @pytest.mark.asyncio
-    async def test_download_endpoint_enforces_scope(self, mock_redis_for_sse):
+    async def test_download_endpoint_enforces_scope(
+        self, mock_redis_for_sse: MagicMock
+    ) -> None:
         """Test that download endpoint enforces download-scoped tokens."""
         import json
 
         # Mock token validation to check scope
-        async def mock_validate(token, expected_scope):
+        async def mock_validate(token: str, expected_scope: str) -> dict[str, object]:
             # Should be called with download:test-123 scope
             assert expected_scope == "download:test-123"
             return {
@@ -547,8 +585,10 @@ class TestSSEStreamingFunctionality:
             # Mock the event stream
             from app.services import event_service
 
-            async def mock_stream(channels, filters):
-                assert channels == ["download:updates"]
+            async def mock_stream(
+                channels: list[str], filters: dict[str, object] | None
+            ) -> AsyncGenerator[dict[str, object], None]:
+                assert channels == ["hermes:download:updates"]
                 assert filters == {"download_id": "test-123"}
                 yield {
                     "event": "connected",
@@ -571,12 +611,14 @@ class TestSSEStreamingFunctionality:
                 assert isinstance(response, EventSourceResponse)
 
     @pytest.mark.asyncio
-    async def test_queue_endpoint_enforces_queue_scope(self, mock_redis_for_sse):
+    async def test_queue_endpoint_enforces_queue_scope(
+        self, mock_redis_for_sse: MagicMock
+    ) -> None:
         """Test that queue endpoint enforces queue-scoped tokens."""
         import json
 
         # Mock token validation to check scope
-        async def mock_validate(token, expected_scope):
+        async def mock_validate(token: str, expected_scope: str) -> dict[str, object]:
             # Should be called with queue scope
             assert expected_scope == "queue"
             return {
@@ -592,8 +634,10 @@ class TestSSEStreamingFunctionality:
             from app.api.v1.endpoints.events import queue_events
             from app.services import event_service
 
-            async def mock_stream(channels, filters=None):
-                assert channels == ["queue:updates"]
+            async def mock_stream(
+                channels: list[str], filters: dict[str, object] | None = None
+            ) -> AsyncGenerator[dict[str, object], None]:
+                assert channels == ["hermes:queue:updates"]
                 yield {
                     "event": "connected",
                     "data": json.dumps({"connection_id": "test"}),
@@ -610,7 +654,9 @@ class TestSSEStreamingFunctionality:
                 assert isinstance(response, EventSourceResponse)
 
     @pytest.mark.asyncio
-    async def test_stream_connection_tracking(self, mock_redis_for_sse):
+    async def test_stream_connection_tracking(
+        self, mock_redis_for_sse: MagicMock
+    ) -> None:
         """Test that connections are properly tracked and cleaned up."""
         from app.services import redis_progress
         from app.services.event_service import event_service
@@ -618,7 +664,7 @@ class TestSSEStreamingFunctionality:
         initial_connections = event_service.active_connections
 
         # Mock subscribe to stop immediately
-        async def mock_subscribe(channels):
+        async def mock_subscribe(channels: list[str]) -> AsyncGenerator[None, None]:
             return
             yield  # Never reached
 
@@ -627,7 +673,7 @@ class TestSSEStreamingFunctionality:
             "subscribe_to_channels",
             side_effect=mock_subscribe,
         ):
-            stream = event_service.event_stream(channels=["download:updates"])
+            stream = event_service.event_stream(channels=["hermes:download:updates"])
 
             # Get connected event
             await anext(stream)
@@ -642,13 +688,17 @@ class TestSSEStreamingFunctionality:
             assert event_service.active_connections == initial_connections
 
     @pytest.mark.asyncio
-    async def test_event_data_format_consistency(self, mock_redis_for_sse):
+    async def test_event_data_format_consistency(
+        self, mock_redis_for_sse: MagicMock
+    ) -> None:
         """Test that all events follow consistent data format."""
         import json
 
         from app.services import redis_progress
 
-        async def mock_subscribe(channels):
+        async def mock_subscribe(
+            channels: list[str],
+        ) -> AsyncGenerator[dict[str, object], None]:
             yield {
                 "type": "download_progress",
                 "data": {
@@ -666,7 +716,7 @@ class TestSSEStreamingFunctionality:
         ):
             from app.services.event_service import event_service
 
-            stream = event_service.event_stream(channels=["download:updates"])
+            stream = event_service.event_stream(channels=["hermes:download:updates"])
 
             # Skip connected event
             await anext(stream)
@@ -691,7 +741,9 @@ class TestSSETokenDownloadVerification:
     """Test download existence verification for SSE token creation."""
 
     @pytest.mark.asyncio
-    async def test_token_denied_for_non_existent_download(self, client: AsyncClient):
+    async def test_token_denied_for_non_existent_download(
+        self, client: AsyncClient
+    ) -> None:
         """Test that token creation fails for non-existent downloads."""
         response = await client.post(
             "/api/v1/events/token",
@@ -706,8 +758,8 @@ class TestSSETokenDownloadVerification:
 
     @pytest.mark.asyncio
     async def test_token_allowed_for_existing_download(
-        self, client: AsyncClient, db_session
-    ):
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         """Test that users can get tokens for existing downloads."""
         from app.db.repositories import DownloadRepository
 
@@ -736,7 +788,7 @@ class TestSSETokenDownloadVerification:
     @pytest.mark.asyncio
     async def test_token_denied_for_invalid_download_id_format(
         self, client: AsyncClient
-    ):
+    ) -> None:
         """Test that invalid download ID format is rejected."""
         # Empty download ID
         response = await client.post(
@@ -750,7 +802,9 @@ class TestSSETokenDownloadVerification:
         assert "invalid" in error_msg or "format" in error_msg
 
     @pytest.mark.asyncio
-    async def test_queue_and_system_tokens_no_download_check(self, client: AsyncClient):
+    async def test_queue_and_system_tokens_no_download_check(
+        self, client: AsyncClient
+    ) -> None:
         """Test that queue and system scopes don't require download verification."""
         # Queue scope
         response = await client.post(
@@ -773,7 +827,7 @@ class TestSSEHealthEndpoint:
     """Test SSE health check endpoint."""
 
     @pytest.mark.asyncio
-    async def test_sse_health_returns_metrics(self, client: AsyncClient):
+    async def test_sse_health_returns_metrics(self, client: AsyncClient) -> None:
         """Test that health endpoint returns SSE metrics."""
         response = await client.get("/api/v1/events/health")
 
@@ -787,7 +841,7 @@ class TestSSEHealthEndpoint:
         assert isinstance(data["heartbeat_interval"], (int, float))
 
     @pytest.mark.asyncio
-    async def test_sse_health_no_auth_required(self, client: AsyncClient):
+    async def test_sse_health_no_auth_required(self, client: AsyncClient) -> None:
         """Test that health endpoint doesn't require authentication."""
         # Clear auth override
         from app.main import app

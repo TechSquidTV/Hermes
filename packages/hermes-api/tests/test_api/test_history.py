@@ -1,5 +1,7 @@
 """Tests for download history endpoints."""
 
+from __future__ import annotations
+
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -9,13 +11,14 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints import history as history_endpoint
+from app.core.security import AuthPrincipal
 from app.db.models import DownloadHistory
 
 
 @pytest.mark.asyncio
 async def test_history_statistics_use_all_matching_records_not_current_page(
     client: AsyncClient, db_session: AsyncSession
-):
+) -> None:
     now = datetime.now(timezone.utc)
     records = [
         DownloadHistory(
@@ -75,7 +78,7 @@ async def test_history_statistics_use_all_matching_records_not_current_page(
 @pytest.mark.asyncio
 async def test_history_statistics_are_zero_without_matching_records(
     client: AsyncClient, db_session: AsyncSession
-):
+) -> None:
     db_session.add(
         DownloadHistory(
             id="history-other-extractor",
@@ -107,7 +110,9 @@ async def test_history_statistics_are_zero_without_matching_records(
 
 
 @pytest.mark.asyncio
-async def test_history_endpoint_maps_aggregate_query_results(monkeypatch):
+async def test_history_endpoint_maps_aggregate_query_results(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     now = datetime.now(timezone.utc)
     history_record = SimpleNamespace(
         download_id="download-aggregate",
@@ -134,11 +139,13 @@ async def test_history_endpoint_maps_aggregate_query_results(monkeypatch):
         )
     )
     extractor_result = SimpleNamespace(all=lambda: [(None, 1)])
-    db_session = SimpleNamespace(
-        execute=AsyncMock(
-            side_effect=[count_result, history_result, stats_result, extractor_result]
-        )
-    )
+    db_session = AsyncMock(spec=AsyncSession)
+    db_session.execute.side_effect = [
+        count_result,
+        history_result,
+        stats_result,
+        extractor_result,
+    ]
     monkeypatch.setattr(
         history_endpoint, "calculate_daily_stats", AsyncMock(return_value=[])
     )
@@ -151,7 +158,7 @@ async def test_history_endpoint_maps_aggregate_query_results(monkeypatch):
         limit=1,
         offset=0,
         db_session=db_session,
-        principal=SimpleNamespace(),
+        principal=AuthPrincipal(kind="api_key", subject="test", permissions=["read"]),
     )
 
     assert history.total_downloads == 1

@@ -11,7 +11,7 @@ All configuration is managed through environment variables with the `HERMES_` pr
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `HERMES_SECRET_KEY` | *(required)* | JWT secret key for token signing. Generate a strong random key for production. |
-| `HERMES_DEBUG` | `true` | Enable debug mode. Set to `false` in production. |
+| `HERMES_DEBUG` | `false` | Enable debug logging. HTTP tracebacks and exception details are never exposed. |
 
 ### API Configuration
 
@@ -40,9 +40,26 @@ All configuration is managed through environment variables with the `HERMES_` pr
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HERMES_ACCESS_TOKEN_EXPIRE_MINUTES` | `1440` | Access token expiration (24 hours) |
-| `HERMES_REFRESH_TOKEN_EXPIRE_DAYS` | `30` | Refresh token expiration (30 days) |
+| `HERMES_ACCESS_TOKEN_EXPIRE_MINUTES` | `15` | Access token expiration in minutes |
+| `HERMES_REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh token expiration in days |
 | `HERMES_ALGORITHM` | `HS256` | JWT signing algorithm |
+
+Refresh tokens are single-use and must be replaced after every refresh. Logout
+revokes the access and refresh token family. Revocation is always enabled;
+`HERMES_ENABLE_TOKEN_BLACKLIST` has been removed.
+
+### Signup and initial administrator
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HERMES_ALLOW_PUBLIC_SIGNUP` | `false` | Public signup policy for new installations; existing saved settings take precedence |
+| `HERMES_INITIAL_ADMIN_USERNAME` | unset | Create the initial administrator on startup when no users exist |
+| `HERMES_INITIAL_ADMIN_EMAIL` | unset | Valid email for the initial administrator |
+| `HERMES_INITIAL_ADMIN_PASSWORD` | unset | Password for the initial administrator; at least eight characters and at most 72 UTF-8 bytes |
+
+The first account can always be created during bootstrap and becomes an
+administrator. Later public signup requires an explicit administrator setting.
+Account creation and password changes use the same password policy.
 
 ### File Storage
 
@@ -50,6 +67,7 @@ All configuration is managed through environment variables with the `HERMES_` pr
 |----------|---------|-------------|
 | `HERMES_DOWNLOAD_DIR` | `./downloads` | Directory for completed downloads |
 | `HERMES_TEMP_DIR` | `./temp` | Directory for temporary files during processing |
+| `HERMES_DOWNLOAD_RETENTION_DAYS` | unset | Opt-in hourly deletion of managed terminal downloads older than this many days; minimum 1. Failed file deletions retain their download records. |
 
 The API and worker must use the same `HERMES_DOWNLOAD_DIR` and share that directory.
 On API startup, Hermes repairs missing file records for completed downloads whose
@@ -71,16 +89,16 @@ for the bundled Docker mounts, and restart the API and worker after updating.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HERMES_RATE_LIMIT_PER_MINUTE` | `60` | Maximum requests per minute per IP |
-| `HERMES_ENABLE_RATE_LIMITING` | `true` | Enable rate limiting |
-| `HERMES_ENABLE_TOKEN_BLACKLIST` | `true` | Enable token blacklisting for logout |
+| `HERMES_RATE_LIMIT_PER_MINUTE` | `60` | Value exposed by the configuration API; authentication uses the budgets below |
+| `HERMES_ENABLE_RATE_LIMITING` | `true` | Enable shared Redis budgets for login, signup, and refresh; Redis failure returns 503 |
+| `HERMES_TRUSTED_PROXY_HOSTS` | `[]` | Exact IPs or resolvable DNS names of trusted proxies, comma-separated; Compose defaults to `app` |
 
 ### Security Settings
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HERMES_MAX_LOGIN_ATTEMPTS` | `5` | Maximum failed login attempts before lockout |
-| `HERMES_LOGIN_ATTEMPT_WINDOW_MINUTES` | `15` | Time window for login attempt tracking |
+| `HERMES_MAX_LOGIN_ATTEMPTS` | `5` | Maximum requests per client per authentication endpoint within the configured window |
+| `HERMES_LOGIN_ATTEMPT_WINDOW_MINUTES` | `15` | Redis budget window for login, signup, and refresh |
 
 ### CORS Configuration
 
@@ -88,6 +106,9 @@ for the bundled Docker mounts, and restart the API and worker after updating.
 |----------|---------|-------------|
 | `HERMES_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:5173,https://hermes.example.com,https://hermes-api.example.com` | Comma-separated list of allowed CORS origins. Includes example domains for separate domain deployments. |
 | `HERMES_ALLOW_CREDENTIALS` | `true` | Allow credentials in CORS requests |
+
+Wildcard origins (`*`) are rejected when `HERMES_ALLOW_CREDENTIALS=true`.
+Configure concrete frontend origins for credentialed requests.
 
 #### CORS Examples
 

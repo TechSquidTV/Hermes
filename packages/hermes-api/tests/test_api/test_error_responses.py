@@ -1,5 +1,7 @@
 """Tests for standard API error response wrappers."""
 
+from __future__ import annotations
+
 import pytest
 from httpx import AsyncClient
 
@@ -10,7 +12,7 @@ class TestErrorResponses:
     @pytest.mark.asyncio
     async def test_http_exception_uses_standard_error_wrapper(
         self, client: AsyncClient
-    ):
+    ) -> None:
         """HTTPException responses should use the documented ErrorResponse shape."""
         response = await client.get("/api/v1/download/missing-download-id")
 

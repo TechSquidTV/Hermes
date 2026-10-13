@@ -41,8 +41,8 @@ async def event_stream(
     download_id: Optional[str] = Query(
         None, description="Filter to specific download ID"
     ),
-    token_data: dict = Depends(get_current_sse_token),
-):
+    token_data: dict[str, object] = Depends(get_current_sse_token),
+) -> EventSourceResponse:
     """
     SSE endpoint for real-time updates.
 
@@ -90,7 +90,11 @@ async def event_stream(
         channel_list = [c.strip() for c in channels.split(",")]
     else:
         # Default to all channels
-        channel_list = ["download:updates", "queue:updates", "system:notifications"]
+        channel_list = [
+            "hermes:download:updates",
+            "hermes:queue:updates",
+            "hermes:system:notifications",
+        ]
 
     # Build filters
     filters = {}
@@ -99,11 +103,13 @@ async def event_stream(
 
     # Validate token scope for requested channels
     token_scope = token_data.get("scope", "")
+    if not isinstance(token_scope, str):
+        raise HTTPException(status_code=401, detail="Invalid SSE token scope")
 
     # If token is scoped to a specific download, only allow download updates for that download
     if token_scope.startswith("download:"):
         download_id_from_scope = token_scope.split(":", 1)[1]
-        channel_list = ["download:updates"]
+        channel_list = ["hermes:download:updates"]
         filters["download_id"] = download_id_from_scope
         logger.info(
             "SSE stream scoped to download",
@@ -112,21 +118,21 @@ async def event_stream(
         )
     elif token_scope == "queue":
         # Queue-scoped token can only access queue updates
-        channel_list = ["queue:updates"]
+        channel_list = ["hermes:queue:updates"]
         logger.info(
             "SSE stream scoped to queue",
             user_id=token_data.get("user_id"),
         )
     elif token_scope == "stats":
         # Stats-scoped token can only access stats updates
-        channel_list = ["stats:updates"]
+        channel_list = ["hermes:stats:updates"]
         logger.info(
             "SSE stream scoped to stats",
             user_id=token_data.get("user_id"),
         )
     elif token_scope == "system":
         # System-scoped token can access system notifications
-        channel_list = ["system:notifications"]
+        channel_list = ["hermes:system:notifications"]
         logger.info(
             "SSE stream scoped to system",
             user_id=token_data.get("user_id"),
@@ -144,7 +150,7 @@ async def event_stream(
 async def download_events(
     download_id: str,
     token: Optional[str] = Query(None, description="SSE token"),
-):
+) -> EventSourceResponse:
     """
     SSE endpoint for a specific download's events.
 
@@ -198,7 +204,7 @@ async def download_events(
 
     return EventSourceResponse(
         event_service.event_stream(
-            channels=["download:updates"], filters={"download_id": download_id}
+            channels=["hermes:download:updates"], filters={"download_id": download_id}
         )
     )
 
@@ -206,7 +212,7 @@ async def download_events(
 @router.get("/queue")
 async def queue_events(
     token: Optional[str] = Query(None, description="SSE token"),
-):
+) -> EventSourceResponse:
     """
     SSE endpoint for queue updates.
 
@@ -253,13 +259,15 @@ async def queue_events(
         user_id=token_data.get("user_id"),
     )
 
-    return EventSourceResponse(event_service.event_stream(channels=["queue:updates"]))
+    return EventSourceResponse(
+        event_service.event_stream(channels=["hermes:queue:updates"])
+    )
 
 
 @router.get("/stats")
 async def stats_events(
     token: Optional[str] = Query(None, description="SSE token"),
-):
+) -> EventSourceResponse:
     """
     SSE endpoint for statistics updates.
 
@@ -306,7 +314,9 @@ async def stats_events(
         user_id=token_data.get("user_id"),
     )
 
-    return EventSourceResponse(event_service.event_stream(channels=["stats:updates"]))
+    return EventSourceResponse(
+        event_service.event_stream(channels=["hermes:stats:updates"])
+    )
 
 
 @router.post("/token", response_model=SSETokenResponse)
@@ -314,7 +324,7 @@ async def create_sse_token(
     request: CreateSSETokenRequest = Body(...),
     principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.READ)),
     db_session: AsyncSession = Depends(get_database_session),
-):
+) -> SSETokenResponse:
     """
     Create ephemeral SSE token for secure, scoped SSE connections.
 
@@ -408,24 +418,17 @@ async def create_sse_token(
     )
 
     # Store in Redis
-    try:
-        await redis_progress_service.store_sse_token(
-            token=sse_token.token,
-            data={
-                "scope": sse_token.scope,
-                "user_id": sse_token.user_id,
-                "expires_at": sse_token.expires_at.isoformat(),
-                "permissions": [p.value for p in sse_token.permissions],
-                "created_at": sse_token.created_at.isoformat(),
-            },
-            ttl=request.ttl,
-        )
-    except Exception as e:
-        logger.error("Failed to store SSE token", error=str(e), exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create SSE token",
-        )
+    await redis_progress_service.store_sse_token(
+        token=sse_token.token,
+        data={
+            "scope": sse_token.scope,
+            "user_id": sse_token.user_id,
+            "expires_at": sse_token.expires_at.isoformat(),
+            "permissions": [p.value for p in sse_token.permissions],
+            "created_at": sse_token.created_at.isoformat(),
+        },
+        ttl=request.ttl,
+    )
 
     logger.info(
         "Created SSE token",
@@ -445,7 +448,7 @@ async def create_sse_token(
 
 
 @router.get("/health")
-async def sse_health():
+async def sse_health() -> dict[str, object]:
     """
     Health check endpoint for SSE service.
 

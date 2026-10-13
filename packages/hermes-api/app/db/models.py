@@ -2,12 +2,14 @@
 Database models for the Hermes API.
 """
 
+from __future__ import annotations
+
 from datetime import datetime, timezone
 
+from pydantic import JsonValue
 from sqlalchemy import (
     JSON,
     Boolean,
-    Column,
     DateTime,
     Enum,
     Float,
@@ -16,7 +18,7 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.utils.media import DEFAULT_FORMAT_SPEC
@@ -27,10 +29,10 @@ class Download(Base):
 
     __tablename__ = "downloads"
 
-    id = Column(String, primary_key=True, index=True)
-    url = Column(String, nullable=False, index=True)
-    title = Column(String, nullable=True)
-    status = Column(
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    url: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    title: Mapped[str | None] = mapped_column(String, nullable=True)
+    status: Mapped[str] = mapped_column(
         Enum(
             "pending",
             "downloading",
@@ -43,50 +45,54 @@ class Download(Base):
         default="pending",
         nullable=False,
     )
-    progress = Column(Float, default=0.0)  # 0.0 to 100.0
+    progress: Mapped[float | None] = mapped_column(Float, default=0.0, nullable=True)
 
     # Progress tracking fields
-    downloaded_bytes = Column(Integer, nullable=True)  # Bytes downloaded so far
-    total_bytes = Column(Integer, nullable=True)  # Total bytes to download
-    download_speed = Column(Float, nullable=True)  # Download speed in bytes per second
-    eta = Column(Float, nullable=True)  # Estimated time remaining in seconds
+    downloaded_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    download_speed: Mapped[float | None] = mapped_column(Float, nullable=True)
+    eta: Mapped[float | None] = mapped_column(Float, nullable=True)
 
-    format_spec = Column(String, default=DEFAULT_FORMAT_SPEC)
-    output_path = Column(String, nullable=True)
-    file_size = Column(Integer, nullable=True)  # Final file size in bytes
-    duration = Column(Float, nullable=True)  # Video duration in seconds
-    error_message = Column(Text, nullable=True)
+    format_spec: Mapped[str | None] = mapped_column(
+        String, default=DEFAULT_FORMAT_SPEC, nullable=True
+    )
+    output_path: Mapped[str | None] = mapped_column(String, nullable=True)
+    file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    duration: Mapped[float | None] = mapped_column(Float, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Metadata
-    video_id = Column(String, nullable=True, index=True)
-    extractor = Column(String, nullable=True)
-    thumbnail_url = Column(String, nullable=True)
-    description = Column(Text, nullable=True)
+    video_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    extractor: Mapped[str | None] = mapped_column(String, nullable=True)
+    thumbnail_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Batch relationship
-    batch_id = Column(
+    batch_id: Mapped[str | None] = mapped_column(
         String,
         ForeignKey("download_batches.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
-    batch_position = Column(Integer, nullable=True)
-    batch_video_id = Column(String(200), nullable=True)
+    batch_position: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    batch_video_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     # Timestamps
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Relationships
-    files = relationship(
+    files: Mapped[list[DownloadFile]] = relationship(
         "DownloadFile", back_populates="download", cascade="all, delete-orphan"
     )
-    batch = relationship("DownloadBatch", back_populates="downloads")
+    batch: Mapped[DownloadBatch | None] = relationship(
+        "DownloadBatch", back_populates="downloads"
+    )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<Download(id={self.id}, url={self.url[:50]}..., status={self.status})>"
 
 
@@ -95,30 +101,30 @@ class DownloadFile(Base):
 
     __tablename__ = "download_files"
 
-    id = Column(String, primary_key=True, index=True)
-    download_id = Column(
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    download_id: Mapped[str] = mapped_column(
         String, ForeignKey("downloads.id", ondelete="CASCADE"), nullable=False
     )
-    filename = Column(String, nullable=False)
-    filepath = Column(String, nullable=False)
-    file_size = Column(Integer, nullable=False)  # Size in bytes
-    file_type = Column(String, nullable=False)  # video, audio, subtitle, thumbnail
+    filename: Mapped[str] = mapped_column(String, nullable=False)
+    filepath: Mapped[str] = mapped_column(String, nullable=False)
+    file_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    file_type: Mapped[str] = mapped_column(String, nullable=False)
 
     # Metadata
-    format_id = Column(String, nullable=True)
-    resolution = Column(String, nullable=True)
-    codec = Column(String, nullable=True)
-    bitrate = Column(Integer, nullable=True)
+    format_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    resolution: Mapped[str | None] = mapped_column(String, nullable=True)
+    codec: Mapped[str | None] = mapped_column(String, nullable=True)
+    bitrate: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Timestamps
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )
 
     # Relationships
-    download = relationship("Download", back_populates="files")
+    download: Mapped[Download] = relationship("Download", back_populates="files")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<DownloadFile(id={self.id}, filename={self.filename}, type={self.file_type})>"
 
 
@@ -127,20 +133,20 @@ class DownloadBatch(Base):
 
     __tablename__ = "download_batches"
 
-    id = Column(String, primary_key=True, index=True)
-    user_id = Column(
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    user_id: Mapped[str] = mapped_column(
         String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
 
     # Batch metadata
-    batch_type = Column(
+    batch_type: Mapped[str] = mapped_column(
         Enum("playlist", "manual_batch", "api_batch", name="batch_type"), nullable=False
     )
-    batch_title = Column(String(500), nullable=True)
-    source_url = Column(Text, nullable=True)
+    batch_title: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Status tracking
-    status = Column(
+    status: Mapped[str] = mapped_column(
         Enum(
             "pending",
             "processing",
@@ -155,38 +161,40 @@ class DownloadBatch(Base):
     )
 
     # Counts
-    total_videos = Column(Integer, default=0, nullable=False)
-    completed_videos = Column(Integer, default=0, nullable=False)
-    failed_videos = Column(Integer, default=0, nullable=False)
+    total_videos: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    completed_videos: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    failed_videos: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # Progress
-    overall_progress = Column(Float, nullable=False, default=0.0)  # 0.0 to 100.0
+    overall_progress: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
 
     # Metadata from playlist
-    playlist_id = Column(String(200), nullable=True)
-    playlist_uploader = Column(String(200), nullable=True)
+    playlist_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    playlist_uploader: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     # Timestamps
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True
     )
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Settings applied to all downloads in batch
-    format_spec = Column(String(100), default=DEFAULT_FORMAT_SPEC)
-    output_directory = Column(Text, nullable=True)
+    format_spec: Mapped[str | None] = mapped_column(
+        String(100), default=DEFAULT_FORMAT_SPEC, nullable=True
+    )
+    output_directory: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Celery task tracking
-    celery_task_id = Column(String(255), nullable=True)
+    celery_task_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Relationships
-    videos = relationship(
+    videos: Mapped[list[BatchVideo]] = relationship(
         "BatchVideo", back_populates="batch", cascade="all, delete-orphan"
     )
-    downloads = relationship("Download", back_populates="batch")
+    downloads: Mapped[list[Download]] = relationship("Download", back_populates="batch")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<DownloadBatch(id={self.id}, title={self.batch_title}, status={self.status})>"
 
 
@@ -195,8 +203,8 @@ class BatchVideo(Base):
 
     __tablename__ = "batch_videos"
 
-    id = Column(String, primary_key=True, index=True)
-    batch_id = Column(
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    batch_id: Mapped[str] = mapped_column(
         String,
         ForeignKey("download_batches.id", ondelete="CASCADE"),
         nullable=False,
@@ -204,20 +212,20 @@ class BatchVideo(Base):
     )
 
     # Video info from playlist extraction
-    video_url = Column(Text, nullable=False)
-    video_id = Column(String(200), nullable=True)
-    title = Column(String(500), nullable=True)
-    duration = Column(Integer, nullable=True)  # seconds
-    thumbnail_url = Column(Text, nullable=True)
-    uploader = Column(String(200), nullable=True)
-    view_count = Column(Integer, nullable=True)
-    upload_date = Column(String(8), nullable=True)  # YYYYMMDD
+    video_url: Mapped[str] = mapped_column(Text, nullable=False)
+    video_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    title: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    duration: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    thumbnail_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    uploader: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    view_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    upload_date: Mapped[str | None] = mapped_column(String(8), nullable=True)
 
     # Position in playlist
-    position = Column(Integer, nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
 
     # Status
-    status = Column(
+    status: Mapped[str] = mapped_column(
         Enum(
             "pending",
             "queued",
@@ -231,7 +239,7 @@ class BatchVideo(Base):
         nullable=False,
         index=True,
     )
-    download_id = Column(
+    download_id: Mapped[str | None] = mapped_column(
         String,
         ForeignKey("downloads.id", ondelete="SET NULL"),
         nullable=True,
@@ -239,18 +247,20 @@ class BatchVideo(Base):
     )
 
     # Error tracking
-    error_message = Column(Text, nullable=True)
-    retry_count = Column(Integer, default=0)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    retry_count: Mapped[int | None] = mapped_column(Integer, default=0, nullable=True)
 
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )
 
     # Relationships
-    batch = relationship("DownloadBatch", back_populates="videos")
-    download = relationship("Download")
+    batch: Mapped[DownloadBatch] = relationship(
+        "DownloadBatch", back_populates="videos"
+    )
+    download: Mapped[Download | None] = relationship("Download")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<BatchVideo(id={self.id}, title={self.title}, position={self.position}, status={self.status})>"
 
 
@@ -259,21 +269,21 @@ class Webhook(Base):
 
     __tablename__ = "webhooks"
 
-    id = Column(String, primary_key=True, index=True)
-    name = Column(String, nullable=False)
-    url = Column(String, nullable=False)
-    secret = Column(String, nullable=True)  # For signature verification
-    events = Column(JSON, nullable=False)  # List of events to subscribe to
-    headers = Column(JSON, nullable=True)  # Custom headers
-    is_active = Column(Boolean, default=True, nullable=False)
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    url: Mapped[str] = mapped_column(String, nullable=False)
+    secret: Mapped[str | None] = mapped_column(String, nullable=True)
+    events: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    headers: Mapped[dict[str, str] | None] = mapped_column(JSON, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     # Timestamps
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )
-    last_triggered = Column(DateTime, nullable=True)
+    last_triggered: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<Webhook(id={self.id}, name={self.name}, url={self.url})>"
 
 
@@ -282,22 +292,22 @@ class ApiKey(Base):
 
     __tablename__ = "api_keys"
 
-    id = Column(String, primary_key=True, index=True)
-    user_id = Column(String, nullable=False, index=True)  # Associate with user
-    name = Column(String, nullable=False)
-    key_hash = Column(String, nullable=False, unique=True)  # Hashed API key
-    permissions = Column(JSON, nullable=False, default=list)  # List of permissions
-    rate_limit = Column(Integer, default=60, nullable=False)  # Requests per minute
-    is_active = Column(Boolean, default=True, nullable=False)
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    key_hash: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    permissions: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    rate_limit: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     # Timestamps
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )
-    last_used = Column(DateTime, nullable=True)
-    expires_at = Column(DateTime, nullable=True)
+    last_used: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<ApiKey(id={self.id}, name={self.name}, active={self.is_active})>"
 
 
@@ -306,26 +316,28 @@ class User(Base):
 
     __tablename__ = "users"
 
-    id = Column(String, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True, nullable=False)
-    email = Column(
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    username: Mapped[str] = mapped_column(
         String, unique=True, index=True, nullable=False
-    )  # Made required and unique
-    password_hash = Column(String, nullable=False)
-    avatar = Column(String, nullable=True)
-    is_active = Column(Boolean, default=True, nullable=False)
-    is_admin = Column(Boolean, default=False, nullable=False, index=True)
-    preferences = Column(
+    )
+    email: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String, nullable=False)
+    avatar: Mapped[str | None] = mapped_column(String, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_admin: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, index=True
+    )
+    preferences: Mapped[dict[str, JsonValue] | None] = mapped_column(
         JSON, nullable=True, default=dict
-    )  # User preferences (theme, etc.)
+    )
 
     # Timestamps
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )
-    last_login = Column(DateTime, nullable=True)
+    last_login: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<User(id={self.id}, username={self.username}, email={self.email})>"
 
 
@@ -334,26 +346,26 @@ class DownloadHistory(Base):
 
     __tablename__ = "download_history"
 
-    id = Column(String, primary_key=True, index=True)
-    download_id = Column(String, nullable=False, index=True)
-    url = Column(String, nullable=False)
-    status = Column(
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    download_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    url: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(
         Enum("completed", "failed", "cancelled", name="history_status"), nullable=False
     )
-    duration = Column(Float, nullable=True)  # Download duration in seconds
-    file_size = Column(Integer, nullable=True)
-    error_message = Column(Text, nullable=True)
+    duration: Mapped[float | None] = mapped_column(Float, nullable=True)
+    file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Metadata
-    video_id = Column(String, nullable=True)
-    extractor = Column(String, nullable=True)
-    format_used = Column(String, nullable=True)
+    video_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    extractor: Mapped[str | None] = mapped_column(String, nullable=True)
+    format_used: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # Timestamps
-    started_at = Column(DateTime, nullable=False)
-    completed_at = Column(DateTime, nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    completed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<DownloadHistory(id={self.id}, status={self.status}, duration={self.duration}s)>"
 
 
@@ -362,24 +374,22 @@ class TokenBlacklist(Base):
 
     __tablename__ = "token_blacklist"
 
-    id = Column(String, primary_key=True, index=True)
-    token_id = Column(String, unique=True, index=True, nullable=False)  # JWT ID (jti)
-    user_id = Column(
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    token_id: Mapped[str] = mapped_column(
+        String, unique=True, index=True, nullable=False
+    )
+    user_id: Mapped[str] = mapped_column(
         String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    expires_at = Column(
-        DateTime, nullable=False, index=True
-    )  # When the token naturally expires
-    reason = Column(
-        String, default="logout", nullable=False
-    )  # logout, revoked, security, etc.
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    reason: Mapped[str] = mapped_column(String, default="logout", nullable=False)
 
     # Timestamps
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<TokenBlacklist(id={self.id}, token_id={self.token_id[:8]}..., reason={self.reason})>"
 
 
@@ -388,17 +398,19 @@ class SystemSettings(Base):
 
     __tablename__ = "system_settings"
 
-    id = Column(Integer, primary_key=True, default=1)  # Always 1 (singleton)
-    allow_public_signup = Column(Boolean, default=True, nullable=False)
-    updated_by_user_id = Column(String, nullable=True)  # User who last updated
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    allow_public_signup: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    updated_by_user_id: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # Timestamps
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<SystemSettings(id={self.id}, allow_public_signup={self.allow_public_signup})>"

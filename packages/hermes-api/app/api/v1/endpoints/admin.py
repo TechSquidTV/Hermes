@@ -5,12 +5,13 @@ Admin-only endpoints for system management.
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from pydantic import Field
 
 from app.api.dependencies import get_current_admin_user
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.models.auth import AuthenticatedUser
 from app.models.base import CamelCaseModel
 from app.models.pydantic.config import Configuration, ConfigurationUpdate
 from app.services.system_settings_service import system_settings_service
@@ -41,8 +42,8 @@ class UpdateSignupSettingRequest(CamelCaseModel):
 
 @router.get("/settings", response_model=SystemSettingsResponse)
 async def get_system_settings(
-    current_user: dict = Depends(get_current_admin_user),
-):
+    current_user: AuthenticatedUser = Depends(get_current_admin_user),
+) -> SystemSettingsResponse:
     """
     Get current system settings.
 
@@ -59,8 +60,8 @@ async def get_system_settings(
 @router.put("/settings/signup", response_model=SystemSettingsResponse)
 async def update_signup_setting(
     request: UpdateSignupSettingRequest,
-    current_user: dict = Depends(get_current_admin_user),
-):
+    current_user: AuthenticatedUser = Depends(get_current_admin_user),
+) -> SystemSettingsResponse:
     """
     Update the public signup setting.
 
@@ -71,30 +72,19 @@ async def update_signup_setting(
 
     **Requires**: Admin authentication
     """
-    try:
-        updated_settings = await system_settings_service.update_allow_public_signup(
-            value=request.enabled,
-            user_id=current_user.get("id"),
-        )
+    updated_settings = await system_settings_service.update_allow_public_signup(
+        value=request.enabled,
+        user_id=current_user.get("id"),
+    )
 
-        logger.info(
-            "Admin updated signup setting",
-            admin_id=current_user.get("id"),
-            admin_username=current_user.get("username"),
-            new_value=request.enabled,
-        )
+    logger.info(
+        "Admin updated signup setting",
+        admin_id=current_user.get("id"),
+        admin_username=current_user.get("username"),
+        new_value=request.enabled,
+    )
 
-        return SystemSettingsResponse(**updated_settings)
-    except Exception as e:
-        logger.error(
-            f"Failed to update signup setting: {e}",
-            admin_id=current_user.get("id"),
-            exc_info=True,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update signup setting",
-        )
+    return SystemSettingsResponse(**updated_settings)
 
 
 # ============================================================================
@@ -104,8 +94,8 @@ async def update_signup_setting(
 
 @router.get("/config", response_model=Configuration)
 async def get_admin_configuration(
-    current_user: dict = Depends(get_current_admin_user),
-):
+    current_user: AuthenticatedUser = Depends(get_current_admin_user),
+) -> Configuration:
     """
     Get current API configuration.
 
@@ -143,8 +133,8 @@ async def get_admin_configuration(
 @router.put("/config", response_model=Configuration)
 async def update_admin_configuration(
     config_update: ConfigurationUpdate,
-    current_user: dict = Depends(get_current_admin_user),
-):
+    current_user: AuthenticatedUser = Depends(get_current_admin_user),
+) -> Configuration:
     """
     Update API configuration.
 

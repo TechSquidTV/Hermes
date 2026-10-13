@@ -16,7 +16,7 @@ logger = get_logger(__name__)
 @router.get("/", response_model=StorageInfo)
 async def get_storage_info(
     principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.READ)),
-):
+) -> StorageInfo:
     """
     Get storage usage information and cleanup recommendations.
 

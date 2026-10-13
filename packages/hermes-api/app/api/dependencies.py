@@ -2,15 +2,23 @@
 FastAPI dependencies for authentication and authorization.
 """
 
-from typing import Optional
+from typing import Optional, TypedDict
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
-from app.core.security import get_current_principal
+from app.core.security import get_current_principal, optional_security
+from app.db.repositories import (
+    ApiKeyRepository,
+    DownloadFileRepository,
+    DownloadRepository,
+    TokenBlacklistRepository,
+    UserRepository,
+)
 from app.db.session import get_database_session
+from app.models.auth import AuthenticatedUser
 
 logger = get_logger(__name__)
 security = HTTPBearer()
@@ -19,7 +27,7 @@ security = HTTPBearer()
 async def get_current_user_from_token(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db_session: AsyncSession = Depends(get_database_session),
-) -> dict:
+) -> AuthenticatedUser:
     """Extract and validate JWT token, return current user."""
     try:
         principal = await get_current_principal(credentials, db_session)
@@ -38,9 +46,9 @@ async def get_current_user_from_token(
 
 # Optional dependency for endpoints that can work with or without auth
 async def get_current_user_optional(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
     db_session: AsyncSession = Depends(get_database_session),
-) -> Optional[dict]:
+) -> Optional[AuthenticatedUser]:
     """Get current user if authenticated, None otherwise."""
     if not credentials:
         return None
@@ -61,8 +69,8 @@ async def get_token_from_header(
 
 # Admin-only dependency
 async def get_current_admin_user(
-    current_user: dict = Depends(get_current_user_from_token),
-) -> dict:
+    current_user: AuthenticatedUser = Depends(get_current_user_from_token),
+) -> AuthenticatedUser:
     """
     Verify that the current user is an admin.
 
@@ -86,3 +94,22 @@ async def get_current_admin_user(
         username=current_user.get("username"),
     )
     return current_user
+
+
+class Repositories(TypedDict):
+    downloads: DownloadRepository
+    download_files: DownloadFileRepository
+    users: UserRepository
+    api_keys: ApiKeyRepository
+    token_blacklist: TokenBlacklistRepository
+
+
+def get_repositories_from_session(session: AsyncSession) -> Repositories:
+    """Construct repositories without owning or closing the caller's session."""
+    return {
+        "downloads": DownloadRepository(session),
+        "download_files": DownloadFileRepository(session),
+        "users": UserRepository(session),
+        "api_keys": ApiKeyRepository(session),
+        "token_blacklist": TokenBlacklistRepository(session),
+    }

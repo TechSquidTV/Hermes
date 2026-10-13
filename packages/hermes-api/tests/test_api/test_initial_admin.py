@@ -2,6 +2,14 @@
 Tests for initial admin creation from environment variables.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.db.models import User
+
+
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,8 +19,8 @@ class TestInitialAdminCreation:
 
     @pytest.mark.asyncio
     async def test_initial_admin_created_from_env_vars(
-        self, db_session: AsyncSession, monkeypatch
-    ):
+        self, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test that initial admin is created from environment variables on startup."""
         # Set initial admin credentials in settings
         from app.core import config
@@ -50,8 +58,8 @@ class TestInitialAdminCreation:
 
     @pytest.mark.asyncio
     async def test_initial_admin_not_created_when_users_exist(
-        self, db_session: AsyncSession, test_user, monkeypatch
-    ):
+        self, db_session: AsyncSession, test_user: User, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test that initial admin is NOT created if users already exist."""
         # Set initial admin credentials in settings
         from app.core import config
@@ -84,8 +92,8 @@ class TestInitialAdminCreation:
 
     @pytest.mark.asyncio
     async def test_initial_admin_not_created_without_credentials(
-        self, db_session: AsyncSession, monkeypatch
-    ):
+        self, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test that initial admin is NOT created if credentials are not provided."""
         # Set empty credentials
         from app.core import config
@@ -112,8 +120,8 @@ class TestInitialAdminCreation:
 
     @pytest.mark.asyncio
     async def test_initial_admin_not_created_with_partial_credentials(
-        self, db_session: AsyncSession, monkeypatch
-    ):
+        self, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test that initial admin is NOT created if only partial credentials provided."""
         # Set only partial credentials
         from app.core import config

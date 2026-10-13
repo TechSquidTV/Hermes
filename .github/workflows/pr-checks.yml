@@ -152,15 +152,15 @@ jobs:
 
       - name: Run black (format check)
         working-directory: packages/hermes-api
-        run: uv run --locked black --check app/ tests/
+        run: uv run --locked black --check app/ tests/ typings/
 
       - name: Run isort (import sorting check)
         working-directory: packages/hermes-api
-        run: uv run --locked isort --check-only app/ tests/
+        run: uv run --locked isort --check-only app/ tests/ typings/
 
       - name: Run ruff (linting)
         working-directory: packages/hermes-api
-        run: uv run --locked ruff check app/ tests/
+        run: uv run --locked ruff check app/ tests/ typings/
 
       - name: Run mypy (type checking)
         working-directory: packages/hermes-api

@@ -4,12 +4,15 @@ External work queues and Redis are mocked; these tests cover API-owned request
 handling, persistence, response shaping, and state transitions.
 """
 
-from unittest.mock import AsyncMock, patch
+from __future__ import annotations
+
+from unittest.mock import AsyncMock, call, patch
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.db.repositories import DownloadRepository
 from app.utils.media import DEFAULT_FORMAT_SPEC
 
@@ -21,7 +24,7 @@ class TestDownloadEndpoints:
     @pytest.mark.parametrize("format_spec", [None, "bestvideo+bestaudio", "best"])
     async def test_start_download_creates_record_and_queues_task(
         self, client: AsyncClient, db_session: AsyncSession, format_spec: str | None
-    ):
+    ) -> None:
         expected_format = format_spec or DEFAULT_FORMAT_SPEC
         with patch(
             "app.api.v1.endpoints.downloads.download_video_task.apply_async"
@@ -31,7 +34,7 @@ class TestDownloadEndpoints:
                 json={
                     "url": "https://example.test/watch",
                     **({"format": format_spec} if format_spec else {}),
-                    "outputDirectory": "/downloads/custom",
+                    "outputDirectory": str(settings.download_dir + "/custom"),
                 },
             )
 
@@ -51,15 +54,16 @@ class TestDownloadEndpoints:
                 "download_id": data["downloadId"],
                 "url": "https://example.test/watch",
                 "format_spec": expected_format,
-                "output_path": "/downloads/custom",
+                "output_path": str(settings.download_dir + "/custom"),
             },
+            task_id=data["downloadId"],
             queue="hermes.downloads",
         )
 
     @pytest.mark.asyncio
     async def test_start_download_forwards_supported_options(
         self, client: AsyncClient, db_session: AsyncSession
-    ):
+    ) -> None:
         with patch(
             "app.api.v1.endpoints.downloads.download_video_task.apply_async"
         ) as apply_async:
@@ -68,17 +72,12 @@ class TestDownloadEndpoints:
                 json={
                     "url": "https://example.test/watch",
                     "format": "best",
-                    "outputDirectory": "/downloads/custom",
+                    "outputDirectory": str(settings.download_dir + "/custom"),
                     "outputTemplate": "%(title)s.custom.%(ext)s",
                     "downloadSubtitles": True,
                     "downloadThumbnail": True,
                     "subtitleLanguages": ["en", "es"],
                     "cookies": {"session": "abc", "pref": "dark"},
-                    "cookieFile": "/cookies/browser.txt",
-                    "browserCookies": {
-                        "browser": "firefox",
-                        "profile": "default",
-                    },
                 },
             )
 
@@ -92,21 +91,19 @@ class TestDownloadEndpoints:
             "download_id": data["downloadId"],
             "url": "https://example.test/watch",
             "format_spec": "best",
-            "output_path": "/downloads/custom",
+            "output_path": str(settings.download_dir + "/custom"),
             "output_template": "%(title)s.custom.%(ext)s",
             "writesubtitles": True,
             "writethumbnail": True,
             "subtitleslangs": ["en", "es"],
             "http_headers": {"Cookie": "session=abc; pref=dark"},
-            "cookiefile": "/cookies/browser.txt",
-            "cookiesfrombrowser": ("firefox", "default", None, None),
         }
         assert apply_async.call_args.kwargs["queue"] == "hermes.downloads"
 
     @pytest.mark.asyncio
     async def test_completed_download_persists_full_progress(
         self, db_session: AsyncSession
-    ):
+    ) -> None:
         repo = DownloadRepository(db_session)
         download = await repo.create(
             url="https://example.test/watch",
@@ -123,7 +120,7 @@ class TestDownloadEndpoints:
     @pytest.mark.asyncio
     async def test_terminal_download_ignores_late_active_progress(
         self, db_session: AsyncSession
-    ):
+    ) -> None:
         repo = DownloadRepository(db_session)
         download = await repo.create(
             url="https://example.test/watch",
@@ -141,7 +138,7 @@ class TestDownloadEndpoints:
     @pytest.mark.asyncio
     async def test_get_download_status_uses_nested_redis_progress_from_task(
         self, client: AsyncClient, db_session: AsyncSession
-    ):
+    ) -> None:
         download = await DownloadRepository(db_session).create(
             url="https://example.test/watch",
             status="downloading",
@@ -188,14 +185,21 @@ class TestDownloadEndpoints:
     @pytest.mark.asyncio
     async def test_cancel_download_updates_cancellable_status(
         self, client: AsyncClient, db_session: AsyncSession
-    ):
+    ) -> None:
         download = await DownloadRepository(db_session).create(
             url="https://example.test/watch",
             status="pending",
         )
 
-        response = await client.post(f"/api/v1/download/{download.id}/cancel")
+        with (
+            patch("app.api.v1.endpoints.downloads.celery_app.control.revoke") as revoke,
+            patch(
+                "app.api.v1.endpoints.downloads.redis_progress_service", new=AsyncMock()
+            ),
+        ):
+            response = await client.post(f"/api/v1/download/{download.id}/cancel")
 
+        revoke.assert_called_once_with(download.id, terminate=True, signal="SIGTERM")
         assert response.status_code == 200
         data = response.json()
         assert data == {
@@ -211,7 +215,7 @@ class TestDownloadEndpoints:
     @pytest.mark.asyncio
     async def test_cancel_download_rejects_terminal_status(
         self, client: AsyncClient, db_session: AsyncSession
-    ):
+    ) -> None:
         download = await DownloadRepository(db_session).create(
             url="https://example.test/watch",
             status="completed",
@@ -232,9 +236,9 @@ class TestDownloadEndpoints:
     @pytest.mark.asyncio
     async def test_start_batch_download_creates_records_and_schedules_batch(
         self, client: AsyncClient, db_session: AsyncSession
-    ):
+    ) -> None:
         with patch(
-            "app.api.v1.endpoints.downloads.batch_download_task.apply_async"
+            "app.api.v1.endpoints.downloads.download_video_task.apply_async"
         ) as apply_async:
             response = await client.post(
                 "/api/v1/download/batch",
@@ -244,7 +248,7 @@ class TestDownloadEndpoints:
                         "https://example.test/two",
                     ],
                     "format": "best",
-                    "outputDirectory": "/downloads/batch",
+                    "outputDirectory": str(settings.download_dir + "/batch"),
                     "downloadSubtitles": True,
                     "downloadThumbnail": True,
                 },
@@ -252,7 +256,7 @@ class TestDownloadEndpoints:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["batchId"] == "batch_2_urls"
+        assert data["batchId"] not in data["downloads"]
         assert data["totalDownloads"] == 2
         assert data["status"] == "queued"
         assert len(data["downloads"]) == 2
@@ -261,20 +265,30 @@ class TestDownloadEndpoints:
         downloads = [
             await repo.get_by_id(download_id) for download_id in data["downloads"]
         ]
-        assert [download.url for download in downloads] == [
+        assert all(download is not None for download in downloads)
+        records = [download for download in downloads if download is not None]
+        assert [download.url for download in records] == [
             "https://example.test/one",
             "https://example.test/two",
         ]
-        assert [download.status for download in downloads] == ["pending", "pending"]
+        assert [download.status for download in records] == ["pending", "pending"]
 
-        apply_async.assert_called_once_with(
-            kwargs={
-                "download_ids": data["downloads"],
-                "urls": ["https://example.test/one", "https://example.test/two"],
-                "format_spec": "best",
-                "output_directory": "/downloads/batch",
-                "writesubtitles": True,
-                "writethumbnail": True,
-            },
-            queue="hermes.downloads",
-        )
+        assert apply_async.call_args_list == [
+            call(
+                task_id=download_id,
+                kwargs={
+                    "download_id": download_id,
+                    "url": url,
+                    "format_spec": "best",
+                    "output_path": str(settings.download_dir + "/batch"),
+                    "writesubtitles": True,
+                    "writethumbnail": True,
+                },
+                queue="hermes.downloads",
+            )
+            for download_id, url in zip(
+                data["downloads"],
+                ["https://example.test/one", "https://example.test/two"],
+                strict=True,
+            )
+        ]

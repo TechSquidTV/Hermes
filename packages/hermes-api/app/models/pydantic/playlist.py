@@ -165,7 +165,7 @@ class DetectUrlTypeResponse(BaseModel):
 
     success: bool
     url_type: Literal["playlist", "video", "unknown"]
-    metadata: Optional[dict] = None
+    metadata: Optional[dict[str, object]] = None
 
 
 class ParsePlaylistRequest(BaseModel):

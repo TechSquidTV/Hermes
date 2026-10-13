@@ -7,7 +7,7 @@ import os
 import re
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Dict, TypedDict
 
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -20,10 +20,11 @@ from app.db.repositories import (
 from app.services.download_files import register_download_file
 from app.services.redis_progress import redis_progress_service
 from app.services.yt_dlp_service import YTDLPService
-from app.tasks.celery_app import celery_app
+from app.tasks.types import task
 from app.utils.download_progress import (
     build_download_progress_payload,
 )
+from app.utils.files import resolve_download_path
 from app.utils.media import DEFAULT_FORMAT_SPEC
 
 logger = get_logger(__name__)
@@ -65,12 +66,12 @@ def sanitize_filename(filename: str) -> str:
 async def _publish_sse_progress(
     download_id: str,
     status: str,
-    progress: float = None,
-    downloaded_bytes: int = None,
-    total_bytes: int = None,
-    download_speed: float = None,
-    eta: float = None,
-    result: dict = None,
+    progress: float | None = None,
+    downloaded_bytes: int | None = None,
+    total_bytes: int | None = None,
+    download_speed: float | None = None,
+    eta: float | None = None,
+    result: dict[str, Any] | None = None,
 ) -> None:
     """
     Publish real-time progress updates via SSE (Redis Pub/Sub only).
@@ -112,15 +113,23 @@ async def _publish_sse_progress(
     )
 
 
+class ProgressFields(TypedDict):
+    progress: float | None
+    downloaded_bytes: int | None
+    total_bytes: int | None
+    download_speed: float | None
+    eta: float | None
+
+
 async def _get_progress_payload_fields(
     download_id: str,
     status: str,
-    progress: float = None,
-    downloaded_bytes: int = None,
-    total_bytes: int = None,
-    download_speed: float = None,
-    eta: float = None,
-) -> dict[str, Any] | None:
+    progress: float | None = None,
+    downloaded_bytes: int | None = None,
+    total_bytes: int | None = None,
+    download_speed: float | None = None,
+    eta: float | None = None,
+) -> ProgressFields | None:
     """Resolve progress fields for active SSE payloads."""
     if progress is not None or downloaded_bytes is not None:
         return {
@@ -153,15 +162,17 @@ async def _get_progress_payload_fields(
 async def _update_download_status(
     download_id: str,
     status: str,
-    progress: float = None,
-    error_message: str = None,
-    downloaded_bytes: int = None,
-    total_bytes: int = None,
-    download_speed: float = None,
-    eta: float = None,
+    progress: float | None = None,
+    error_message: str | None = None,
+    downloaded_bytes: int | None = None,
+    total_bytes: int | None = None,
+    download_speed: float | None = None,
+    eta: float | None = None,
     publish_sse: bool = True,
-    **kwargs,
-) -> None:
+    result: dict[str, Any] | None = None,
+    message: str | None = None,
+    **kwargs: object,
+) -> bool:
     """
     Update download status in database and optionally publish to SSE.
 
@@ -173,17 +184,16 @@ async def _update_download_status(
         if status == "completed":
             # The status repository commits both writes below; registration must
             # never become visible independently of the completed status.
+            completed_path = kwargs.get("output_path")
+            if not isinstance(completed_path, str):
+                raise ValueError("Completed download must have an output path")
             file_record = await register_download_file(
-                session, download_id, kwargs["output_path"]
+                session, download_id, completed_path
             )
             kwargs["output_path"] = file_record.filepath
             kwargs["file_size"] = file_record.file_size
 
-        repos = {
-            "downloads": DownloadRepository(session),
-            "history": DownloadHistoryRepository(session),
-        }
-        await repos["downloads"].update_status(
+        updated = await DownloadRepository(session).update_status(
             download_id=download_id,
             status=status,
             progress=progress,
@@ -195,10 +205,12 @@ async def _update_download_status(
             **kwargs,
         )
 
+        if not updated or updated.status != status:
+            return False
+
     # Optionally publish SSE (disabled during progress updates for frequency control)
     if publish_sse:
         payload_extra = dict(kwargs)
-        result = payload_extra.pop("result", None)
         progress_fields = await _get_progress_payload_fields(
             download_id=download_id,
             status=status,
@@ -214,7 +226,16 @@ async def _update_download_status(
             error_message=error_message,
             result=result,
             include_progress=progress_fields is not None,
-            **(progress_fields or {}),
+            message=message,
+            progress=progress_fields["progress"] if progress_fields else None,
+            downloaded_bytes=(
+                progress_fields["downloaded_bytes"] if progress_fields else None
+            ),
+            total_bytes=progress_fields["total_bytes"] if progress_fields else None,
+            download_speed=(
+                progress_fields["download_speed"] if progress_fields else None
+            ),
+            eta=progress_fields["eta"] if progress_fields else None,
             **payload_extra,
         )
 
@@ -241,6 +262,8 @@ async def _update_download_status(
             action="status_changed", download_id=download_id, data={"status": status}
         )
 
+    return True
+
 
 async def _create_download_history(
     download_id: str,
@@ -248,15 +271,11 @@ async def _create_download_history(
     status: str,
     started_at: datetime,
     completed_at: datetime,
-    **kwargs,
+    **kwargs: object,
 ) -> None:
     """Helper function to create download history record."""
     async with async_session_maker() as session:
-        repos = {
-            "downloads": DownloadRepository(session),
-            "history": DownloadHistoryRepository(session),
-        }
-        await repos["history"].create(
+        await DownloadHistoryRepository(session).create(
             download_id=download_id,
             url=url,
             status=status,
@@ -270,12 +289,8 @@ async def _trigger_webhooks(event: str, download_id: str, data: Dict[str, Any]) 
     """Helper function to trigger webhooks for an event."""
     try:
         async with async_session_maker() as session:
-            repos = {
-                "downloads": DownloadRepository(session),
-                "history": DownloadHistoryRepository(session),
-                "webhooks": WebhookRepository(session),
-            }
-            webhooks = await repos["webhooks"].get_webhooks_for_event(event)
+            repository = WebhookRepository(session)
+            webhooks = await repository.get_webhooks_for_event(event)
 
             for webhook in webhooks:
                 # TODO: Implement webhook triggering with retry logic
@@ -284,26 +299,34 @@ async def _trigger_webhooks(event: str, download_id: str, data: Dict[str, Any]) 
                     webhook_id=webhook.id,
                     download_id=download_id,
                 )
-                await repos["webhooks"].update_last_triggered(webhook.id)
+                await repository.update_last_triggered(webhook.id)
 
     except Exception as e:
-        logger.error("Failed to trigger webhooks", event=event, error=str(e))
+        logger.error("Failed to trigger webhooks", event_type=event, error=str(e))
 
 
 async def _download_video_task(
     download_id: str,
     url: str,
     format_spec: str = DEFAULT_FORMAT_SPEC,
-    output_path: str = None,
-    output_template: str = None,
-    **kwargs,
+    output_path: str | None = None,
+    output_template: str | None = None,
+    **kwargs: object,
 ) -> Dict[str, Any]:
     """Core download logic."""
     started_at = datetime.now(timezone.utc)
 
     try:
-        # Update status to downloading
-        await _update_download_status(download_id, "downloading", started_at=started_at)
+        output_directory = resolve_download_path(output_path or settings.download_dir)
+        # A cancelled/finished task may still be delivered after broker retries.
+        if not await _update_download_status(
+            download_id, "downloading", started_at=started_at
+        ):
+            return {
+                "success": False,
+                "download_id": download_id,
+                "error": "Download is no longer active",
+            }
 
         # Trigger download started webhook
         await _trigger_webhooks("download_started", download_id, {"url": url})
@@ -354,14 +377,11 @@ async def _download_video_task(
         if not output_filename:
             output_filename = f"{sanitized_title}.%(ext)s"
 
-        # Generate output path if not provided
-        if not output_path:
-            output_path = os.path.join(
-                settings.download_dir,
-                output_filename,
-            )
-        else:
-            output_path = os.path.join(output_path, output_filename)
+        # Prefix custom templates too, so all retries/duplicates are isolated.
+        output_filename = f"{download_id}_{output_filename}"
+        output_path = str(
+            resolve_download_path(str(output_directory / output_filename))
+        )
 
         # Ensure output directory exists
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -532,7 +552,7 @@ async def _download_video_task(
             "extractor": extractor,
             "description": description,
         }
-        await _update_download_status(
+        completed = await _update_download_status(
             download_id,
             "completed",
             progress=100.0,
@@ -546,6 +566,16 @@ async def _download_video_task(
             description=description,
             result=complete_result,  # Include result for SSE
         )
+
+        if not completed:
+            # A cancellation won the atomic status transition. Do not announce
+            # completion or leave an unregistered final file behind.
+            resolve_download_path(result_path).unlink(missing_ok=True)
+            return {
+                "success": False,
+                "download_id": download_id,
+                "error": "Download is no longer active",
+            }
 
         # Create history record
         await _create_download_history(
@@ -612,12 +642,10 @@ async def _download_video_task(
         }
 
     except Exception as e:
-        error_message = str(e)
+        error_message = "Download failed; see server logs for details"
         completed_at = datetime.now(timezone.utc)
 
-        logger.error(
-            "Download task failed", download_id=download_id, error=error_message
-        )
+        logger.error("Download task failed", download_id=download_id, error=str(e))
 
         await _update_download_status(
             download_id,
@@ -664,14 +692,14 @@ async def _download_video_task(
         return {"success": False, "download_id": download_id, "error": error_message}
 
 
-@celery_app.task(name="app.tasks.download_tasks.download_video_task")
+@task(name="app.tasks.download_tasks.download_video_task")
 def download_video_task(
     download_id: str,
     url: str,
     format_spec: str = DEFAULT_FORMAT_SPEC,
-    output_path: str = None,
-    output_template: str = None,
-    **kwargs,
+    output_path: str | None = None,
+    output_template: str | None = None,
+    **kwargs: object,
 ) -> Dict[str, Any]:
     """
     Celery task for downloading a video.
@@ -685,106 +713,6 @@ def download_video_task(
             format_spec=format_spec,
             output_path=output_path,
             output_template=output_template,
-            **kwargs,
-        )
-    )
-
-
-async def _batch_download_task(
-    download_ids: list[str],
-    urls: list[str],
-    format_spec: str = DEFAULT_FORMAT_SPEC,
-    output_directory: str = None,
-    **kwargs,
-) -> Dict[str, Any]:
-    """Core batch download logic."""
-    started_at = datetime.now(timezone.utc)  # TODO: Use for batch timing
-    results = []
-
-    batch_id = f"batch_{len(download_ids)}_urls"  # TODO: Create actual batch record
-    logger.debug(f"Batch started at: {started_at}")  # Use for timing reference
-
-    try:
-        # Trigger batch started webhook
-        await _trigger_webhooks(
-            "batch_download_started",
-            batch_id,
-            {"urls": urls, "total_videos": len(urls)},
-        )
-
-        # Process each URL with its corresponding download ID
-        for download_id, url in zip(download_ids, urls):
-            result = await _download_video_task(
-                download_id=download_id,
-                url=url,
-                format_spec=format_spec,
-                output_path=output_directory,
-                **kwargs,
-            )
-
-            results.append(result)
-
-        completed_at = datetime.now(timezone.utc)  # TODO: Use for batch timing
-        successful_downloads = sum(1 for r in results if r["success"])
-        logger.debug(f"Batch completed at: {completed_at}")  # Use for timing reference
-
-        await _trigger_webhooks(
-            "batch_download_completed",
-            batch_id,
-            {
-                "total_videos": len(urls),
-                "successful_downloads": successful_downloads,
-                "failed_downloads": len(urls) - successful_downloads,
-                "results": results,
-            },
-        )
-
-        return {
-            "batch_id": batch_id,
-            "total_downloads": len(urls),
-            "successful_downloads": successful_downloads,
-            "results": results,
-        }
-
-    except Exception as e:
-        error_message = str(e)
-
-        logger.error(
-            "Batch download task failed", batch_id=batch_id, error=error_message
-        )
-
-        await _trigger_webhooks(
-            "batch_download_failed", batch_id, {"error": error_message}
-        )
-
-        return {"batch_id": batch_id, "error": error_message, "results": results}
-
-
-@celery_app.task(name="app.tasks.download_tasks.batch_download_task")
-def batch_download_task(
-    download_ids: list[str],
-    urls: list[str],
-    format_spec: str = DEFAULT_FORMAT_SPEC,
-    output_directory: str = None,
-    **kwargs,
-) -> Dict[str, Any]:
-    """
-    Celery task for batch downloading videos.
-
-    This is a synchronous wrapper that runs the async batch download logic.
-
-    Args:
-        download_ids: List of pre-created download IDs from the database
-        urls: List of URLs to download
-        format_spec: Format specification for all downloads
-        output_directory: Optional output directory path
-    """
-    return asyncio.run(
-        _batch_download_task(
-            download_ids=download_ids,
-            urls=urls,
-            format_spec=format_spec,
-            output_directory=output_directory,
             **kwargs,
         )
     )

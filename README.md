@@ -149,7 +149,7 @@ Hermes includes security features designed specifically for self-hosted deployme
 
 ### Signup Control
 
-By default, anyone with access to your Hermes instance can create an account. For self-hosted deployments, you can restrict signup:
+Public signup is disabled by default after the first account is created. Administrators can create additional accounts or explicitly enable public signup. Existing installations retain their saved signup setting.
 
 **Option 1: First User Becomes Admin** (Default)
 - The first user to sign up automatically gets admin privileges

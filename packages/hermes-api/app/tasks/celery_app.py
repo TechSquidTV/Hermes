@@ -44,16 +44,20 @@ celery_app.conf.update(
     task_max_retries=3,
     # Beat scheduler settings (for periodic tasks)
     beat_schedule={
-        "cleanup-old-downloads": {
-            "task": "app.tasks.cleanup_tasks.cleanup_old_downloads",
-            "schedule": 3600.0,  # Every hour
-        },
         "cleanup-temp-files": {
             "task": "app.tasks.cleanup_tasks.cleanup_temp_files",
             "schedule": 1800.0,  # Every 30 minutes
         },
     },
 )
+
+# Retention deletes completed media and is an explicit operator choice.
+if settings.download_retention_days is not None:
+    celery_app.conf.beat_schedule["cleanup-old-downloads"] = {
+        "task": "app.tasks.cleanup_tasks.cleanup_old_downloads",
+        "schedule": 3600.0,
+        "kwargs": {"days": settings.download_retention_days},
+    }
 
 # Configure Redis connection for Celery
 celery_app.conf.broker_url = settings.redis_url

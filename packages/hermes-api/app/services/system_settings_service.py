@@ -7,13 +7,19 @@ with fallback to environment variables if database is unavailable.
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, TypedDict
 
 from app.core.config import settings
 from app.db.base import async_session_maker
 from app.db.repositories import SystemSettingsRepository
 
 logger = logging.getLogger(__name__)
+
+
+class SettingsSnapshot(TypedDict):
+    allow_public_signup: bool
+    updated_at: datetime | None
+    updated_by_user_id: str | None
 
 
 class SystemSettingsService:
@@ -24,8 +30,8 @@ class SystemSettingsService:
     Falls back to environment variables if database is unavailable.
     """
 
-    def __init__(self):
-        self._cache: Optional[dict] = None
+    def __init__(self) -> None:
+        self._cache: Optional[SettingsSnapshot] = None
         self._cache_timestamp: Optional[datetime] = None
         self._cache_ttl = timedelta(seconds=10)  # 10-second cache
 
@@ -35,13 +41,13 @@ class SystemSettingsService:
             return False
         return datetime.now(timezone.utc) - self._cache_timestamp < self._cache_ttl
 
-    def _invalidate_cache(self):
+    def _invalidate_cache(self) -> None:
         """Invalidate the cache."""
         self._cache = None
         self._cache_timestamp = None
         logger.info("[SystemSettingsService] Cache invalidated")
 
-    async def _load_from_db(self) -> Optional[dict]:
+    async def _load_from_db(self) -> Optional[SettingsSnapshot]:
         """Load settings from database."""
         try:
             async with async_session_maker() as session:
@@ -94,7 +100,7 @@ class SystemSettingsService:
 
     async def update_allow_public_signup(
         self, value: bool, user_id: Optional[str] = None
-    ) -> dict:
+    ) -> SettingsSnapshot:
         """
         Update the allow_public_signup setting.
 
@@ -129,7 +135,7 @@ class SystemSettingsService:
             )
             raise
 
-    async def get_all_settings(self) -> dict:
+    async def get_all_settings(self) -> SettingsSnapshot:
         """Get all system settings."""
         # Check cache first
         if self._is_cache_valid() and self._cache:

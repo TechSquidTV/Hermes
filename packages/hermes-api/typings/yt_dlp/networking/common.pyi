@@ -1,0 +1,16 @@
+from types import TracebackType
+from typing import Self
+
+class RequestHandler: ...
+class RequestDirector: ...
+
+class Response:
+    url: str
+    def read(self, size: int = ...) -> bytes: ...
+    def __enter__(self) -> Self: ...
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None: ...

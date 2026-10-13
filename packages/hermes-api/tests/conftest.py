@@ -1,5 +1,17 @@
 """Pytest configuration and fixtures."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
+    from pathlib import Path
+
+    from app.db.models import User
+    from app.utils.urls import SocketInfo
+
+
 import os
 from tempfile import TemporaryDirectory
 from typing import AsyncGenerator
@@ -22,14 +34,14 @@ os.environ.setdefault(
 
 
 @pytest.fixture(scope="session", autouse=True)
-def cleanup_test_database_directory():
+def cleanup_test_database_directory() -> Generator[None, None, None]:
     """Keep test databases isolated from developer data and parallel runs."""
     yield
     _test_database_dir.cleanup()
 
 
 @pytest_asyncio.fixture(scope="function", autouse=True)
-async def setup_test_database():
+async def setup_test_database() -> AsyncGenerator[None, None]:
     """Set up test database before each test."""
     # Import all models to ensure they're registered with Base
     from app.db.base import create_tables, drop_tables, engine
@@ -47,7 +59,7 @@ async def setup_test_database():
 
 
 @pytest_asyncio.fixture
-async def db_session(setup_test_database) -> AsyncGenerator[AsyncSession, None]:
+async def db_session(setup_test_database: None) -> AsyncGenerator[AsyncSession, None]:
     """Create a database session for tests."""
     from app.db.base import async_session_maker
 
@@ -56,30 +68,25 @@ async def db_session(setup_test_database) -> AsyncGenerator[AsyncSession, None]:
 
 
 @pytest_asyncio.fixture
-async def client(setup_test_database) -> AsyncGenerator[AsyncClient, None]:
+async def client(setup_test_database: None) -> AsyncGenerator[AsyncClient, None]:
     """Create an async HTTP client for testing with auth mocked."""
     from app.core.security import (
         AuthPrincipal,
-        get_current_api_key,
         get_current_principal,
     )
     from app.main import app
 
     # Override authentication dependency for testing
-    async def mock_get_api_key():
-        return "test-api-key"
-
-    async def mock_get_principal():
+    async def mock_get_principal() -> AuthPrincipal:
         return AuthPrincipal(
             kind="api_key",
             subject="test-api-key",
             permissions=["admin"],
         )
 
-    app.dependency_overrides[get_current_api_key] = mock_get_api_key
     app.dependency_overrides[get_current_principal] = mock_get_principal
 
-    transport = ASGITransport(app=app)
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         yield client
 
@@ -88,7 +95,7 @@ async def client(setup_test_database) -> AsyncGenerator[AsyncClient, None]:
 
 
 @pytest_asyncio.fixture
-async def test_user(db_session: AsyncSession):
+async def test_user(db_session: AsyncSession) -> User:
     """Create a test user for authentication tests."""
     from app.core.security import get_password_hash
     from app.db.repositories import UserRepository
@@ -109,7 +116,7 @@ async def test_user(db_session: AsyncSession):
 
 
 @pytest_asyncio.fixture
-async def test_user2(db_session: AsyncSession):
+async def test_user2(db_session: AsyncSession) -> User:
     """Create a second test user for isolation tests."""
     from app.core.security import get_password_hash
     from app.db.repositories import UserRepository
@@ -130,7 +137,7 @@ async def test_user2(db_session: AsyncSession):
 
 
 @pytest_asyncio.fixture
-async def test_admin_user(db_session: AsyncSession):
+async def test_admin_user(db_session: AsyncSession) -> User:
     """Create a test admin user for admin tests."""
     from app.core.security import get_password_hash
     from app.db.repositories import UserRepository
@@ -152,7 +159,7 @@ async def test_admin_user(db_session: AsyncSession):
 
 
 @pytest.fixture
-def auth_token(test_user):
+def auth_token(test_user: User) -> str:
     """Create an authentication token for a test user."""
     from app.core.security import create_access_token
 
@@ -164,7 +171,7 @@ def auth_token(test_user):
 
 
 @pytest.fixture
-def auth_token2(test_user2):
+def auth_token2(test_user2: User) -> str:
     """Create an authentication token for the second test user."""
     from app.core.security import create_access_token
 
@@ -176,7 +183,7 @@ def auth_token2(test_user2):
 
 
 @pytest.fixture
-def admin_auth_token(test_admin_user):
+def admin_auth_token(test_admin_user: User) -> str:
     """Create an authentication token for the admin test user."""
     from app.core.security import create_access_token
 
@@ -185,3 +192,26 @@ def admin_auth_token(test_admin_user):
     )
 
     return token
+
+
+@pytest.fixture(autouse=True)
+def isolated_external_services(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    import socket
+
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "enable_rate_limiting", False)
+    monkeypatch.setattr(settings, "allow_public_signup", True)
+    monkeypatch.setattr(settings, "download_dir", str(tmp_path))
+    original = socket.getaddrinfo
+
+    def resolve_test_hosts(
+        host: str, port: int, *args: Any, **kwargs: Any
+    ) -> list[SocketInfo]:
+        if host.endswith(".test") or host == "example.com":
+            return [
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", port))
+            ]
+        return cast("list[SocketInfo]", original(host, port, *args, **kwargs))
+
+    monkeypatch.setattr(socket, "getaddrinfo", resolve_test_hosts)

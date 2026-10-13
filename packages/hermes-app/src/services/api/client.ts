@@ -26,7 +26,6 @@ type CleanupResponse = components["schemas"]["CleanupResponse"]
 type ApiKeyCreate = components["schemas"]["ApiKeyCreate"]
 type ApiKeyResponse = components["schemas"]["ApiKeyResponse"]
 type ApiKeyListResponse = components["schemas"]["ApiKeyListResponse"]
-type TokenResponse = components["schemas"]["TokenResponse"]
 
 // SSE Token types
 interface CreateSSETokenRequest {
@@ -44,6 +43,7 @@ interface SSETokenResponse {
 
 import { TokenStorage } from '@/utils/tokenStorage'
 import { getApiBaseUrl } from '@/lib/config'
+import { refreshSession } from '../session'
 
 interface ApiRequestInit extends RequestInit {
   skipAuth?: boolean
@@ -144,29 +144,30 @@ class ApiClient {
     const response = await fetch(url, fetchOptions)
 
     if (response.status === 401 && !skipAuth) {
-      try {
-        // Try to refresh token
-        await this.refreshToken()
-
-        // Retry request with new token
-        const newHeaders = await this.getAuthHeaders()
-        fetchOptions.headers = {
-          ...fetchOptions.headers,
-          ...newHeaders,
+      const sentAuthorization = new Headers(fetchOptions.headers).get('Authorization')
+      const currentToken = TokenStorage.getAccessToken()
+      // A slower expired request may return after another request has already
+      // refreshed. Retry with that replacement instead of rotating again.
+      if (!currentToken || sentAuthorization === `Bearer ${currentToken}`) {
+        const refreshToken = TokenStorage.getRefreshToken()
+        try {
+          await refreshSession()
+        } catch (refreshError) {
+          if (TokenStorage.getRefreshToken() === refreshToken) {
+            TokenStorage.clearTokens()
+            window.location.href = '/auth/login'
+          }
+          throw this.handleAuthError(refreshError)
         }
-
-        const retryResponse = await fetch(url, fetchOptions)
-        if (!retryResponse.ok) {
-          throw new Error(`HTTP ${retryResponse.status}: ${retryResponse.statusText}`)
-        }
-
-        return retryResponse.json()
-      } catch (refreshError) {
-        // Refresh failed, redirect to login
-        TokenStorage.clearTokens()
-        window.location.href = '/auth/login'
-        throw this.handleAuthError(refreshError)
       }
+
+      const newHeaders = await this.getAuthHeaders()
+      fetchOptions.headers = { ...fetchOptions.headers, ...newHeaders }
+      const retryResponse = await fetch(url, fetchOptions)
+      if (!retryResponse.ok) {
+        throw this.handleAuthError(new Error(`HTTP ${retryResponse.status}: ${retryResponse.statusText}`))
+      }
+      return retryResponse.json()
     }
 
     if (!response.ok) {
@@ -362,33 +363,6 @@ class ApiClient {
     return this.request<{ message: string }>(`/auth/api-keys/${apiKeyId}`, {
       method: 'DELETE',
     })
-  }
-
-  // Private method for token refresh
-  private async refreshToken(): Promise<TokenResponse> {
-    const refreshToken = TokenStorage.getRefreshToken()
-    if (!refreshToken) {
-      throw new Error('No refresh token available')
-    }
-
-    const response = await fetch(`${this.baseURL}/auth/refresh`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ refreshToken }),
-    })
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: 'Token refresh failed' }))
-      throw new Error(`Token refresh failed: ${errorData.detail || response.statusText}`)
-    }
-
-    const tokenResponse = await response.json()
-    TokenStorage.setAccessToken(tokenResponse.accessToken, 15)
-    TokenStorage.setRefreshToken(tokenResponse.refreshToken)
-
-    return tokenResponse
   }
 
   // Delete downloaded files

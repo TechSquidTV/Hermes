@@ -3,16 +3,20 @@ Security utilities for API authentication and authorization.
 """
 
 import hashlib
+import hmac
 import secrets
+import uuid
+from collections.abc import Callable, Coroutine, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
-from typing import List, Literal, Optional
+from typing import Any, List, Literal, Optional, cast
 
 import bcrypt
 import jwt
 from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import JsonValue
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -23,6 +27,8 @@ from app.db.repositories import (
     UserRepository,
 )
 from app.db.session import get_database_session
+from app.models.auth import AuthenticatedUser, TokenClaims
+from app.utils.dates import as_utc
 
 logger = get_logger(__name__)
 
@@ -53,26 +59,24 @@ class AuthPrincipal:
     email: Optional[str] = None
     avatar: Optional[str] = None
     is_admin: bool = False
-    preferences: Optional[dict] = None
+    preferences: Optional[dict[str, JsonValue]] = None
     created_at: Optional[str] = None
     last_login: Optional[str] = None
     token_id: Optional[str] = None
+    session_id: Optional[str] = None
     api_key_id: Optional[str] = None
     api_key_name: Optional[str] = None
     permissions: list[str] = field(default_factory=list)
 
-    @property
-    def legacy_identifier(self) -> str:
-        """Stable string for routes that only need to know auth succeeded."""
-        if self.kind == "user" and self.user_id:
-            return f"user:{self.user_id}"
-        if self.api_key_id:
-            return f"db_api_key:{self.api_key_id}"
-        return self.subject
-
-    def as_user_dict(self) -> dict:
+    def as_user_dict(self) -> AuthenticatedUser:
         """Return the historical user dict shape used by auth/admin endpoints."""
-        if self.kind != "user" or not self.user_id:
+        if (
+            self.kind != "user"
+            or not self.user_id
+            or not self.username
+            or not self.email
+            or not self.session_id
+        ):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User authentication required",
@@ -89,6 +93,7 @@ class AuthPrincipal:
             "created_at": self.created_at,
             "last_login": self.last_login,
             "token_id": self.token_id,
+            "session_id": self.session_id,
         }
 
 
@@ -104,12 +109,15 @@ def hash_api_key(api_key: str) -> str:
 
 def verify_api_key(plain_key: str, hashed_key: str) -> bool:
     """Verify a plain API key against its hash."""
-    return hash_api_key(plain_key) == hashed_key
+    return hmac.compare_digest(hash_api_key(plain_key), hashed_key)
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+def create_access_token(
+    data: Mapping[str, object], expires_delta: Optional[timedelta] = None
+) -> str:
     """Create a JWT access token."""
-    to_encode = data.copy()
+    to_encode = dict(data)
+    to_encode.setdefault("sid", str(uuid.uuid4()))
 
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
@@ -119,8 +127,6 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
         )
 
     # Add JWT ID for token tracking and blacklisting
-    import uuid
-
     jti = str(uuid.uuid4())
 
     to_encode.update(
@@ -140,9 +146,12 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 
-def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None):
+def create_refresh_token(
+    data: Mapping[str, object], expires_delta: Optional[timedelta] = None
+) -> str:
     """Create a JWT refresh token."""
-    to_encode = data.copy()
+    to_encode = dict(data)
+    to_encode.setdefault("sid", str(uuid.uuid4()))
 
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
@@ -152,8 +161,6 @@ def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None):
         )
 
     # Add JWT ID for token tracking and blacklisting
-    import uuid
-
     jti = str(uuid.uuid4())
 
     to_encode.update(
@@ -173,7 +180,13 @@ def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 
-def verify_token(token: str) -> Optional[dict]:
+def create_token_pair(data: dict[str, str]) -> tuple[str, str]:
+    """Mint access and refresh credentials with a shared session revocation ID."""
+    claims = {**data, "sid": data.get("sid") or str(uuid.uuid4())}
+    return create_access_token(claims), create_refresh_token(claims)
+
+
+def verify_token(token: str) -> Optional[TokenClaims]:
     """Verify and decode a JWT token."""
     try:
         payload = jwt.decode(
@@ -182,8 +195,18 @@ def verify_token(token: str) -> Optional[dict]:
             algorithms=[settings.algorithm],
             audience=["hermes-app", "hermes-api"],  # Accept tokens for app or API
             issuer="hermes-api",
+            options={"require": ["exp", "iat", "jti", "type", "sid", "sub", "user_id"]},
         )
-        return payload
+        if not all(
+            isinstance(payload.get(name), str) and payload[name]
+            for name in ("sub", "user_id", "jti", "sid")
+        ):
+            return None
+        if payload.get("type") not in ("access", "refresh") or not all(
+            isinstance(payload.get(name), (int, float)) for name in ("exp", "iat")
+        ):
+            return None
+        return cast(TokenClaims, payload)
     except jwt.ExpiredSignatureError as e:
         logger.warning("JWT expired", error=str(e))
         return None
@@ -202,10 +225,16 @@ async def _principal_from_jwt(
     payload = verify_token(token)
     if not payload:
         return None
+    if (
+        payload.get("type") != "access"
+        or not isinstance(payload.get("sid"), str)
+        or not isinstance(payload.get("jti"), str)
+    ):
+        raise HTTPException(status_code=401, detail="Access token required")
 
-    username: str = payload.get("sub")
-    user_id: str = payload.get("user_id")
-    token_id: str = payload.get("jti")
+    username = payload["sub"]
+    user_id = payload["user_id"]
+    token_id = payload["jti"]
 
     if not username or not user_id:
         logger.warning("Missing username or user_id in token payload")
@@ -217,7 +246,9 @@ async def _principal_from_jwt(
 
     if token_id:
         token_blacklist_repo = TokenBlacklistRepository(db_session)
-        if await token_blacklist_repo.is_blacklisted(token_id):
+        if await token_blacklist_repo.is_blacklisted(
+            token_id
+        ) or await token_blacklist_repo.is_blacklisted(payload["sid"]):
             logger.warning(f"Token is blacklisted: {token_id}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -255,6 +286,7 @@ async def _principal_from_jwt(
         created_at=user.created_at.isoformat() if user.created_at else None,
         last_login=user.last_login.isoformat() if user.last_login else None,
         token_id=token_id,
+        session_id=payload["sid"],
     )
 
 
@@ -279,7 +311,9 @@ async def _principal_from_api_key(
         logger.warning(f"Inactive API key used: {db_api_key.id}")
         return None
 
-    if db_api_key.expires_at and datetime.now(timezone.utc) > db_api_key.expires_at:
+    if db_api_key.expires_at and datetime.now(timezone.utc) >= as_utc(
+        db_api_key.expires_at
+    ):
         logger.warning(f"Expired API key used: {db_api_key.id}")
         return None
 
@@ -346,47 +380,12 @@ async def get_current_principal_optional(
     return await _principal_from_api_key(auth_token, db_session)
 
 
-async def get_current_api_key_optional(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
-    token: Optional[str] = Query(None),
-    db_session: AsyncSession = Depends(get_database_session),
-) -> Optional[str]:
-    """
-    Extract and validate API key from Authorization header or query param.
-
-    For SSE endpoints where EventSource cannot send custom headers,
-    accepts token as query parameter as fallback.
-
-    Args:
-        credentials: HTTP Bearer token from Authorization header
-        token: Optional token from query parameter (for SSE)
-
-    Returns:
-        Validated API key/user marker or None if no auth provided
-    """
-    principal = await get_current_principal_optional(credentials, token, db_session)
-    return principal.legacy_identifier if principal else None
-
-
-async def get_current_api_key(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db_session: AsyncSession = Depends(get_database_session),
-) -> str:
-    """Extract and validate API key from Authorization header."""
-    principal = await get_current_principal(credentials, db_session)
-    return principal.legacy_identifier
-
-
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash."""
     try:
-        # Convert string to bytes if needed
-        if isinstance(plain_password, str):
-            plain_password = plain_password.encode("utf-8")
-        if isinstance(hashed_password, str):
-            hashed_password = hashed_password.encode("utf-8")
-
-        return bcrypt.checkpw(plain_password, hashed_password)
+        return bcrypt.checkpw(
+            plain_password.encode("utf-8"), hashed_password.encode("utf-8")
+        )
     except Exception as e:
         logger.error("Password verification failed", error=str(e))
         return False
@@ -395,13 +394,8 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def get_password_hash(password: str) -> str:
     """Hash a password for storage."""
     try:
-        # Convert string to bytes and hash
-        if isinstance(password, str):
-            password = password.encode("utf-8")
-
-        # Generate salt and hash
         salt = bcrypt.gensalt()
-        hashed = bcrypt.hashpw(password, salt)
+        hashed = bcrypt.hashpw(password.encode("utf-8"), salt)
 
         # Return as string
         return hashed.decode("utf-8")
@@ -423,7 +417,9 @@ class PermissionChecker:
         )
 
     @staticmethod
-    def require_permission(api_key_permissions: List[str], required_permission: str):
+    def require_permission(
+        api_key_permissions: List[str], required_permission: str
+    ) -> None:
         """Raise exception if permission is not granted."""
         if not PermissionChecker.has_permission(
             api_key_permissions, required_permission
@@ -434,7 +430,9 @@ class PermissionChecker:
             )
 
 
-def require_api_permission(required_permission: ApiKeyPermission | str):
+def require_api_permission(
+    required_permission: ApiKeyPermission | str,
+) -> Callable[[AuthPrincipal], Coroutine[object, object, AuthPrincipal]]:
     """FastAPI dependency factory that enforces permissions for API key callers."""
 
     required_permission_value = (
@@ -447,6 +445,8 @@ def require_api_permission(required_permission: ApiKeyPermission | str):
         principal: AuthPrincipal = Depends(get_current_principal),
     ) -> AuthPrincipal:
         if principal.kind == "user":
+            if required_permission_value == "admin" and not principal.is_admin:
+                raise HTTPException(status_code=403, detail="Admin access required")
             return principal
 
         PermissionChecker.require_permission(
@@ -462,7 +462,7 @@ def require_api_permission(required_permission: ApiKeyPermission | str):
 # =============================================================================
 
 
-async def validate_sse_token(token: str, required_scope: str) -> dict:
+async def validate_sse_token(token: str, required_scope: str) -> dict[str, Any]:
     """
     Validate ephemeral SSE token.
 
@@ -560,7 +560,7 @@ def _scope_matches(token_scope: str, required_scope: str) -> bool:
 
 async def get_current_sse_token(
     token: Optional[str] = Query(None, description="SSE token from query parameter"),
-) -> dict:
+) -> dict[str, Any]:
     """
     Dependency to extract and validate SSE token from query parameter.
 

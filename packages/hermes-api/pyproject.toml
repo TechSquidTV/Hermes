@@ -17,7 +17,6 @@ dependencies = [
     "PyJWT[crypto]>=2.8.0",
     "bcrypt>=4.0.0",
     "pydantic-settings>=2.0.0",
-    "slowapi>=0.1.9",
     "sse-starlette>=1.6.5",
     "structlog>=23.0.0",
 ]
@@ -45,14 +44,19 @@ line_length = 88
 
 [tool.mypy]
 python_version = "3.11"
-warn_return_any = false
-warn_unused_configs = true
-disallow_untyped_defs = false
-ignore_missing_imports = true
-no_implicit_optional = false
+strict = true
+explicit_package_bases = true
+mypy_path = "$MYPY_CONFIG_FILE_DIR/typings"
+plugins = ["pydantic.mypy"]
 files = ["app", "tests"]
-strict_optional = false
-disable_error_code = ["var-annotated", "return-value", "arg-type", "assignment", "misc", "attr-defined", "call-arg"]
+
+[[tool.mypy.overrides]]
+module = ["celery.*", "kombu.*"]
+ignore_missing_imports = true
+
+[tool.pydantic-mypy]
+init_typed = true
+warn_required_dynamic_aliases = true
 
 [tool.ruff]
 line-length = 88

@@ -2,6 +2,51 @@
 
 This document covers operational aspects of deploying Hermes including volume management, monitoring, backups, and security. For reverse proxy configuration and domain setup, see the [Proxy & Deployment Guide](PROXY_DEPLOYMENT.md).
 
+## Backend security upgrade
+
+This upgrade includes breaking authentication and download behavior. Before
+rolling it out, drain older queued tasks, then restart the API, workers, and beat
+together. The old sequential batch task is removed, and single-download task IDs
+now match their download UUIDs.
+
+Users must sign in again because earlier JWTs do not contain the required session
+claim. Renew SSE tokens after restarting: progress, token, and event-channel
+Redis names now use the `hermes:` namespace. Refresh tokens can be exchanged only
+once; the bundled frontend coordinates concurrent exchanges, and other clients
+must serialize refresh requests and store both replacement tokens.
+
+The following API changes apply:
+
+- `/api/v1/info/` requires authenticated READ access.
+- URLs must use HTTP or HTTPS and resolve to public addresses. Private, local,
+  reserved, credential-bearing, and non-HTTP URLs are rejected, including
+  redirects and secondary media requests. Media requiring an external network
+  downloader is refused. Local ffmpeg merging and conversion remain supported.
+- `cookieFile` and `browserCookies` are removed from download requests.
+  Caller-supplied cookie values remain supported.
+- Output directories must resolve inside `HERMES_DOWNLOAD_DIR`. The API and
+  worker must share that root. UUIDs prefix default and custom output filenames;
+  download status reports return the basename instead of an absolute path.
+- Cleanup and file deletion require administrator users or administrator API
+  keys.
+
+New installations disable public signup after bootstrap. Review the saved signup
+setting on existing installations if public registration should be disabled.
+Default access and refresh lifetimes are 15 minutes and seven days, respectively;
+explicit settings still take precedence. Token revocation is mandatory, and
+`HERMES_ENABLE_TOKEN_BLACKLIST` has been removed.
+
+Authentication budgets are shared through Redis. With limiting enabled, Redis
+outages temporarily disable login, signup, and refresh. Configure
+`HERMES_TRUSTED_PROXY_HOSTS` with exact trusted proxy IPs or DNS names before using
+forwarded client addresses; Compose defaults to its frontend service, `app`.
+Wildcard CORS origins cannot be combined with credentials.
+
+Automatic retention is off by default. Set `HERMES_DOWNLOAD_RETENTION_DAYS` only
+when hourly deletion of old managed downloads is desired. Preview the cleanup
+with its `dry_run` option before enabling scheduled deletion. See the
+[configuration guide](CONFIGURATION.md) for the updated settings.
+
 ## Docker Volume Mounts
 
 The Docker setup uses volume mounts to persist data and provide access to downloaded files:
@@ -230,7 +275,7 @@ find $BACKUP_DIR -name "*" -type f -mtime +7 -delete
 - [ ] Enable rate limiting (`HERMES_ENABLE_RATE_LIMITING=true`)
 - [ ] Set strong secret key (32+ characters, random)
 - [ ] Configure CORS properly for your domain(s)
-- [ ] Enable token blacklisting (`HERMES_ENABLE_TOKEN_BLACKLIST=true`)
+- [ ] Use session revocation (always enabled) and store each replacement refresh token
 - [ ] Set up proper firewall rules
 - [ ] Monitor authentication attempts
 - [ ] Keep all dependencies updated

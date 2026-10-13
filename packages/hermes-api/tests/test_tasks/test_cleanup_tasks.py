@@ -2,10 +2,12 @@
 Tests for cleanup tasks.
 """
 
+from __future__ import annotations
+
 import os
 import tempfile
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
@@ -20,7 +22,7 @@ class TestCleanupTempFiles:
     """Test suite for temporary file cleanup."""
 
     @pytest.mark.asyncio
-    async def test_cleanup_temp_files_basic(self):
+    async def test_cleanup_temp_files_basic(self) -> None:
         """Test basic temp file cleanup."""
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create old and new files
@@ -56,7 +58,7 @@ class TestCleanupTempFiles:
             assert os.path.exists(new_file)
 
     @pytest.mark.asyncio
-    async def test_cleanup_temp_files_no_directory(self):
+    async def test_cleanup_temp_files_no_directory(self) -> None:
         """Test cleanup when temp directory doesn't exist."""
         with patch.dict(os.environ, {"HERMES_TEMP_DIR": "/nonexistent/directory"}):
             result = await _cleanup_temp_files(max_age_hours=24)
@@ -65,7 +67,7 @@ class TestCleanupTempFiles:
         assert result["total_freed_bytes"] == 0
 
     @pytest.mark.asyncio
-    async def test_cleanup_temp_files_empty_directory(self):
+    async def test_cleanup_temp_files_empty_directory(self) -> None:
         """Test cleanup with empty temp directory."""
         with tempfile.TemporaryDirectory() as tmpdir:
             with patch.dict(os.environ, {"HERMES_TEMP_DIR": tmpdir}):
@@ -75,7 +77,7 @@ class TestCleanupTempFiles:
             assert result["total_freed_bytes"] == 0
 
     @pytest.mark.asyncio
-    async def test_cleanup_temp_files_all_new_files(self):
+    async def test_cleanup_temp_files_all_new_files(self) -> None:
         """Test cleanup when all files are newer than cutoff."""
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create only new files
@@ -97,7 +99,7 @@ class TestCleanupTempFiles:
             assert len(os.listdir(tmpdir)) == 3
 
     @pytest.mark.asyncio
-    async def test_cleanup_temp_files_different_cutoff(self):
+    async def test_cleanup_temp_files_different_cutoff(self) -> None:
         """Test cleanup with different age cutoff."""
         with tempfile.TemporaryDirectory() as tmpdir:
             old_file = os.path.join(tmpdir, "old_file.tmp")
@@ -119,7 +121,7 @@ class TestCleanupTempFiles:
             assert result["total_freed_bytes"] == file_size
             assert not os.path.exists(old_file)
 
-    def test_cleanup_temp_files_sync_wrapper(self):
+    def test_cleanup_temp_files_sync_wrapper(self) -> None:
         """Test the synchronous wrapper function."""
         with tempfile.TemporaryDirectory() as tmpdir:
             test_file = os.path.join(tmpdir, "test.tmp")
@@ -142,9 +144,14 @@ class TestCleanupDownloadFiles:
     """Test suite for download file cleanup."""
 
     @pytest.mark.asyncio
-    async def test_cleanup_download_files_success(self):
+    async def test_cleanup_download_files_success(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test successful cleanup of download files."""
         with tempfile.TemporaryDirectory() as tmpdir:
+            from app.core.config import settings
+
+            monkeypatch.setattr(settings, "download_dir", tmpdir)
             # Create test files
             test_file1 = os.path.join(tmpdir, "video1.mp4")
             test_file2 = os.path.join(tmpdir, "video2.mp4")
@@ -179,7 +186,7 @@ class TestCleanupDownloadFiles:
                 )
 
                 with patch(
-                    "app.tasks.cleanup_tasks.DownloadFileRepository",
+                    "app.api.dependencies.DownloadFileRepository",
                     return_value=mock_repo,
                 ):
                     result = await _cleanup_download_files(["test-download-123"])
@@ -191,8 +198,13 @@ class TestCleanupDownloadFiles:
             assert not os.path.exists(test_file2)
 
     @pytest.mark.asyncio
-    async def test_cleanup_download_files_missing_file(self):
+    async def test_cleanup_download_files_missing_file(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test cleanup handles missing files gracefully."""
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "download_dir", "/nonexistent/path")
         # Mock file info for non-existent file
         mock_file = Mock()
         mock_file.filepath = "/nonexistent/path/video.mp4"
@@ -207,7 +219,7 @@ class TestCleanupDownloadFiles:
             mock_repo.get_by_download_id = AsyncMock(return_value=[mock_file])
 
             with patch(
-                "app.tasks.cleanup_tasks.DownloadFileRepository", return_value=mock_repo
+                "app.api.dependencies.DownloadFileRepository", return_value=mock_repo
             ):
                 result = await _cleanup_download_files(["test-download-123"])
 
@@ -217,7 +229,7 @@ class TestCleanupDownloadFiles:
         assert result["failed_files"] == 0
 
     @pytest.mark.asyncio
-    async def test_cleanup_download_files_empty_list(self):
+    async def test_cleanup_download_files_empty_list(self) -> None:
         """Test cleanup with empty download ID list."""
         with patch("app.tasks.cleanup_tasks.async_session_maker") as mock_session_maker:
             mock_session = AsyncMock()
@@ -232,7 +244,7 @@ class TestCleanupDownloadFiles:
         assert result["total_freed_bytes"] == 0
 
     @pytest.mark.asyncio
-    async def test_cleanup_download_files_repository_error(self):
+    async def test_cleanup_download_files_repository_error(self) -> None:
         """Test cleanup handles repository errors."""
         with patch("app.tasks.cleanup_tasks.async_session_maker") as mock_session_maker:
             mock_session = AsyncMock()
@@ -246,7 +258,7 @@ class TestCleanupDownloadFiles:
             )
 
             with patch(
-                "app.tasks.cleanup_tasks.DownloadFileRepository", return_value=mock_repo
+                "app.api.dependencies.DownloadFileRepository", return_value=mock_repo
             ):
                 result = await _cleanup_download_files(["test-download-123"])
 
@@ -255,9 +267,14 @@ class TestCleanupDownloadFiles:
         assert "test-download-123" in result["failed_downloads"]
 
     @pytest.mark.asyncio
-    async def test_cleanup_download_files_multiple_downloads(self):
+    async def test_cleanup_download_files_multiple_downloads(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test cleanup of files from multiple downloads."""
         with tempfile.TemporaryDirectory() as tmpdir:
+            from app.core.config import settings
+
+            monkeypatch.setattr(settings, "download_dir", tmpdir)
             # Create files for two downloads
             file1 = os.path.join(tmpdir, "download1_video.mp4")
             file2 = os.path.join(tmpdir, "download2_video.mp4")
@@ -285,7 +302,7 @@ class TestCleanupDownloadFiles:
                 mock_repo = AsyncMock()
 
                 # Different files for different downloads
-                async def get_files_side_effect(download_id):
+                async def get_files_side_effect(download_id: str) -> list[MagicMock]:
                     if download_id == "download-1":
                         return [mock_file1]
                     elif download_id == "download-2":
@@ -297,7 +314,7 @@ class TestCleanupDownloadFiles:
                 )
 
                 with patch(
-                    "app.tasks.cleanup_tasks.DownloadFileRepository",
+                    "app.api.dependencies.DownloadFileRepository",
                     return_value=mock_repo,
                 ):
                     result = await _cleanup_download_files(["download-1", "download-2"])

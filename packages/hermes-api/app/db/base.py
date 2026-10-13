@@ -42,7 +42,6 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with async_session_maker() as session:
         try:
             yield session
-            await session.commit()
         except Exception:
             await session.rollback()
             raise
@@ -50,7 +49,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
-async def create_tables():
+async def create_tables() -> None:
     """Create all database tables."""
     # Register models even when this helper runs before application startup.
     from app.db import models  # noqa: F401
@@ -67,7 +66,7 @@ async def create_tables():
         await conn.run_sync(Base.metadata.create_all)
 
 
-async def drop_tables():
+async def drop_tables() -> None:
     """Drop all database tables (for testing)."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)

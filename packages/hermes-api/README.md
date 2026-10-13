@@ -161,15 +161,25 @@ uv run pytest tests/test_api/test_health.py -v
 
 ```bash
 # Format code
-uv run black app/ tests/
-uv run isort app/ tests/
+uv run --locked black app/ tests/ typings/
+uv run --locked isort app/ tests/ typings/
 
 # Type checking
-uv run mypy app/
+uv run --locked python -m mypy app/ tests/
 
 # Linting
-uv run ruff check app/ tests/
+uv run --locked ruff check app/ tests/ typings/
 ```
+
+Mypy runs in strict mode for the entire application and test suite, with the
+Pydantic plugin checking model constructors. Use SQLAlchemy `Mapped` attributes
+and explicit optional values; keep fixtures and task signatures typed. There are
+no project-wide error-code suppressions.
+
+The untyped Celery and Kombu imports are confined to library boundaries. The
+shared Celery task decorator preserves callable signatures, and the yt-dlp
+interfaces used by Hermes have local stubs in [`typings/`](typings/README.md).
+Update those contracts when upgrading yt-dlp.
 
 ## 🏗️ Architecture
 

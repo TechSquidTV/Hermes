@@ -6,7 +6,8 @@ import uuid
 from pathlib import Path
 
 from sqlalchemy import and_, select
-from sqlalchemy.dialects.sqlite import insert
+from sqlalchemy.dialects.postgresql import insert as postgres_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
@@ -52,6 +53,10 @@ async def register_download_file(
         "file_size": file_stat.st_size,
         "file_type": file_type,
     }
+    dialect = session.get_bind().dialect.name
+    if dialect not in {"sqlite", "postgresql"}:
+        raise ValueError("Managed file registration requires SQLite or PostgreSQL")
+    insert = sqlite_insert if dialect == "sqlite" else postgres_insert
     statement = (
         insert(DownloadFile)
         .values(id=file_id, download_id=download_id, **metadata)
@@ -92,6 +97,8 @@ async def backfill_download_files(session: AsyncSession) -> int:
             return repaired
 
         for download in downloads:
+            if download.output_path is None:
+                continue
             try:
                 file_record = await register_download_file(
                     session, download.id, download.output_path

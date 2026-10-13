@@ -1,0 +1,3 @@
+from . import FileDownloader
+
+class DashSegmentsFD(FileDownloader): ...

@@ -44,6 +44,8 @@ services:
     env_file:
       - .env
     environment:
+      # Trust only the frontend proxy container when reading forwarded client IPs.
+      - HERMES_TRUSTED_PROXY_HOSTS=${HERMES_TRUSTED_PROXY_HOSTS:-app}
       - HERMES_SECRET_KEY=${HERMES_SECRET_KEY}
       - HERMES_REDIS_URL=${HERMES_REDIS_URL:-redis://redis:6379}
     volumes:

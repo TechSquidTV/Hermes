@@ -5,10 +5,12 @@ Pydantic models for download-related API requests and responses.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
 
 from app.models.base import CamelCaseModel
+from app.utils.files import resolve_download_path
 from app.utils.media import DEFAULT_FORMAT_SPEC
+from app.utils.urls import validate_public_url
 
 
 class DownloadRequest(CamelCaseModel):
@@ -18,6 +20,7 @@ class DownloadRequest(CamelCaseModel):
         ..., description="Video URL to download", min_length=1, max_length=2048
     )
     format: str = Field(
+        max_length=1024,
         default=DEFAULT_FORMAT_SPEC,
         description=(
             "Format selection specification. Defaults to bestvideo*+bestaudio/best, "
@@ -56,24 +59,26 @@ class DownloadRequest(CamelCaseModel):
     cookies: Optional[Dict[str, str]] = Field(
         None, description="Custom cookies to use for the download"
     )
-    cookie_file: Optional[str] = Field(
-        None, description="Path to cookie file for authentication"
-    )
-    browser_cookies: Optional[Dict[str, str]] = Field(
-        None, description="Browser cookie extraction settings"
-    )
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("output_directory")
+    @classmethod
+    def validate_output_directory(cls, value: str | None) -> str | None:
+        try:
+            return str(resolve_download_path(value)) if value is not None else None
+        except (OSError, ValueError, RuntimeError) as error:
+            raise ValueError(
+                "Output directory must be inside download storage"
+            ) from error
 
     @field_validator("url")
     @classmethod
-    def validate_url(cls, v):
-        """Validate URL format."""
-        if not v.startswith(("http://", "https://")):
-            raise ValueError("URL must start with http:// or https://")
-        return v
+    def validate_url(cls, v: str) -> str:
+        return validate_public_url(v, resolve=False)
 
     @field_validator("subtitle_languages")
     @classmethod
-    def validate_subtitle_languages(cls, v):
+    def validate_subtitle_languages(cls, v: list[str] | None) -> list[str] | None:
         """Validate subtitle language codes."""
         if v:
             # Basic validation - could be expanded with proper language code validation
@@ -159,6 +164,7 @@ class BatchDownloadRequest(CamelCaseModel):
         ..., min_length=1, max_length=50, description="List of video URLs to download"
     )
     format: str = Field(
+        max_length=1024,
         default=DEFAULT_FORMAT_SPEC,
         description=(
             "Format selection for all downloads. "
@@ -179,12 +185,13 @@ class BatchDownloadRequest(CamelCaseModel):
 
     @field_validator("urls")
     @classmethod
-    def validate_urls(cls, v):
-        """Validate all URLs in the batch."""
-        for url in v:
-            if not url.startswith(("http://", "https://")):
-                raise ValueError(f"Invalid URL format: {url}")
-        return v
+    def validate_urls(cls, v: list[str]) -> list[str]:
+        return [validate_public_url(url, resolve=False) for url in v]
+
+    @field_validator("output_directory")
+    @classmethod
+    def validate_output_directory(cls, value: str | None) -> str | None:
+        return DownloadRequest.validate_output_directory(value)
 
 
 class BatchDownloadResponse(CamelCaseModel):

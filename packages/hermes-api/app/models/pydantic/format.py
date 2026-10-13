@@ -81,7 +81,7 @@ class FormatInfo(CamelCaseModel):
         description="Common video resolution options",
     )
 
-    format_notes: dict = Field(
+    format_notes: dict[str, str] = Field(
         default_factory=lambda: {
             "best": "Select the best quality format (video+audio)",
             "worst": "Select the worst quality format",
