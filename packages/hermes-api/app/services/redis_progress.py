@@ -16,12 +16,19 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 
 
+def _decode_object(data: str | bytes) -> dict[str, Any]:
+    decoded: object = json.loads(data)
+    if not isinstance(decoded, dict):
+        raise ValueError("Expected a JSON object")
+    return decoded
+
+
 class RedisProgressService:
     """Service for managing download progress in Redis."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._async_redis: Optional[aioredis.Redis] = None
-        self._async_redis_loop: Optional[Any] = None
+        self._async_redis_loop: Optional[asyncio.AbstractEventLoop] = None
         self._sync_redis: Optional[redis.Redis] = None
 
     async def get_async_redis(self) -> aioredis.Redis:
@@ -104,7 +111,7 @@ class RedisProgressService:
             key = f"hermes:download:{download_id}:progress"
             data = await r.get(key)
             if data:
-                return json.loads(data)
+                return _decode_object(data)
             return None
         except Exception as e:
             logger.error(
@@ -177,7 +184,7 @@ class RedisProgressService:
                 f"Max recursion depth ({max_depth}) exceeded in _serialize_data"
             )
 
-        serialized = {}
+        serialized: dict[str, Any] = {}
         for key, value in data.items():
             if isinstance(value, datetime):
                 serialized[key] = value.isoformat()
@@ -386,7 +393,7 @@ class RedisProgressService:
             key = f"hermes:sse:token:{token}"
             data = await r.get(key)
             if data:
-                return json.loads(data)
+                return _decode_object(data)
             return None
         except Exception as e:
             logger.error(

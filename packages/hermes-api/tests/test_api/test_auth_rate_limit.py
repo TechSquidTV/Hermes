@@ -1,5 +1,15 @@
 """Authentication uses shared Redis budgets and verified proxy identities."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from httpx import AsyncClient
+    from pydantic import JsonValue
+    from starlette.requests import Request
+
+
 from unittest.mock import AsyncMock
 
 import pytest
@@ -11,7 +21,7 @@ from app.core.rate_limit import auth_client_ip
 from app.main import app
 
 
-def request(peer, forwarded):
+def request(peer: str, forwarded: str) -> Request:
     return Request(
         {
             "type": "http",
@@ -21,12 +31,16 @@ def request(peer, forwarded):
     )
 
 
-async def test_untrusted_forwarded_headers_are_ignored(monkeypatch):
+async def test_untrusted_forwarded_headers_are_ignored(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(settings, "trusted_proxy_hosts", ["10.0.0.2"])
     assert await auth_client_ip(request("203.0.113.5", "1.2.3.4")) == "203.0.113.5"
 
 
-async def test_trusted_proxy_chain_uses_nearest_untrusted_client(monkeypatch):
+async def test_trusted_proxy_chain_uses_nearest_untrusted_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(settings, "trusted_proxy_hosts", ["10.0.0.2", "10.0.0.3"])
     assert (
         await auth_client_ip(request("10.0.0.2", "1.2.3.4, 203.0.113.5, 10.0.0.3"))
@@ -51,8 +65,11 @@ async def test_trusted_proxy_chain_uses_nearest_untrusted_client(monkeypatch):
     ],
 )
 async def test_every_auth_entrypoint_enforces_redis_budget(
-    client, monkeypatch, path, body
-):
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    path: str,
+    body: dict[str, JsonValue],
+) -> None:
     app.dependency_overrides.clear()
     monkeypatch.setattr(settings, "enable_rate_limiting", True)
     redis = AsyncMock()
@@ -70,7 +87,9 @@ async def test_every_auth_entrypoint_enforces_redis_budget(
     assert call[3] == str(settings.login_attempt_window_minutes * 60)
 
 
-async def test_disabled_limiter_never_contacts_redis(client, monkeypatch):
+async def test_disabled_limiter_never_contacts_redis(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     redis = AsyncMock()
     monkeypatch.setattr(settings, "enable_rate_limiting", False)
     monkeypatch.setattr(
@@ -84,7 +103,9 @@ async def test_disabled_limiter_never_contacts_redis(client, monkeypatch):
     redis.assert_not_called()
 
 
-async def test_redis_failure_does_not_disable_auth_limits(client, monkeypatch):
+async def test_redis_failure_does_not_disable_auth_limits(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(settings, "enable_rate_limiting", True)
     monkeypatch.setattr(
         "app.core.rate_limit.redis_progress_service.get_async_redis",
@@ -98,8 +119,8 @@ async def test_redis_failure_does_not_disable_auth_limits(client, monkeypatch):
 
 
 async def test_login_budget_rejects_sixth_attempt_and_ignores_spoofed_ips(
-    client, monkeypatch
-):
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     app.dependency_overrides.clear()
     monkeypatch.setattr(settings, "enable_rate_limiting", True)
     redis = AsyncMock()

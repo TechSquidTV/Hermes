@@ -1,5 +1,17 @@
 """Retention selects terminal records and preserves files it cannot safely remove."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+import pytest
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
@@ -9,7 +21,9 @@ from app.services.download_files import register_download_file
 from app.tasks import cleanup_tasks
 
 
-async def test_retention_selects_old_terminal_downloads_only(db_session):
+async def test_retention_selects_old_terminal_downloads_only(
+    db_session: AsyncSession,
+) -> None:
     repository = DownloadRepository(db_session)
     old = datetime.now(timezone.utc) - timedelta(days=40)
     recent = datetime.now(timezone.utc) - timedelta(days=1)
@@ -32,7 +46,9 @@ async def test_retention_selects_old_terminal_downloads_only(db_session):
     } == set(expected)
 
 
-async def test_retention_dry_run_and_actual_cleanup(db_session, tmp_path):
+async def test_retention_dry_run_and_actual_cleanup(
+    db_session: AsyncSession, tmp_path: Path
+) -> None:
     old = datetime.now(timezone.utc) - timedelta(days=40)
     download = await DownloadRepository(db_session).create(
         url="https://example.test/watch", status="completed", completed_at=old
@@ -52,8 +68,8 @@ async def test_retention_dry_run_and_actual_cleanup(db_session, tmp_path):
 
 
 async def test_retention_preserves_records_if_file_deletion_fails(
-    db_session, monkeypatch
-):
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
     old = datetime.now(timezone.utc) - timedelta(days=40)
     download = await DownloadRepository(db_session).create(
         url="https://example.test/watch", status="completed", completed_at=old
@@ -76,7 +92,9 @@ async def test_retention_preserves_records_if_file_deletion_fails(
     assert await DownloadRepository(db_session).get_by_id(download_id) is not None
 
 
-async def test_retention_refuses_symlink_escape(db_session, tmp_path, monkeypatch):
+async def test_retention_refuses_symlink_escape(
+    db_session: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     root = tmp_path / "downloads"
     root.mkdir()
     monkeypatch.setattr(settings, "download_dir", str(root))

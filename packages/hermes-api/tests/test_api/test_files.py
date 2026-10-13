@@ -1,5 +1,15 @@
 """Tests for downloaded file management endpoints."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from app.db.models import Download
+
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,9 +20,9 @@ from app.db.repositories import DownloadFileRepository, DownloadRepository
 
 async def _create_managed_file(
     db_session: AsyncSession,
-    file_path,
+    file_path: Path,
     content: bytes = b"video",
-):
+) -> Download:
     file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_bytes(content)
 
@@ -33,8 +43,11 @@ async def _create_managed_file(
 
 @pytest.mark.asyncio
 async def test_download_file_serves_managed_download(
-    client: AsyncClient, db_session: AsyncSession, tmp_path, monkeypatch
-):
+    client: AsyncClient,
+    db_session: AsyncSession,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     downloads_dir = tmp_path / "downloads"
     monkeypatch.setattr(settings, "download_dir", str(downloads_dir))
     media_path = downloads_dir / "example.mp4"
@@ -51,8 +64,8 @@ async def test_download_file_serves_managed_download(
 
 @pytest.mark.asyncio
 async def test_download_file_rejects_untracked_file_inside_download_dir(
-    client: AsyncClient, tmp_path, monkeypatch
-):
+    client: AsyncClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     downloads_dir = tmp_path / "downloads"
     monkeypatch.setattr(settings, "download_dir", str(downloads_dir))
     untracked_file = downloads_dir / "untracked.mp4"
@@ -68,8 +81,8 @@ async def test_download_file_rejects_untracked_file_inside_download_dir(
 
 @pytest.mark.asyncio
 async def test_delete_files_rejects_path_outside_download_dir(
-    client: AsyncClient, tmp_path, monkeypatch
-):
+    client: AsyncClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     downloads_dir = tmp_path / "downloads"
     monkeypatch.setattr(settings, "download_dir", str(downloads_dir))
     outside_file = tmp_path / "outside.txt"
@@ -89,8 +102,11 @@ async def test_delete_files_rejects_path_outside_download_dir(
 
 @pytest.mark.asyncio
 async def test_file_listing_paginates_all_matches_and_reports_full_totals(
-    client: AsyncClient, db_session: AsyncSession, tmp_path, monkeypatch
-):
+    client: AsyncClient,
+    db_session: AsyncSession,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(settings, "download_dir", str(tmp_path))
     for index in range(5):
         await _create_managed_file(db_session, tmp_path / f"{index}.mp4", b"video")
@@ -106,8 +122,11 @@ async def test_file_listing_paginates_all_matches_and_reports_full_totals(
 
 @pytest.mark.asyncio
 async def test_file_listing_respects_zero_max_size_and_directory_boundaries(
-    client: AsyncClient, db_session: AsyncSession, tmp_path, monkeypatch
-):
+    client: AsyncClient,
+    db_session: AsyncSession,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(settings, "download_dir", str(tmp_path))
     await _create_managed_file(db_session, tmp_path / "videos" / "empty.mp4", b"")
     await _create_managed_file(db_session, tmp_path / "videos" / "full.mp4")
@@ -125,7 +144,7 @@ async def test_file_listing_respects_zero_max_size_and_directory_boundaries(
 
 
 @pytest.mark.asyncio
-async def test_file_listing_rejects_inverted_size_range(client: AsyncClient):
+async def test_file_listing_rejects_inverted_size_range(client: AsyncClient) -> None:
     response = await client.get(
         "/api/v1/files/", params={"min_size": 10, "max_size": 0}
     )

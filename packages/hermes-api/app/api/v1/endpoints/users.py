@@ -2,7 +2,7 @@
 User management endpoints (admin only).
 """
 
-from typing import Any, Dict, List
+from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import EmailStr
@@ -13,6 +13,7 @@ from app.core.logging import get_logger
 from app.core.security import get_password_hash
 from app.db.repositories import UserRepository
 from app.db.session import get_database_session
+from app.models.auth import AuthenticatedUser
 from app.models.base import CamelCaseModel
 from app.models.pydantic.password import Password
 
@@ -56,9 +57,9 @@ class UserUpdateActive(CamelCaseModel):
 
 @router.get("/", response_model=List[UserListResponse])
 async def list_users(
-    current_admin: dict = Depends(get_current_admin_user),
+    current_admin: AuthenticatedUser = Depends(get_current_admin_user),
     db_session: AsyncSession = Depends(get_database_session),
-) -> List[Dict[str, Any]]:
+) -> List[UserListResponse]:
     """
     List all users (admin only).
 
@@ -81,7 +82,7 @@ async def list_users(
             avatar=user.avatar,
             is_active=user.is_active,
             is_admin=user.is_admin,
-            created_at=user.created_at.isoformat() if user.created_at else None,
+            created_at=user.created_at.isoformat(),
             last_login=user.last_login.isoformat() if user.last_login else None,
         )
         for user in users
@@ -91,9 +92,9 @@ async def list_users(
 @router.post("/", response_model=UserListResponse)
 async def create_user_as_admin(
     user_data: UserCreateAdmin,
-    current_admin: dict = Depends(get_current_admin_user),
+    current_admin: AuthenticatedUser = Depends(get_current_admin_user),
     db_session: AsyncSession = Depends(get_database_session),
-) -> Dict[str, Any]:
+) -> UserListResponse:
     """
     Create a new user as admin (admin only).
 
@@ -143,7 +144,7 @@ async def create_user_as_admin(
         avatar=user.avatar,
         is_active=user.is_active,
         is_admin=user.is_admin,
-        created_at=user.created_at.isoformat() if user.created_at else None,
+        created_at=user.created_at.isoformat(),
         last_login=user.last_login.isoformat() if user.last_login else None,
     )
 
@@ -152,9 +153,9 @@ async def create_user_as_admin(
 async def update_user_admin_status(
     user_id: str,
     update_data: UserUpdateAdmin,
-    current_admin: dict = Depends(get_current_admin_user),
+    current_admin: AuthenticatedUser = Depends(get_current_admin_user),
     db_session: AsyncSession = Depends(get_database_session),
-) -> Dict[str, Any]:
+) -> UserListResponse:
     """
     Promote or demote user admin status (admin only).
 
@@ -211,7 +212,7 @@ async def update_user_admin_status(
         avatar=user.avatar,
         is_active=user.is_active,
         is_admin=user.is_admin,
-        created_at=user.created_at.isoformat() if user.created_at else None,
+        created_at=user.created_at.isoformat(),
         last_login=user.last_login.isoformat() if user.last_login else None,
     )
 
@@ -220,9 +221,9 @@ async def update_user_admin_status(
 async def update_user_active_status(
     user_id: str,
     update_data: UserUpdateActive,
-    current_admin: dict = Depends(get_current_admin_user),
+    current_admin: AuthenticatedUser = Depends(get_current_admin_user),
     db_session: AsyncSession = Depends(get_database_session),
-) -> Dict[str, Any]:
+) -> UserListResponse:
     """
     Activate or deactivate user account (admin only).
 
@@ -267,7 +268,7 @@ async def update_user_active_status(
         avatar=user.avatar,
         is_active=user.is_active,
         is_admin=user.is_admin,
-        created_at=user.created_at.isoformat() if user.created_at else None,
+        created_at=user.created_at.isoformat(),
         last_login=user.last_login.isoformat() if user.last_login else None,
     )
 
@@ -275,7 +276,7 @@ async def update_user_active_status(
 @router.delete("/{user_id}")
 async def delete_user(
     user_id: str,
-    current_admin: dict = Depends(get_current_admin_user),
+    current_admin: AuthenticatedUser = Depends(get_current_admin_user),
     db_session: AsyncSession = Depends(get_database_session),
 ) -> Dict[str, str]:
     """

@@ -4,7 +4,7 @@ Authentication endpoints for user management.
 
 import json
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict
+from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer
@@ -29,6 +29,7 @@ from app.core.security import (
 )
 from app.db.registration import lock_user_registration
 from app.db.session import get_database_session
+from app.models.auth import AuthenticatedUser
 from app.models.base import CamelCaseModel
 from app.models.pydantic.password import Password
 from app.services.system_settings_service import system_settings_service
@@ -73,7 +74,7 @@ class UserResponse(CamelCaseModel):
     avatar: str | None
     is_active: bool = True
     is_admin: bool = False
-    preferences: dict | None = None
+    preferences: dict[str, JsonValue] | None = None
     created_at: str
     last_login: str | None = None
 
@@ -94,7 +95,7 @@ async def login(
     request: Request,
     credentials: UserLogin,
     db_session: AsyncSession = Depends(get_database_session),
-) -> Dict[str, Any]:
+) -> AuthResponse:
     """Authenticate user and return access token."""
     repos = get_repositories_from_session(db_session)
 
@@ -142,7 +143,7 @@ async def login(
             is_active=user.is_active,
             is_admin=user.is_admin,
             preferences=user.preferences,
-            created_at=user.created_at.isoformat() if user.created_at else None,
+            created_at=user.created_at.isoformat(),
             last_login=user.last_login.isoformat() if user.last_login else None,
         ),
     )
@@ -155,7 +156,7 @@ async def signup(
     request: Request,
     user_data: UserCreate,
     db_session: AsyncSession = Depends(get_database_session),
-) -> Dict[str, Any]:
+) -> AuthResponse:
     """Create new user account."""
     repos = get_repositories_from_session(db_session)
 
@@ -223,7 +224,7 @@ async def signup(
             is_active=user.is_active,
             is_admin=user.is_admin,
             preferences=user.preferences,
-            created_at=user.created_at.isoformat() if user.created_at else None,
+            created_at=user.created_at.isoformat(),
             last_login=user.last_login.isoformat() if user.last_login else None,
         ),
     )
@@ -231,7 +232,7 @@ async def signup(
 
 @router.post("/logout")
 async def logout(
-    current_user: dict = Depends(get_current_user_from_token),
+    current_user: AuthenticatedUser = Depends(get_current_user_from_token),
     db_session: AsyncSession = Depends(get_database_session),
 ) -> Dict[str, str]:
     """Revoke the entire token family, including already-rotated refresh tokens."""
@@ -277,8 +278,8 @@ async def refresh_token(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
         )
 
-    username = payload.get("sub")
-    user_id = payload.get("user_id")
+    username = payload["sub"]
+    user_id = payload["user_id"]
 
     if not username or not user_id:
         raise HTTPException(
@@ -326,10 +327,10 @@ async def refresh_token(
 
 @router.get("/me", response_model=UserResponse)
 async def get_current_user(
-    current_user: dict = Depends(get_current_user_from_token),
+    current_user: AuthenticatedUser = Depends(get_current_user_from_token),
 ) -> UserResponse:
     """Get current authenticated user information."""
-    user_response = UserResponse(**current_user)
+    user_response = UserResponse.model_validate(current_user)
     return user_response
 
 
@@ -360,7 +361,7 @@ class ProfileUpdate(CamelCaseModel):
 @router.patch("/profile", response_model=UserResponse)
 async def update_profile(
     updates: ProfileUpdate,
-    current_user: dict = Depends(get_current_user_from_token),
+    current_user: AuthenticatedUser = Depends(get_current_user_from_token),
     db_session: AsyncSession = Depends(get_database_session),
 ) -> UserResponse:
     """Update user profile (name, email, avatar, preferences)."""
@@ -408,7 +409,7 @@ async def update_profile(
         is_active=user.is_active,
         is_admin=user.is_admin,
         preferences=user.preferences,
-        created_at=user.created_at.isoformat() if user.created_at else None,
+        created_at=user.created_at.isoformat(),
         last_login=user.last_login.isoformat() if user.last_login else None,
     )
 
@@ -458,7 +459,7 @@ class ApiKeyListResponse(CamelCaseModel):
 @router.post("/change-password")
 async def change_password(
     password_data: PasswordChange,
-    current_user: dict = Depends(get_current_user_from_token),
+    current_user: AuthenticatedUser = Depends(get_current_user_from_token),
     db_session: AsyncSession = Depends(get_database_session),
 ) -> Dict[str, str]:
     """Change user password. Requires current password for verification."""
@@ -496,9 +497,9 @@ async def change_password(
 @router.post("/api-keys", response_model=ApiKeyResponse)
 async def create_api_key_endpoint(
     api_key_data: ApiKeyCreate,
-    current_user: dict = Depends(get_current_user_from_token),
+    current_user: AuthenticatedUser = Depends(get_current_user_from_token),
     db_session: AsyncSession = Depends(get_database_session),
-) -> Dict[str, Any]:
+) -> ApiKeyResponse:
     """Create a new API key for the authenticated user."""
     # Generate the actual API key
     plain_api_key = create_api_key()  # Call the imported function from security module
@@ -536,9 +537,9 @@ async def create_api_key_endpoint(
 
 @router.get("/api-keys", response_model=list[ApiKeyListResponse])
 async def list_api_keys(
-    current_user: dict = Depends(get_current_user_from_token),
+    current_user: AuthenticatedUser = Depends(get_current_user_from_token),
     db_session: AsyncSession = Depends(get_database_session),
-) -> list[Dict[str, Any]]:
+) -> list[ApiKeyListResponse]:
     """List all API keys for the authenticated user."""
     repos = get_repositories_from_session(db_session)
 
@@ -571,7 +572,7 @@ async def list_api_keys(
 @router.delete("/api-keys/{api_key_id}")
 async def revoke_api_key(
     api_key_id: str,
-    current_user: dict = Depends(get_current_user_from_token),
+    current_user: AuthenticatedUser = Depends(get_current_user_from_token),
     db_session: AsyncSession = Depends(get_database_session),
 ) -> Dict[str, str]:
     """Revoke (deactivate) an API key."""

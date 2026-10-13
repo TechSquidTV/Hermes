@@ -7,7 +7,7 @@ import os
 import re
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Dict, TypedDict
 
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -20,7 +20,7 @@ from app.db.repositories import (
 from app.services.download_files import register_download_file
 from app.services.redis_progress import redis_progress_service
 from app.services.yt_dlp_service import YTDLPService
-from app.tasks.celery_app import celery_app
+from app.tasks.types import task
 from app.utils.download_progress import (
     build_download_progress_payload,
 )
@@ -66,12 +66,12 @@ def sanitize_filename(filename: str) -> str:
 async def _publish_sse_progress(
     download_id: str,
     status: str,
-    progress: float = None,
-    downloaded_bytes: int = None,
-    total_bytes: int = None,
-    download_speed: float = None,
-    eta: float = None,
-    result: dict = None,
+    progress: float | None = None,
+    downloaded_bytes: int | None = None,
+    total_bytes: int | None = None,
+    download_speed: float | None = None,
+    eta: float | None = None,
+    result: dict[str, Any] | None = None,
 ) -> None:
     """
     Publish real-time progress updates via SSE (Redis Pub/Sub only).
@@ -113,15 +113,23 @@ async def _publish_sse_progress(
     )
 
 
+class ProgressFields(TypedDict):
+    progress: float | None
+    downloaded_bytes: int | None
+    total_bytes: int | None
+    download_speed: float | None
+    eta: float | None
+
+
 async def _get_progress_payload_fields(
     download_id: str,
     status: str,
-    progress: float = None,
-    downloaded_bytes: int = None,
-    total_bytes: int = None,
-    download_speed: float = None,
-    eta: float = None,
-) -> dict[str, Any] | None:
+    progress: float | None = None,
+    downloaded_bytes: int | None = None,
+    total_bytes: int | None = None,
+    download_speed: float | None = None,
+    eta: float | None = None,
+) -> ProgressFields | None:
     """Resolve progress fields for active SSE payloads."""
     if progress is not None or downloaded_bytes is not None:
         return {
@@ -154,14 +162,16 @@ async def _get_progress_payload_fields(
 async def _update_download_status(
     download_id: str,
     status: str,
-    progress: float = None,
-    error_message: str = None,
-    downloaded_bytes: int = None,
-    total_bytes: int = None,
-    download_speed: float = None,
-    eta: float = None,
+    progress: float | None = None,
+    error_message: str | None = None,
+    downloaded_bytes: int | None = None,
+    total_bytes: int | None = None,
+    download_speed: float | None = None,
+    eta: float | None = None,
     publish_sse: bool = True,
-    **kwargs,
+    result: dict[str, Any] | None = None,
+    message: str | None = None,
+    **kwargs: object,
 ) -> bool:
     """
     Update download status in database and optionally publish to SSE.
@@ -174,17 +184,16 @@ async def _update_download_status(
         if status == "completed":
             # The status repository commits both writes below; registration must
             # never become visible independently of the completed status.
+            completed_path = kwargs.get("output_path")
+            if not isinstance(completed_path, str):
+                raise ValueError("Completed download must have an output path")
             file_record = await register_download_file(
-                session, download_id, kwargs["output_path"]
+                session, download_id, completed_path
             )
             kwargs["output_path"] = file_record.filepath
             kwargs["file_size"] = file_record.file_size
 
-        repos = {
-            "downloads": DownloadRepository(session),
-            "history": DownloadHistoryRepository(session),
-        }
-        updated = await repos["downloads"].update_status(
+        updated = await DownloadRepository(session).update_status(
             download_id=download_id,
             status=status,
             progress=progress,
@@ -202,7 +211,6 @@ async def _update_download_status(
     # Optionally publish SSE (disabled during progress updates for frequency control)
     if publish_sse:
         payload_extra = dict(kwargs)
-        result = payload_extra.pop("result", None)
         progress_fields = await _get_progress_payload_fields(
             download_id=download_id,
             status=status,
@@ -218,7 +226,16 @@ async def _update_download_status(
             error_message=error_message,
             result=result,
             include_progress=progress_fields is not None,
-            **(progress_fields or {}),
+            message=message,
+            progress=progress_fields["progress"] if progress_fields else None,
+            downloaded_bytes=(
+                progress_fields["downloaded_bytes"] if progress_fields else None
+            ),
+            total_bytes=progress_fields["total_bytes"] if progress_fields else None,
+            download_speed=(
+                progress_fields["download_speed"] if progress_fields else None
+            ),
+            eta=progress_fields["eta"] if progress_fields else None,
             **payload_extra,
         )
 
@@ -254,15 +271,11 @@ async def _create_download_history(
     status: str,
     started_at: datetime,
     completed_at: datetime,
-    **kwargs,
+    **kwargs: object,
 ) -> None:
     """Helper function to create download history record."""
     async with async_session_maker() as session:
-        repos = {
-            "downloads": DownloadRepository(session),
-            "history": DownloadHistoryRepository(session),
-        }
-        await repos["history"].create(
+        await DownloadHistoryRepository(session).create(
             download_id=download_id,
             url=url,
             status=status,
@@ -276,12 +289,8 @@ async def _trigger_webhooks(event: str, download_id: str, data: Dict[str, Any]) 
     """Helper function to trigger webhooks for an event."""
     try:
         async with async_session_maker() as session:
-            repos = {
-                "downloads": DownloadRepository(session),
-                "history": DownloadHistoryRepository(session),
-                "webhooks": WebhookRepository(session),
-            }
-            webhooks = await repos["webhooks"].get_webhooks_for_event(event)
+            repository = WebhookRepository(session)
+            webhooks = await repository.get_webhooks_for_event(event)
 
             for webhook in webhooks:
                 # TODO: Implement webhook triggering with retry logic
@@ -290,19 +299,19 @@ async def _trigger_webhooks(event: str, download_id: str, data: Dict[str, Any]) 
                     webhook_id=webhook.id,
                     download_id=download_id,
                 )
-                await repos["webhooks"].update_last_triggered(webhook.id)
+                await repository.update_last_triggered(webhook.id)
 
     except Exception as e:
-        logger.error("Failed to trigger webhooks", event=event, error=str(e))
+        logger.error("Failed to trigger webhooks", event_type=event, error=str(e))
 
 
 async def _download_video_task(
     download_id: str,
     url: str,
     format_spec: str = DEFAULT_FORMAT_SPEC,
-    output_path: str = None,
-    output_template: str = None,
-    **kwargs,
+    output_path: str | None = None,
+    output_template: str | None = None,
+    **kwargs: object,
 ) -> Dict[str, Any]:
     """Core download logic."""
     started_at = datetime.now(timezone.utc)
@@ -683,14 +692,14 @@ async def _download_video_task(
         return {"success": False, "download_id": download_id, "error": error_message}
 
 
-@celery_app.task(name="app.tasks.download_tasks.download_video_task")
+@task(name="app.tasks.download_tasks.download_video_task")
 def download_video_task(
     download_id: str,
     url: str,
     format_spec: str = DEFAULT_FORMAT_SPEC,
-    output_path: str = None,
-    output_template: str = None,
-    **kwargs,
+    output_path: str | None = None,
+    output_template: str | None = None,
+    **kwargs: object,
 ) -> Dict[str, Any]:
     """
     Celery task for downloading a video.

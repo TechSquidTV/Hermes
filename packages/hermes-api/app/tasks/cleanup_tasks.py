@@ -9,29 +9,14 @@ from typing import Any, Dict, List
 
 from sqlalchemy import select
 
+from app.api.dependencies import get_repositories_from_session
 from app.core.logging import get_logger
 from app.db.base import async_session_maker
 from app.db.models import Download
-from app.db.repositories import (
-    DownloadFileRepository,
-    DownloadHistoryRepository,
-    DownloadRepository,
-    TokenBlacklistRepository,
-)
-from app.tasks.celery_app import celery_app
+from app.tasks.types import task
 from app.utils.files import resolve_download_path
 
 logger = get_logger(__name__)
-
-
-def _get_cleanup_repositories(session):
-    """Create cleanup task repositories for an active database session."""
-    return {
-        "downloads": DownloadRepository(session),
-        "download_files": DownloadFileRepository(session),
-        "token_blacklist": TokenBlacklistRepository(session),
-        "history": DownloadHistoryRepository(session),
-    }
 
 
 async def _get_old_downloads(days: int = 30) -> List[Dict[str, Any]]:
@@ -61,7 +46,7 @@ async def _cleanup_download_files(download_ids: List[str]) -> Dict[str, Any]:
     failed_files = []
 
     async with async_session_maker() as session:
-        repos = _get_cleanup_repositories(session)
+        repos = get_repositories_from_session(session)
 
         for download_id in download_ids:
             try:
@@ -122,7 +107,7 @@ async def _cleanup_temp_files(max_age_hours: int = 24) -> Dict[str, Any]:
     return {"deleted_files": deleted_files, "total_freed_bytes": total_freed}
 
 
-@celery_app.task(name="app.tasks.cleanup_tasks.cleanup_old_downloads")
+@task(name="app.tasks.cleanup_tasks.cleanup_old_downloads")
 def cleanup_old_downloads(days: int = 30, dry_run: bool = False) -> Dict[str, Any]:
     """
     Celery task to clean up old download records and files.
@@ -164,7 +149,7 @@ async def _cleanup_old_downloads_async(
             # Just count what would be deleted
             total_files = 0
             async with async_session_maker() as session:
-                repos = _get_cleanup_repositories(session)
+                repos = get_repositories_from_session(session)
 
                 for download_id in download_ids:
                     files = await repos["download_files"].get_by_download_id(
@@ -185,7 +170,7 @@ async def _cleanup_old_downloads_async(
         # Delete download records from database
         deleted_downloads = 0
         async with async_session_maker() as session:
-            repos = _get_cleanup_repositories(session)
+            repos = get_repositories_from_session(session)
 
             for download_id in download_ids:
                 if download_id in file_cleanup["failed_downloads"]:
@@ -227,7 +212,7 @@ async def _cleanup_old_downloads_async(
         }
 
 
-@celery_app.task(name="app.tasks.cleanup_tasks.cleanup_temp_files")
+@task(name="app.tasks.cleanup_tasks.cleanup_temp_files")
 def cleanup_temp_files(
     max_age_hours: int = 24, dry_run: bool = False
 ) -> Dict[str, Any]:
@@ -309,7 +294,7 @@ async def _cleanup_temp_files_async(
         }
 
 
-@celery_app.task(name="app.tasks.cleanup_tasks.cleanup_expired_tokens")
+@task(name="app.tasks.cleanup_tasks.cleanup_expired_tokens")
 def cleanup_expired_tokens(dry_run: bool = False) -> Dict[str, Any]:
     """
     Celery task to clean up expired tokens from the blacklist.
@@ -334,7 +319,7 @@ async def _cleanup_expired_tokens_async(dry_run: bool = False) -> Dict[str, Any]
         now = datetime.now(timezone.utc)
 
         async with async_session_maker() as session:
-            repos = _get_cleanup_repositories(session)
+            repos = get_repositories_from_session(session)
 
             if dry_run:
                 # Count expired tokens without deleting

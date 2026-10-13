@@ -1,5 +1,16 @@
 """Exercise worker completion and repair against the real database and file API."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from httpx import AsyncClient
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+
 import asyncio
 from unittest.mock import AsyncMock
 
@@ -16,7 +27,7 @@ from app.tasks import download_tasks
 
 
 @pytest.fixture
-def worker_boundaries(monkeypatch):
+def worker_boundaries(monkeypatch: pytest.MonkeyPatch) -> tuple[AsyncMock, AsyncMock]:
     """Mock network services while keeping all worker database writes real."""
     yt_service = AsyncMock()
     yt_service.extract_info.return_value = {"title": "Completed video", "duration": 12}
@@ -33,8 +44,14 @@ def worker_boundaries(monkeypatch):
     [("mp4", "video"), ("m4a", "audio"), ("opus", "audio")],
 )
 async def test_worker_completion_registers_retrievable_file(
-    client, db_session, tmp_path, monkeypatch, worker_boundaries, extension, file_type
-):
+    client: AsyncClient,
+    db_session: AsyncSession,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    worker_boundaries: tuple[AsyncMock, AsyncMock],
+    extension: str,
+    file_type: str,
+) -> None:
     monkeypatch.setattr(settings, "download_dir", str(tmp_path))
     download = await DownloadRepository(db_session).create(
         url="https://example.test/watch"
@@ -44,7 +61,7 @@ async def test_worker_completion_registers_retrievable_file(
     final_path = tmp_path / f"Completed_video.{extension}"
     content = b"postprocessed media bytes"
 
-    async def write_output(**kwargs):
+    async def write_output(**kwargs: object) -> str:
         # The worker must use the same configured directory as the file API.
         assert kwargs["output_path"] == str(
             tmp_path / f"{download_id}_Completed_video.%(ext)s"
@@ -54,10 +71,13 @@ async def test_worker_completion_registers_retrievable_file(
 
     yt_service.download_video.side_effect = write_output
 
-    async def verify_completion_visible(*, download_id, progress_data):
+    async def verify_completion_visible(
+        *, download_id: str, progress_data: dict[str, object]
+    ) -> None:
         if progress_data["status"] == "completed":
             async with async_session_maker() as session:
                 completed = await DownloadRepository(session).get_by_id(download_id)
+                assert completed is not None
                 assert completed.status == "completed"
                 assert len(completed.files) == 1
             response = await client.get(
@@ -73,6 +93,7 @@ async def test_worker_completion_registers_retrievable_file(
 
     async with async_session_maker() as session:
         completed = await DownloadRepository(session).get_by_id(download_id)
+        assert completed is not None
         assert completed.status == "completed"
         assert completed.output_path == str(final_path.resolve())
         assert completed.file_size == len(content)
@@ -104,8 +125,11 @@ async def test_worker_completion_registers_retrievable_file(
 
 
 async def test_completion_rolls_back_file_registration_when_status_write_fails(
-    db_session, tmp_path, monkeypatch, worker_boundaries
-):
+    db_session: AsyncSession,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    worker_boundaries: tuple[AsyncMock, AsyncMock],
+) -> None:
     monkeypatch.setattr(settings, "download_dir", str(tmp_path))
     final_path = tmp_path / "video.mp4"
     final_path.write_bytes(b"video")
@@ -122,14 +146,18 @@ async def test_completion_rolls_back_file_registration_when_status_write_fails(
 
     async with async_session_maker() as session:
         unchanged = await DownloadRepository(session).get_by_id(download.id)
+        assert unchanged is not None
         assert unchanged.status == "downloading"
         assert unchanged.files == []
     worker_boundaries[1].publish_download_progress.assert_not_awaited()
 
 
 async def test_simultaneous_completion_retries_create_one_file_record(
-    db_session, tmp_path, monkeypatch, worker_boundaries
-):
+    db_session: AsyncSession,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    worker_boundaries: tuple[AsyncMock, AsyncMock],
+) -> None:
     monkeypatch.setattr(settings, "download_dir", str(tmp_path))
     final_path = tmp_path / "video.mp4"
     final_path.write_bytes(b"video")
@@ -147,13 +175,17 @@ async def test_simultaneous_completion_retries_create_one_file_record(
     )
     async with async_session_maker() as session:
         completed = await DownloadRepository(session).get_by_id(download.id)
+        assert completed is not None
         assert completed.status == "completed"
         assert len(completed.files) == 1
 
 
 async def test_completion_does_not_commit_when_registration_fails(
-    db_session, tmp_path, monkeypatch, worker_boundaries
-):
+    db_session: AsyncSession,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    worker_boundaries: tuple[AsyncMock, AsyncMock],
+) -> None:
     monkeypatch.setattr(settings, "download_dir", str(tmp_path))
     download = await DownloadRepository(db_session).create(
         url="https://example.test/watch", status="downloading"
@@ -164,14 +196,19 @@ async def test_completion_does_not_commit_when_registration_fails(
         )
     async with async_session_maker() as session:
         unchanged = await DownloadRepository(session).get_by_id(download.id)
+        assert unchanged is not None
         assert unchanged.status == "downloading"
         assert unchanged.files == []
     worker_boundaries[1].publish_download_progress.assert_not_awaited()
 
 
 async def test_startup_repairs_completed_download_without_redownloading(
-    client, db_session, tmp_path, monkeypatch, worker_boundaries
-):
+    client: AsyncClient,
+    db_session: AsyncSession,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    worker_boundaries: tuple[AsyncMock, AsyncMock],
+) -> None:
     from app.main import app, lifespan
 
     monkeypatch.setattr(settings, "download_dir", str(tmp_path))
@@ -206,8 +243,11 @@ async def test_startup_repairs_completed_download_without_redownloading(
 
 
 async def test_repair_skips_unsafe_missing_and_incomplete_outputs(
-    client, db_session, tmp_path, monkeypatch
-):
+    client: AsyncClient,
+    db_session: AsyncSession,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     root = tmp_path / "downloads"
     root.mkdir()
     monkeypatch.setattr(settings, "download_dir", str(root))
@@ -245,8 +285,12 @@ async def test_repair_skips_unsafe_missing_and_incomplete_outputs(
 
 
 async def test_managed_file_symlink_escape_is_rejected_after_registration(
-    client, db_session, tmp_path, monkeypatch, worker_boundaries
-):
+    client: AsyncClient,
+    db_session: AsyncSession,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    worker_boundaries: tuple[AsyncMock, AsyncMock],
+) -> None:
     root = tmp_path / "downloads"
     root.mkdir()
     monkeypatch.setattr(settings, "download_dir", str(root))
@@ -276,8 +320,8 @@ async def test_managed_file_symlink_escape_is_rejected_after_registration(
 
 
 async def test_repair_covers_all_batches_and_preserves_existing_records(
-    db_session, tmp_path, monkeypatch
-):
+    db_session: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(settings, "download_dir", str(tmp_path))
     for index in range(105):
         path = tmp_path / f"{index}.mp4"

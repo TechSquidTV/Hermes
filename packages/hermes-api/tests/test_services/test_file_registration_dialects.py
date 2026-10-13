@@ -1,5 +1,15 @@
 """Use each supported database's conflict-aware INSERT syntax."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, cast
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from sqlalchemy.engine import Dialect
+
+
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -10,8 +20,12 @@ from app.db.models import DownloadFile
 from app.services.download_files import register_download_file
 
 
-@pytest.mark.parametrize("dialect", [postgresql.dialect(), sqlite.dialect()])
-async def test_registration_uses_native_upsert(dialect, tmp_path):
+@pytest.mark.parametrize(
+    "dialect", [cast("type[Dialect]", postgresql.dialect)(), sqlite.aiosqlite.dialect()]
+)
+async def test_registration_uses_native_upsert(
+    dialect: Dialect, tmp_path: Path
+) -> None:
     output = tmp_path / "video.mp4"
     output.write_bytes(b"media")
     session = AsyncMock(spec=AsyncSession)

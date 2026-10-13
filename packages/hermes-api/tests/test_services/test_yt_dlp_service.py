@@ -2,6 +2,15 @@
 Tests for YTDLPService.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from pathlib import Path
+    from types import TracebackType
+
+
 import shutil
 import wave
 from unittest.mock import patch
@@ -17,37 +26,42 @@ from app.utils.media import DEFAULT_FORMAT_SPEC
 class FakeYoutubeDL:
     """Minimal context manager for asserting yt-dlp options."""
 
-    calls = []
+    calls: list[dict[str, object]] = []
 
-    def __init__(self, opts):
+    def __init__(self, opts: dict[str, object]) -> None:
         self.opts = opts
         self.calls.append(opts)
 
-    def __enter__(self):
+    def __enter__(self) -> FakeYoutubeDL:
         return self
 
-    def __exit__(self, exc_type, exc, traceback):
-        return False
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        return None
 
-    def extract_info(self, url, download=False):
-        info = {"id": "test-video", "title": "Test Video", "ext": "mp4"}
+    def extract_info(self, url: str, download: bool = False) -> dict[str, Any]:
+        info: dict[str, Any] = {"id": "test-video", "title": "Test Video", "ext": "mp4"}
         if download:
             info["requested_downloads"] = [
-                {"filepath": self.opts["outtmpl"].replace("%(ext)s", "mp4")}
+                {"filepath": str(self.opts["outtmpl"]).replace("%(ext)s", "mp4")}
             ]
         return info
 
-    def prepare_filename(self, info):
+    def prepare_filename(self, info: dict[str, object]) -> str:
         raise AssertionError("Use the final filepath, not the output template")
 
 
 @pytest.fixture(autouse=True)
-def reset_fake_youtube_dl():
+def reset_fake_youtube_dl() -> None:
     FakeYoutubeDL.calls = []
 
 
 @pytest.mark.asyncio
-async def test_extract_info_enables_node_js_runtime():
+async def test_extract_info_enables_node_js_runtime() -> None:
     with patch(
         "app.services.yt_dlp_service.shutil.which", return_value="/usr/bin/node"
     ):
@@ -56,13 +70,14 @@ async def test_extract_info_enables_node_js_runtime():
     with patch("app.services.yt_dlp_service.PublicYoutubeDL", FakeYoutubeDL):
         result = await service.extract_info("https://example.com/video")
 
+    assert result is not None
     assert result["title"] == "Test Video"
     assert FakeYoutubeDL.calls[0]["js_runtimes"] == {"node": {}}
     assert "remote_components" not in FakeYoutubeDL.calls[0]
 
 
 @pytest.mark.asyncio
-async def test_download_video_enables_node_js_runtime(tmp_path):
+async def test_download_video_enables_node_js_runtime(tmp_path: Path) -> None:
     with patch(
         "app.services.yt_dlp_service.shutil.which", return_value="/usr/bin/node"
     ):
@@ -83,13 +98,14 @@ async def test_download_video_enables_node_js_runtime(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_extract_info_uses_yt_dlp_defaults_when_node_is_unavailable():
+async def test_extract_info_uses_yt_dlp_defaults_when_node_is_unavailable() -> None:
     with patch("app.services.yt_dlp_service.shutil.which", return_value=None):
         service = YTDLPService()
 
     with patch("app.services.yt_dlp_service.PublicYoutubeDL", FakeYoutubeDL):
         result = await service.extract_info("https://example.com/video")
 
+    assert result is not None
     assert result["title"] == "Test Video"
     assert "js_runtimes" not in FakeYoutubeDL.calls[0]
     assert "remote_components" not in FakeYoutubeDL.calls[0]
@@ -98,8 +114,8 @@ async def test_extract_info_uses_yt_dlp_defaults_when_node_is_unavailable():
 @pytest.mark.asyncio
 @pytest.mark.parametrize("extension", ["wav", "mp3"])
 async def test_download_video_returns_real_final_path_after_processing(
-    tmp_path, extension
-):
+    tmp_path: Path, extension: str
+) -> None:
     if extension == "mp3" and not shutil.which("ffmpeg"):
         pytest.skip("FFmpeg is required for audio conversion")
 
@@ -110,7 +126,7 @@ async def test_download_video_returns_real_final_path_after_processing(
         sample.setframerate(8000)
         sample.writeframes(b"\0\0" * 8000)
 
-    options = {"enable_file_urls": True, "noprogress": True}
+    options: dict[str, Any] = {"enable_file_urls": True, "noprogress": True}
     if extension == "mp3":
         options["postprocessors"] = [
             {"key": "FFmpegExtractAudio", "preferredcodec": "mp3"}
@@ -137,14 +153,16 @@ async def test_download_video_returns_real_final_path_after_processing(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("format_spec", [None, "140"])
 async def test_download_video_preserves_yt_dlp_errors_and_format_selection(
-    tmp_path, format_spec
-):
+    tmp_path: Path, format_spec: str | None
+) -> None:
     error = DownloadError("Requested format is not available")
     with (
         patch.object(FakeYoutubeDL, "extract_info", side_effect=error),
         patch("app.services.yt_dlp_service.PublicYoutubeDL", FakeYoutubeDL),
     ):
-        options = {} if format_spec is None else {"format_spec": format_spec}
+        options: dict[str, Any] = (
+            {} if format_spec is None else {"format_spec": format_spec}
+        )
         with pytest.raises(DownloadError) as caught:
             await YTDLPService().download_video(
                 "https://example.com/video", str(tmp_path / "video.%(ext)s"), **options
@@ -155,7 +173,9 @@ async def test_download_video_preserves_yt_dlp_errors_and_format_selection(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("info", [None, {"id": "test-video"}])
-async def test_download_video_rejects_results_without_downloaded_media(tmp_path, info):
+async def test_download_video_rejects_results_without_downloaded_media(
+    tmp_path: Path, info: dict[str, object]
+) -> None:
     with (
         patch.object(FakeYoutubeDL, "extract_info", return_value=info),
         patch("app.services.yt_dlp_service.PublicYoutubeDL", FakeYoutubeDL),
@@ -169,8 +189,8 @@ async def test_download_video_rejects_results_without_downloaded_media(tmp_path,
 @pytest.mark.asyncio
 @pytest.mark.parametrize("is_directory", [False, True])
 async def test_download_video_rejects_missing_or_non_file_output(
-    tmp_path, is_directory
-):
+    tmp_path: Path, is_directory: bool
+) -> None:
     if is_directory:
         (tmp_path / "video.mp4").mkdir()
     # A similarly named file must never substitute for the actual result.
@@ -182,7 +202,7 @@ async def test_download_video_rejects_missing_or_non_file_output(
             )
 
 
-def test_default_format_selects_separate_video_and_audio_streams():
+def test_default_format_selects_separate_video_and_audio_streams() -> None:
     # Reproduce YouTube videos with no pre-merged format without network access.
     info = {
         "id": "test-video",

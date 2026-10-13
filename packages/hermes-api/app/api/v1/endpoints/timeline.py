@@ -4,7 +4,7 @@ Timeline analytics endpoint for charts and data visualization.
 
 from datetime import date as date_type
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import Integer, and_, func, select
@@ -32,7 +32,7 @@ async def get_timeline_stats(
     status: Optional[str] = Query(None, description="Filter by status"),
     db_session: AsyncSession = Depends(get_database_session),
     principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.READ)),
-):
+) -> list[DailyStats]:
     """
     Get timeline data for charts and visualizations.
 
@@ -121,7 +121,7 @@ async def get_timeline_summary(
     end_date: Optional[date_type] = Query(None, description="End date (YYYY-MM-DD)"),
     db_session: AsyncSession = Depends(get_database_session),
     principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.READ)),
-):
+) -> TimelineSummary:
     """
     Get summary statistics for the timeline period.
 
@@ -165,6 +165,7 @@ async def get_timeline_summary(
     # Find peak day (day with most downloads)
     peak_day = max(daily_stats, key=lambda x: x.downloads) if daily_stats else None
 
+    trend: Literal["increasing", "decreasing", "stable"]
     # Calculate trend (simplified - compare first half vs second half)
     if len(daily_stats) >= 4:
         mid_point = len(daily_stats) // 2

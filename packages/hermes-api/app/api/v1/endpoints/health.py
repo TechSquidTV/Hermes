@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 
 
 @router.get("/", response_model=HealthResponse)
-async def get_health():
+async def get_health() -> HealthResponse:
     """Get API health status."""
     return HealthResponse(
         status="healthy",
@@ -34,7 +34,7 @@ async def get_health():
 
 
 @router.get("/detailed", response_model=DetailedHealthResponse)
-async def get_detailed_health():
+async def get_detailed_health() -> DetailedHealthResponse:
     """Get detailed health information including dependencies."""
     health_info = DetailedHealthResponse(
         status="healthy",

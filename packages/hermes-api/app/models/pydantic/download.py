@@ -73,12 +73,12 @@ class DownloadRequest(CamelCaseModel):
 
     @field_validator("url")
     @classmethod
-    def validate_url(cls, v):
+    def validate_url(cls, v: str) -> str:
         return validate_public_url(v, resolve=False)
 
     @field_validator("subtitle_languages")
     @classmethod
-    def validate_subtitle_languages(cls, v):
+    def validate_subtitle_languages(cls, v: list[str] | None) -> list[str] | None:
         """Validate subtitle language codes."""
         if v:
             # Basic validation - could be expanded with proper language code validation
@@ -185,7 +185,7 @@ class BatchDownloadRequest(CamelCaseModel):
 
     @field_validator("urls")
     @classmethod
-    def validate_urls(cls, v):
+    def validate_urls(cls, v: list[str]) -> list[str]:
         return [validate_public_url(url, resolve=False) for url in v]
 
     @field_validator("output_directory")

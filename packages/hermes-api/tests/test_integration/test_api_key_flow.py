@@ -2,6 +2,14 @@
 Integration tests for API key functionality end-to-end.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.db.models import User
+
+
 from unittest.mock import Mock
 
 import pytest
@@ -14,7 +22,7 @@ class TestApiKeyIntegration:
     """Test API key integration with download system."""
 
     @pytest.fixture
-    def client(self, monkeypatch):
+    def client(self, monkeypatch: pytest.MonkeyPatch) -> TestClient:
         """Test client fixture."""
         from app.tasks.download_tasks import download_video_task
 
@@ -22,8 +30,8 @@ class TestApiKeyIntegration:
         return TestClient(app)
 
     async def test_api_key_full_lifecycle(
-        self, client: TestClient, test_user, auth_token
-    ):
+        self, client: TestClient, test_user: User, auth_token: str
+    ) -> None:
         """Test complete API key lifecycle: create, use, revoke."""
         # 1. Create API key
         create_response = client.post(
@@ -80,8 +88,8 @@ class TestApiKeyIntegration:
         # or mark them as inactive in the response
 
     async def test_jwt_token_vs_api_key_authentication(
-        self, client: TestClient, test_user, auth_token
-    ):
+        self, client: TestClient, test_user: User, auth_token: str
+    ) -> None:
         """Test that both JWT tokens and API keys work for authentication."""
         # Test 1: JWT token authentication (should work)
         jwt_response = client.get(
@@ -108,8 +116,8 @@ class TestApiKeyIntegration:
         assert api_key_response.status_code == 200
 
     async def test_multiple_users_api_key_isolation(
-        self, client: TestClient, test_user, auth_token
-    ):
+        self, client: TestClient, test_user: User, auth_token: str
+    ) -> None:
         """Test that multiple users have isolated API keys."""
         # Create API key for first user
         create_response1 = client.post(

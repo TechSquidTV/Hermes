@@ -2,6 +2,14 @@
 Tests for API key repository operations.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.db.models import User
+
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_api_key, hash_api_key
@@ -11,7 +19,9 @@ from app.db.repositories import ApiKeyRepository, UserRepository
 class TestApiKeyRepository:
     """Test API key repository operations."""
 
-    async def test_create_api_key(self, db_session: AsyncSession, test_user):
+    async def test_create_api_key(
+        self, db_session: AsyncSession, test_user: User
+    ) -> None:
         """Test creating an API key in the database."""
         # Use the existing db_session fixture instead of creating new sessions
         api_key_repo = ApiKeyRepository(db_session)
@@ -38,7 +48,9 @@ class TestApiKeyRepository:
         assert api_key.is_active is True
         assert api_key.created_at is not None
 
-    async def test_get_api_key_by_hash(self, db_session: AsyncSession, test_user):
+    async def test_get_api_key_by_hash(
+        self, db_session: AsyncSession, test_user: User
+    ) -> None:
         """Test getting API key by hash."""
         api_key_repo = ApiKeyRepository(db_session)
         plain_key = create_api_key()
@@ -62,7 +74,9 @@ class TestApiKeyRepository:
         assert retrieved_key.user_id == test_user.id
         assert retrieved_key.name == "Test Key"
 
-    async def test_get_api_key_by_id(self, db_session: AsyncSession, test_user):
+    async def test_get_api_key_by_id(
+        self, db_session: AsyncSession, test_user: User
+    ) -> None:
         """Test getting API key by ID."""
         api_key_repo = ApiKeyRepository(db_session)
 
@@ -83,7 +97,9 @@ class TestApiKeyRepository:
         assert retrieved_key.id == created_key.id
         assert retrieved_key.user_id == test_user.id
 
-    async def test_get_api_keys_by_user(self, db_session: AsyncSession, test_user):
+    async def test_get_api_keys_by_user(
+        self, db_session: AsyncSession, test_user: User
+    ) -> None:
         """Test getting all API keys for a user."""
         api_key_repo = ApiKeyRepository(db_session)
         user_repo = UserRepository(db_session)
@@ -128,7 +144,9 @@ class TestApiKeyRepository:
         assert "Key 2" in key_names
         assert "Other Key" not in key_names
 
-    async def test_update_last_used(self, db_session: AsyncSession, test_user):
+    async def test_update_last_used(
+        self, db_session: AsyncSession, test_user: User
+    ) -> None:
         """Test updating API key last used timestamp."""
         api_key_repo = ApiKeyRepository(db_session)
 
@@ -148,7 +166,7 @@ class TestApiKeyRepository:
         assert updated_key is not None
         assert updated_key.last_used is not None
 
-    async def test_get_nonexistent_api_key(self, db_session: AsyncSession):
+    async def test_get_nonexistent_api_key(self, db_session: AsyncSession) -> None:
         """Test getting non-existent API key."""
         api_key_repo = ApiKeyRepository(db_session)
 
@@ -159,7 +177,9 @@ class TestApiKeyRepository:
         result = await api_key_repo.get_by_key_hash("nonexistent-hash")
         assert result is None
 
-    async def test_api_key_deactivation(self, db_session: AsyncSession, test_user):
+    async def test_api_key_deactivation(
+        self, db_session: AsyncSession, test_user: User
+    ) -> None:
         """Test deactivating API keys."""
         api_key_repo = ApiKeyRepository(db_session)
 
@@ -181,4 +201,5 @@ class TestApiKeyRepository:
 
         # Verify it's deactivated
         updated_key = await api_key_repo.get_by_id(api_key.id)
+        assert updated_key is not None
         assert updated_key.is_active is False

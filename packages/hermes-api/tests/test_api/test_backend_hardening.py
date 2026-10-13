@@ -1,5 +1,19 @@
 """Security regressions using real API authentication and database transactions."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from datetime import timedelta
+    from pathlib import Path
+
+    from httpx import AsyncClient
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.db.models import User
+
+
 import asyncio
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, Mock
@@ -18,8 +32,8 @@ from app.tasks import download_tasks
 
 
 async def test_refresh_tokens_cannot_authenticate_and_access_tokens_cannot_refresh(
-    client, test_user
-):
+    client: AsyncClient, test_user: User
+) -> None:
     app.dependency_overrides.clear()
     data = {"sub": test_user.username, "user_id": test_user.id}
     refresh = create_refresh_token(data)
@@ -34,8 +48,8 @@ async def test_refresh_tokens_cannot_authenticate_and_access_tokens_cannot_refre
 
 
 async def test_rotation_is_single_use_and_logout_revokes_the_whole_session(
-    client, test_user
-):
+    client: AsyncClient, test_user: User
+) -> None:
     app.dependency_overrides.clear()
     login = await client.post(
         "/api/v1/auth/login",
@@ -48,10 +62,10 @@ async def test_rotation_is_single_use_and_logout_revokes_the_whole_session(
     )
     assert refresh.status_code == 200
     rotated = refresh.json()
-    assert (
-        verify_token(rotated["refreshToken"])["sid"]
-        == verify_token(original["accessToken"])["sid"]
-    )
+    rotated_claims = verify_token(rotated["refreshToken"])
+    original_claims = verify_token(original["accessToken"])
+    assert rotated_claims is not None and original_claims is not None
+    assert rotated_claims["sid"] == original_claims["sid"]
     replay = await client.post(
         "/api/v1/auth/refresh", json={"refreshToken": original["refreshToken"]}
     )
@@ -74,7 +88,9 @@ async def test_rotation_is_single_use_and_logout_revokes_the_whole_session(
         ).status_code == 401
 
 
-async def test_concurrent_refresh_has_only_one_successor(client, test_user):
+async def test_concurrent_refresh_has_only_one_successor(
+    client: AsyncClient, test_user: User
+) -> None:
     app.dependency_overrides.clear()
     refresh = create_refresh_token({"sub": test_user.username, "user_id": test_user.id})
     responses = await asyncio.gather(
@@ -90,8 +106,13 @@ async def test_concurrent_refresh_has_only_one_successor(client, test_user):
     "delta,expected", [(timedelta(days=1), 200), (timedelta(days=-1), 401)]
 )
 async def test_api_key_expiry_survives_sqlite_roundtrip(
-    client, test_user, auth_token, db_session, delta, expected
-):
+    client: AsyncClient,
+    test_user: User,
+    auth_token: str,
+    db_session: AsyncSession,
+    delta: timedelta,
+    expected: bool,
+) -> None:
     app.dependency_overrides.clear()
     created = await client.post(
         "/api/v1/auth/api-keys",
@@ -105,6 +126,8 @@ async def test_api_key_expiry_survives_sqlite_roundtrip(
     assert created.status_code == 200
     key = created.json()
     stored = await ApiKeyRepository(db_session).get_by_id(key["id"])
+    assert stored is not None
+    assert stored.expires_at is not None
     assert stored.expires_at.tzinfo is None
     response = await client.get(
         "/api/v1/queue/", headers={"Authorization": f"Bearer {key['key']}"}
@@ -112,7 +135,9 @@ async def test_api_key_expiry_survives_sqlite_roundtrip(
     assert response.status_code == expected
 
 
-async def test_info_requires_authentication_before_extraction(client, monkeypatch):
+async def test_info_requires_authentication_before_extraction(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     app.dependency_overrides.clear()
     extract = AsyncMock()
     monkeypatch.setattr("app.api.v1.endpoints.info.yt_service.extract_info", extract)
@@ -135,7 +160,9 @@ async def test_info_requires_authentication_before_extraction(client, monkeypatc
         "https://user:secret@example.test/",
     ],
 )
-async def test_unsafe_urls_never_queue_or_extract(client, monkeypatch, url):
+async def test_unsafe_urls_never_queue_or_extract(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch, url: str
+) -> None:
     enqueue = Mock()
     extract = AsyncMock()
     monkeypatch.setattr(
@@ -161,8 +188,11 @@ async def test_unsafe_urls_never_queue_or_extract(client, monkeypatch, url):
     ],
 )
 async def test_local_path_inputs_cannot_reach_workers(
-    client, monkeypatch, field, value
-):
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    field: str,
+    value: float | None,
+) -> None:
     enqueue = Mock()
     monkeypatch.setattr(
         "app.api.v1.endpoints.downloads.download_video_task.apply_async", enqueue
@@ -175,8 +205,8 @@ async def test_local_path_inputs_cannot_reach_workers(
 
 
 async def test_output_directory_symlink_escape_is_rejected(
-    client, tmp_path, monkeypatch
-):
+    client: AsyncClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     outside = tmp_path / "outside"
     root = tmp_path / "downloads"
     outside.mkdir()
@@ -195,7 +225,7 @@ async def test_output_directory_symlink_escape_is_rejected(
 
 
 @pytest.mark.parametrize("password", ["", "short", "a" * 73, "é" * 37])
-async def test_signup_password_policy(client, password):
+async def test_signup_password_policy(client: AsyncClient, password: str) -> None:
     response = await client.post(
         "/api/v1/auth/signup",
         json={"username": "new", "email": "new@example.com", "password": password},
@@ -203,7 +233,9 @@ async def test_signup_password_policy(client, password):
     assert response.status_code == 422
 
 
-async def test_profile_is_validated_and_bounded(client, auth_token):
+async def test_profile_is_validated_and_bounded(
+    client: AsyncClient, auth_token: str
+) -> None:
     app.dependency_overrides.clear()
     for changes in [
         {"email": "invalid"},
@@ -221,7 +253,9 @@ async def test_profile_is_validated_and_bounded(client, auth_token):
         ).status_code == 422
 
 
-async def test_destructive_endpoints_require_admin_users(client, auth_token):
+async def test_destructive_endpoints_require_admin_users(
+    client: AsyncClient, auth_token: str
+) -> None:
     app.dependency_overrides.clear()
     for method, path, body in [
         ("POST", "/api/v1/cleanup/", {}),
@@ -233,7 +267,9 @@ async def test_destructive_endpoints_require_admin_users(client, auth_token):
         assert response.status_code == 403
 
 
-async def test_first_user_decision_is_serialized(client, monkeypatch):
+async def test_first_user_decision_is_serialized(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     app.dependency_overrides.clear()
     monkeypatch.setattr(settings, "allow_public_signup", False)
     responses = await asyncio.gather(
@@ -256,8 +292,8 @@ async def test_first_user_decision_is_serialized(client, monkeypatch):
 
 
 async def test_cancelled_download_cannot_register_output_or_publish_completion(
-    db_session, tmp_path, monkeypatch
-):
+    db_session: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     repo = DownloadRepository(db_session)
     download = await repo.create(url="https://example.test/watch", status="downloading")
     download_id = download.id
@@ -271,11 +307,14 @@ async def test_cancelled_download_cannot_register_output_or_publish_completion(
     )
     async with async_session_maker() as session:
         stored = await DownloadRepository(session).get_by_id(download_id)
+        assert stored is not None
         assert stored.status == "cancelled" and not stored.files
     progress.publish_download_progress.assert_not_called()
 
 
-async def test_cancelled_task_redelivery_does_not_download(db_session, monkeypatch):
+async def test_cancelled_task_redelivery_does_not_download(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
     download = await DownloadRepository(db_session).create(
         url="https://example.test/watch", status="cancelled"
     )
@@ -287,7 +326,7 @@ async def test_cancelled_task_redelivery_does_not_download(db_session, monkeypat
     service.download_video.assert_not_called()
 
 
-def test_secure_configuration_defaults_and_cors_validation():
+def test_secure_configuration_defaults_and_cors_validation() -> None:
     config = Settings(secret_key="test", _env_file=None)
     assert config.allow_public_signup is False
     assert config.access_token_expire_minutes == 15
@@ -299,8 +338,8 @@ def test_secure_configuration_defaults_and_cors_validation():
 
 
 async def test_api_key_expiration_with_offset_is_stored_as_utc(
-    client, auth_token, db_session
-):
+    client: AsyncClient, auth_token: str, db_session: AsyncSession
+) -> None:
     app.dependency_overrides.clear()
     expiration = datetime.now(timezone.utc) + timedelta(hours=1)
     supplied = expiration.astimezone(timezone(timedelta(hours=-7)))
@@ -316,6 +355,7 @@ async def test_api_key_expiration_with_offset_is_stored_as_utc(
     assert created.status_code == 200
     key = created.json()
     stored = await ApiKeyRepository(db_session).get_by_id(key["id"])
+    assert stored is not None
     assert stored.expires_at == expiration.replace(tzinfo=None)
     assert datetime.fromisoformat(key["expiresAt"]) == expiration
     assert (
@@ -323,3 +363,18 @@ async def test_api_key_expiration_with_offset_is_stored_as_utc(
             "/api/v1/queue/", headers={"Authorization": f"Bearer {key['key']}"}
         )
     ).status_code == 200
+
+
+@pytest.mark.parametrize("claim", ["sid", "user_id"])
+async def test_malformed_session_claims_are_rejected(
+    client: AsyncClient, test_user: User, claim: str
+) -> None:
+    app.dependency_overrides.clear()
+    claims: dict[str, object] = {"sub": test_user.username, "user_id": test_user.id}
+    claims[claim] = ["invalid"]
+    token = create_access_token(claims)
+    assert verify_token(token) is None
+    response = await client.get(
+        "/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 401

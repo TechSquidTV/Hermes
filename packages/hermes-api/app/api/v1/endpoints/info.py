@@ -33,7 +33,7 @@ async def extract_video_info(
         True, description="Whether to include available formats in response"
     ),
     principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.READ)),
-):
+) -> VideoInfo:
     """
     Extract metadata and available formats for a video without downloading it.
     Useful for previewing video details and format options.

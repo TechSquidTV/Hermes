@@ -1,5 +1,7 @@
 """Tests for health endpoints."""
 
+from __future__ import annotations
+
 import pytest
 from httpx import AsyncClient
 
@@ -8,7 +10,7 @@ class TestHealth:
     """Test cases for health endpoints."""
 
     @pytest.mark.asyncio
-    async def test_health_check(self, client: AsyncClient):
+    async def test_health_check(self, client: AsyncClient) -> None:
         """Test basic health check endpoint."""
         response = await client.get("/api/v1/health/")
 
@@ -21,7 +23,7 @@ class TestHealth:
     @pytest.mark.asyncio
     async def test_health_check_uses_build_version(
         self, client: AsyncClient, monkeypatch: pytest.MonkeyPatch
-    ):
+    ) -> None:
         """Test health check prefers CI-provided build version."""
         monkeypatch.setenv("HERMES_BUILD_VERSION", "v0.4.0")
 
@@ -31,7 +33,7 @@ class TestHealth:
         assert response.json()["version"] == "v0.4.0"
 
     @pytest.mark.asyncio
-    async def test_detailed_health_check(self, client: AsyncClient):
+    async def test_detailed_health_check(self, client: AsyncClient) -> None:
         """Test detailed health check endpoint."""
         response = await client.get("/api/v1/health/detailed")
 

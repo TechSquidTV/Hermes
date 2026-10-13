@@ -33,9 +33,11 @@ router = APIRouter()
 logger = get_logger(__name__)
 
 
-def _download_options_from_request(download_request: DownloadRequest) -> dict:
+def _download_options_from_request(
+    download_request: DownloadRequest,
+) -> dict[str, object]:
     """Map public download options onto task/yt-dlp keyword arguments."""
-    options = {}
+    options: dict[str, object] = {}
 
     if download_request.output_template:
         options["output_template"] = download_request.output_template
@@ -55,9 +57,11 @@ def _download_options_from_request(download_request: DownloadRequest) -> dict:
     return options
 
 
-def _batch_download_options_from_request(batch_request: BatchDownloadRequest) -> dict:
+def _batch_download_options_from_request(
+    batch_request: BatchDownloadRequest,
+) -> dict[str, object]:
     """Map public batch download options onto task/yt-dlp keyword arguments."""
-    options = {}
+    options: dict[str, object] = {}
 
     if batch_request.download_subtitles:
         options["writesubtitles"] = True

@@ -18,7 +18,7 @@ logger = get_logger(__name__)
 class EventService:
     """Service for managing SSE events and connections."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.active_connections: int = 0
         self.max_connections: int = settings.sse_max_connections
 

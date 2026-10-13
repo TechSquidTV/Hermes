@@ -2506,7 +2506,7 @@ export interface components {
              * @description Descriptions for format selection options
              */
             formatNotes?: {
-                [key: string]: unknown;
+                [key: string]: string;
             };
         };
         /** HTTPValidationError */
@@ -3029,7 +3029,7 @@ export interface components {
             isAdmin: boolean;
             /** Preferences */
             preferences?: {
-                [key: string]: unknown;
+                [key: string]: components["schemas"]["JsonValue"];
             } | null;
             /** Createdat */
             createdAt: string;
@@ -6917,7 +6917,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Bad Request */
@@ -7471,7 +7473,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": {
+                        [key: string]: string;
+                    };
                 };
             };
             /** @description Bad Request */
@@ -7554,7 +7558,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": {
+                        [key: string]: string;
+                    };
                 };
             };
             /** @description Bad Request */

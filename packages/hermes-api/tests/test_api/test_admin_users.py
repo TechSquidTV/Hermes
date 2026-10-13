@@ -2,13 +2,23 @@
 Tests for admin user management endpoints.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.db.models import User
+
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.fixture
-async def admin_user(db_session: AsyncSession, setup_test_database):
+async def admin_user(db_session: AsyncSession, setup_test_database: None) -> User:
     """Create an admin user for testing."""
     from app.core.security import get_password_hash
     from app.db.repositories import UserRepository
@@ -26,7 +36,7 @@ async def admin_user(db_session: AsyncSession, setup_test_database):
 
 
 @pytest.fixture
-async def admin_token(admin_user):
+async def admin_token(admin_user: User) -> str:
     """Create an authentication token for the admin user."""
     from app.core.security import create_access_token
 
@@ -41,8 +51,8 @@ class TestAdminUserListing:
 
     @pytest.mark.asyncio
     async def test_admin_can_list_users(
-        self, client: AsyncClient, admin_user, admin_token, test_user
-    ):
+        self, client: AsyncClient, admin_user: User, admin_token: str, test_user: User
+    ) -> None:
         """Test that admin can list all users."""
         # Clear any auth overrides
         from app.main import app
@@ -69,8 +79,8 @@ class TestAdminUserListing:
 
     @pytest.mark.asyncio
     async def test_non_admin_cannot_list_users(
-        self, client: AsyncClient, test_user, auth_token
-    ):
+        self, client: AsyncClient, test_user: User, auth_token: str
+    ) -> None:
         """Test that non-admin users cannot list users."""
         # Clear any auth overrides
         from app.main import app
@@ -88,7 +98,7 @@ class TestAdminUserListing:
         assert "admin" in data["error"]["message"].lower()
 
     @pytest.mark.asyncio
-    async def test_list_users_requires_auth(self, client: AsyncClient):
+    async def test_list_users_requires_auth(self, client: AsyncClient) -> None:
         """Test that listing users requires authentication."""
         # Clear any auth overrides
         from app.main import app
@@ -105,8 +115,8 @@ class TestAdminUserCreation:
 
     @pytest.mark.asyncio
     async def test_admin_can_create_user(
-        self, client: AsyncClient, admin_user, admin_token
-    ):
+        self, client: AsyncClient, admin_user: User, admin_token: str
+    ) -> None:
         """Test that admin can create new users."""
         # Clear any auth overrides
         from app.main import app
@@ -133,8 +143,8 @@ class TestAdminUserCreation:
 
     @pytest.mark.asyncio
     async def test_admin_can_create_admin_user(
-        self, client: AsyncClient, admin_user, admin_token
-    ):
+        self, client: AsyncClient, admin_user: User, admin_token: str
+    ) -> None:
         """Test that admin can create other admin users."""
         # Clear any auth overrides
         from app.main import app
@@ -158,8 +168,8 @@ class TestAdminUserCreation:
 
     @pytest.mark.asyncio
     async def test_non_admin_cannot_create_user(
-        self, client: AsyncClient, test_user, auth_token
-    ):
+        self, client: AsyncClient, test_user: User, auth_token: str
+    ) -> None:
         """Test that non-admin users cannot create users."""
         # Clear any auth overrides
         from app.main import app
@@ -181,8 +191,8 @@ class TestAdminUserCreation:
 
     @pytest.mark.asyncio
     async def test_create_user_duplicate_username(
-        self, client: AsyncClient, admin_user, admin_token, test_user
-    ):
+        self, client: AsyncClient, admin_user: User, admin_token: str, test_user: User
+    ) -> None:
         """Test that creating a user with duplicate username fails."""
         # Clear any auth overrides
         from app.main import app
@@ -210,8 +220,8 @@ class TestPromoteDemoteAdmin:
 
     @pytest.mark.asyncio
     async def test_admin_can_promote_user_to_admin(
-        self, client: AsyncClient, admin_user, admin_token, test_user
-    ):
+        self, client: AsyncClient, admin_user: User, admin_token: str, test_user: User
+    ) -> None:
         """Test that admin can promote regular user to admin."""
         # Clear any auth overrides
         from app.main import app
@@ -232,8 +242,12 @@ class TestPromoteDemoteAdmin:
 
     @pytest.mark.asyncio
     async def test_admin_can_demote_admin_to_user(
-        self, client: AsyncClient, admin_user, admin_token, db_session
-    ):
+        self,
+        client: AsyncClient,
+        admin_user: User,
+        admin_token: str,
+        db_session: AsyncSession,
+    ) -> None:
         """Test that admin can demote another admin to regular user."""
         # Clear any auth overrides
         from app.main import app
@@ -265,8 +279,8 @@ class TestPromoteDemoteAdmin:
 
     @pytest.mark.asyncio
     async def test_cannot_demote_last_admin(
-        self, client: AsyncClient, admin_user, admin_token
-    ):
+        self, client: AsyncClient, admin_user: User, admin_token: str
+    ) -> None:
         """Test that the last admin cannot be demoted."""
         # Clear any auth overrides
         from app.main import app
@@ -286,8 +300,8 @@ class TestPromoteDemoteAdmin:
 
     @pytest.mark.asyncio
     async def test_non_admin_cannot_promote_user(
-        self, client: AsyncClient, test_user, test_user2, auth_token
-    ):
+        self, client: AsyncClient, test_user: User, test_user2: User, auth_token: str
+    ) -> None:
         """Test that non-admin users cannot promote others."""
         # Clear any auth overrides
         from app.main import app
@@ -308,8 +322,8 @@ class TestActivateDeactivateUser:
 
     @pytest.mark.asyncio
     async def test_admin_can_deactivate_user(
-        self, client: AsyncClient, admin_user, admin_token, test_user
-    ):
+        self, client: AsyncClient, admin_user: User, admin_token: str, test_user: User
+    ) -> None:
         """Test that admin can deactivate a user."""
         # Clear any auth overrides
         from app.main import app
@@ -330,8 +344,13 @@ class TestActivateDeactivateUser:
 
     @pytest.mark.asyncio
     async def test_admin_can_activate_user(
-        self, client: AsyncClient, admin_user, admin_token, test_user, db_session
-    ):
+        self,
+        client: AsyncClient,
+        admin_user: User,
+        admin_token: str,
+        test_user: User,
+        db_session: AsyncSession,
+    ) -> None:
         """Test that admin can activate a deactivated user."""
         # Clear any auth overrides
         from app.main import app
@@ -354,8 +373,8 @@ class TestActivateDeactivateUser:
 
     @pytest.mark.asyncio
     async def test_admin_cannot_deactivate_self(
-        self, client: AsyncClient, admin_user, admin_token
-    ):
+        self, client: AsyncClient, admin_user: User, admin_token: str
+    ) -> None:
         """Test that admin cannot deactivate their own account."""
         # Clear any auth overrides
         from app.main import app
@@ -378,8 +397,13 @@ class TestDeleteUser:
 
     @pytest.mark.asyncio
     async def test_admin_can_delete_user(
-        self, client: AsyncClient, admin_user, admin_token, test_user, db_session
-    ):
+        self,
+        client: AsyncClient,
+        admin_user: User,
+        admin_token: str,
+        test_user: User,
+        db_session: AsyncSession,
+    ) -> None:
         """Test that admin can delete a regular user."""
         # Clear any auth overrides
         from app.main import app
@@ -406,8 +430,8 @@ class TestDeleteUser:
 
     @pytest.mark.asyncio
     async def test_admin_cannot_delete_self(
-        self, client: AsyncClient, admin_user, admin_token
-    ):
+        self, client: AsyncClient, admin_user: User, admin_token: str
+    ) -> None:
         """Test that admin cannot delete their own account."""
         # Clear any auth overrides
         from app.main import app
@@ -425,8 +449,13 @@ class TestDeleteUser:
 
     @pytest.mark.asyncio
     async def test_cannot_delete_last_admin(
-        self, client: AsyncClient, admin_user, admin_token, db_session, test_user
-    ):
+        self,
+        client: AsyncClient,
+        admin_user: User,
+        admin_token: str,
+        db_session: AsyncSession,
+        test_user: User,
+    ) -> None:
         """Test that the last admin cannot be deleted."""
         # Clear any auth overrides
         from app.main import app
@@ -477,8 +506,8 @@ class TestDeleteUser:
 
     @pytest.mark.asyncio
     async def test_non_admin_cannot_delete_user(
-        self, client: AsyncClient, test_user, test_user2, auth_token
-    ):
+        self, client: AsyncClient, test_user: User, test_user2: User, auth_token: str
+    ) -> None:
         """Test that non-admin users cannot delete users."""
         # Clear any auth overrides
         from app.main import app

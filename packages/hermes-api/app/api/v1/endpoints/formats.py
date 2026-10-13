@@ -14,7 +14,7 @@ router = APIRouter(tags=["formats"])
 
 
 @router.get("/", response_model=FormatInfo)
-async def get_available_formats():
+async def get_available_formats() -> FormatInfo:
     """
     Get information about supported video formats, codecs, and containers.
 

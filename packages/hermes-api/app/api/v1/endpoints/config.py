@@ -24,7 +24,7 @@ class PublicConfig(CamelCaseModel):
 @router.get("/public", response_model=PublicConfig)
 async def get_public_configuration(
     db_session: AsyncSession = Depends(get_database_session),
-):
+) -> PublicConfig:
     """
     Get public configuration settings.
 

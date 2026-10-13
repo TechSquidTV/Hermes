@@ -26,7 +26,7 @@ async def get_api_statistics(
     ),
     db_session: AsyncSession = Depends(get_database_session),
     principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.READ)),
-):
+) -> ApiStatistics:
     """
     Get API usage statistics.
 
@@ -67,7 +67,7 @@ async def get_api_statistics(
     total_bandwidth = sum(sizes)
 
     # Popular extractors
-    extractor_counts = {}
+    extractor_counts: dict[str, int] = {}
     for record in records:
         ext = record.extractor or "unknown"
         extractor_counts[ext] = extractor_counts.get(ext, 0) + 1
@@ -86,7 +86,7 @@ async def get_api_statistics(
     ]
 
     # Error breakdown
-    error_types = {}
+    error_types: dict[str, int] = {}
     failed_records = [r for r in records if r.status == "failed"]
     for record in failed_records:
         # Categorize errors (simplified)

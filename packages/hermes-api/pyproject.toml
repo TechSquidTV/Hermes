@@ -44,25 +44,19 @@ line_length = 88
 
 [tool.mypy]
 python_version = "3.11"
-warn_return_any = false
-warn_unused_configs = true
-check_untyped_defs = true
-disallow_untyped_defs = false
-ignore_missing_imports = true
-no_implicit_optional = false
+strict = true
+explicit_package_bases = true
+mypy_path = "$MYPY_CONFIG_FILE_DIR/typings"
+plugins = ["pydantic.mypy"]
 files = ["app", "tests"]
-strict_optional = false
-disable_error_code = ["var-annotated", "return-value", "arg-type", "assignment", "misc", "attr-defined", "call-arg"]
 
 [[tool.mypy.overrides]]
-module = ["app.services.public_network", "app.utils.urls", "app.utils.dates", "app.models.pydantic.password", "app.db.registration", "app.core.rate_limit"]
-disallow_untyped_defs = true
-disallow_untyped_calls = true
-disallow_any_generics = true
-warn_return_any = true
-no_implicit_optional = true
-strict_optional = true
-enable_error_code = ["var-annotated", "return-value", "arg-type", "assignment", "misc", "attr-defined", "call-arg"]
+module = ["celery.*", "kombu.*"]
+ignore_missing_imports = true
+
+[tool.pydantic-mypy]
+init_typed = true
+warn_required_dynamic_aliases = true
 
 [tool.ruff]
 line-length = 88

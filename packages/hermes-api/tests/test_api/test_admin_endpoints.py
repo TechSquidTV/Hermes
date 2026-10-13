@@ -2,6 +2,14 @@
 Tests for admin endpoints - settings and configuration.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.db.models import User
+
+
 from unittest.mock import patch
 
 import pytest
@@ -12,7 +20,7 @@ class TestAdminSettings:
     """Test admin settings endpoints."""
 
     @pytest.mark.asyncio
-    async def test_get_settings_requires_admin(self, client: AsyncClient):
+    async def test_get_settings_requires_admin(self, client: AsyncClient) -> None:
         """Test that non-admin users cannot access settings."""
         from app.api.dependencies import get_current_user_from_token
         from app.core.security import create_access_token
@@ -51,8 +59,8 @@ class TestAdminSettings:
 
     @pytest.mark.asyncio
     async def test_get_settings_success_for_admin(
-        self, client: AsyncClient, admin_auth_token
-    ):
+        self, client: AsyncClient, admin_auth_token: str
+    ) -> None:
         """Test that admin users can access settings."""
         with patch(
             "app.services.system_settings_service.system_settings_service.get_all_settings"
@@ -74,7 +82,9 @@ class TestAdminSettings:
             assert data["allowPublicSignup"] is True
 
     @pytest.mark.asyncio
-    async def test_update_signup_requires_admin(self, client: AsyncClient, test_user):
+    async def test_update_signup_requires_admin(
+        self, client: AsyncClient, test_user: User
+    ) -> None:
         """Test that non-admin users cannot update signup setting."""
         from app.core.security import create_access_token
 
@@ -93,8 +103,8 @@ class TestAdminSettings:
 
     @pytest.mark.asyncio
     async def test_update_signup_success_for_admin(
-        self, client: AsyncClient, admin_auth_token
-    ):
+        self, client: AsyncClient, admin_auth_token: str
+    ) -> None:
         """Test that admin users can update signup setting."""
         with patch(
             "app.services.system_settings_service.system_settings_service.update_allow_public_signup"
@@ -121,7 +131,9 @@ class TestAdminConfig:
     """Test admin configuration endpoints (moved from /config)."""
 
     @pytest.mark.asyncio
-    async def test_get_config_requires_admin(self, client: AsyncClient, test_user):
+    async def test_get_config_requires_admin(
+        self, client: AsyncClient, test_user: User
+    ) -> None:
         """Test that non-admin users cannot access config."""
         from app.core.security import create_access_token
 
@@ -139,8 +151,8 @@ class TestAdminConfig:
 
     @pytest.mark.asyncio
     async def test_get_config_success_for_admin(
-        self, client: AsyncClient, admin_auth_token
-    ):
+        self, client: AsyncClient, admin_auth_token: str
+    ) -> None:
         """Test that admin users can access config."""
         response = await client.get(
             "/api/v1/admin/config",
@@ -154,7 +166,9 @@ class TestAdminConfig:
         assert "maxConcurrentDownloads" in data or "max_concurrent_downloads" in data
 
     @pytest.mark.asyncio
-    async def test_update_config_requires_admin(self, client: AsyncClient, test_user):
+    async def test_update_config_requires_admin(
+        self, client: AsyncClient, test_user: User
+    ) -> None:
         """Test that non-admin users cannot update config."""
         from app.core.security import create_access_token
 
@@ -173,8 +187,8 @@ class TestAdminConfig:
 
     @pytest.mark.asyncio
     async def test_update_config_success_for_admin(
-        self, client: AsyncClient, admin_auth_token
-    ):
+        self, client: AsyncClient, admin_auth_token: str
+    ) -> None:
         """Test that admin users can update config."""
         response = await client.put(
             "/api/v1/admin/config",
@@ -190,7 +204,7 @@ class TestPublicConfig:
     """Test public config endpoint (no auth required)."""
 
     @pytest.mark.asyncio
-    async def test_public_config_no_auth_required(self, client: AsyncClient):
+    async def test_public_config_no_auth_required(self, client: AsyncClient) -> None:
         """Test that public config is accessible without authentication."""
         with patch(
             "app.services.system_settings_service.system_settings_service.get_allow_public_signup"

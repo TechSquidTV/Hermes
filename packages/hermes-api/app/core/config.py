@@ -169,7 +169,7 @@ class Settings(BaseSettings):
     )
 
     @model_validator(mode="after")
-    def validate_cors(self):
+    def validate_cors(self) -> "Settings":
         if self.allow_credentials and "*" in self.allowed_origins:
             raise ValueError("Wildcard CORS origins cannot allow credentials")
         return self

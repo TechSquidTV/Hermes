@@ -20,8 +20,8 @@ logger = get_logger(__name__)
 class YTDLPService:
     """Async wrapper for yt-dlp operations."""
 
-    def __init__(self):
-        self._default_opts = {
+    def __init__(self) -> None:
+        self._default_opts: dict[str, object] = {
             "quiet": True,
             "no_warnings": True,
             "extract_flat": False,
@@ -33,7 +33,7 @@ class YTDLPService:
             self._default_opts["js_runtimes"] = {"node": {}}
 
     async def extract_info(
-        self, url: str, download: bool = False, **kwargs
+        self, url: str, download: bool = False, **kwargs: object
     ) -> Optional[Dict[str, Any]]:
         """
         Extract video information asynchronously.
@@ -47,7 +47,7 @@ class YTDLPService:
             Video information dictionary or None if extraction fails
         """
 
-        def _extract_info_sync():
+        def _extract_info_sync() -> dict[str, Any] | None:
             try:
                 opts = self._default_opts.copy()
                 opts.update(kwargs)
@@ -73,7 +73,7 @@ class YTDLPService:
         output_path: str,
         format_spec: str = DEFAULT_FORMAT_SPEC,
         progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
-        **kwargs,
+        **kwargs: object,
     ) -> str:
         """Download media and return its final path after all postprocessing.
 
@@ -111,8 +111,6 @@ class YTDLPService:
 
     def get_supported_extractors(self) -> list[str]:
         """Get list of supported extractor names."""
-        import yt_dlp
+        from yt_dlp.extractor import list_extractor_classes
 
-        return list(
-            yt_dlp.extractor.get_info_extractor.__wrapped__.__defaults__[0].keys()
-        )
+        return [extractor.ie_key() for extractor in list_extractor_classes()]

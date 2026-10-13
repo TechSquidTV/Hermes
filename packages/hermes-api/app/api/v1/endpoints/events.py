@@ -41,8 +41,8 @@ async def event_stream(
     download_id: Optional[str] = Query(
         None, description="Filter to specific download ID"
     ),
-    token_data: dict = Depends(get_current_sse_token),
-):
+    token_data: dict[str, object] = Depends(get_current_sse_token),
+) -> EventSourceResponse:
     """
     SSE endpoint for real-time updates.
 
@@ -103,6 +103,8 @@ async def event_stream(
 
     # Validate token scope for requested channels
     token_scope = token_data.get("scope", "")
+    if not isinstance(token_scope, str):
+        raise HTTPException(status_code=401, detail="Invalid SSE token scope")
 
     # If token is scoped to a specific download, only allow download updates for that download
     if token_scope.startswith("download:"):
@@ -148,7 +150,7 @@ async def event_stream(
 async def download_events(
     download_id: str,
     token: Optional[str] = Query(None, description="SSE token"),
-):
+) -> EventSourceResponse:
     """
     SSE endpoint for a specific download's events.
 
@@ -210,7 +212,7 @@ async def download_events(
 @router.get("/queue")
 async def queue_events(
     token: Optional[str] = Query(None, description="SSE token"),
-):
+) -> EventSourceResponse:
     """
     SSE endpoint for queue updates.
 
@@ -265,7 +267,7 @@ async def queue_events(
 @router.get("/stats")
 async def stats_events(
     token: Optional[str] = Query(None, description="SSE token"),
-):
+) -> EventSourceResponse:
     """
     SSE endpoint for statistics updates.
 
@@ -322,7 +324,7 @@ async def create_sse_token(
     request: CreateSSETokenRequest = Body(...),
     principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.READ)),
     db_session: AsyncSession = Depends(get_database_session),
-):
+) -> SSETokenResponse:
     """
     Create ephemeral SSE token for secure, scoped SSE connections.
 
@@ -446,7 +448,7 @@ async def create_sse_token(
 
 
 @router.get("/health")
-async def sse_health():
+async def sse_health() -> dict[str, object]:
     """
     Health check endpoint for SSE service.
 

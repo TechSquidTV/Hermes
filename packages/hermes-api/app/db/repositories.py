@@ -5,9 +5,10 @@ Repository layer for database operations.
 import uuid
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from sqlalchemy import and_, desc, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -22,6 +23,7 @@ from app.db.models import (
     User,
     Webhook,
 )
+from app.models.pydantic.playlist import PlaylistVideoInfo
 from app.utils.dates import as_utc
 from app.utils.media import DEFAULT_FORMAT_SPEC
 
@@ -29,14 +31,14 @@ from app.utils.media import DEFAULT_FORMAT_SPEC
 class BaseRepository:
     """Base repository with common database operations."""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def commit(self):
+    async def commit(self) -> None:
         """Commit the current transaction."""
         await self.session.commit()
 
-    async def rollback(self):
+    async def rollback(self) -> None:
         """Rollback the current transaction."""
         await self.session.rollback()
 
@@ -49,7 +51,7 @@ class DownloadRepository(BaseRepository):
         url: str,
         format_spec: str = DEFAULT_FORMAT_SPEC,
         status: str = "pending",
-        **kwargs,
+        **kwargs: object,
     ) -> Download:
         """Create a new download record."""
         download_id = str(uuid.uuid4())
@@ -80,13 +82,13 @@ class DownloadRepository(BaseRepository):
         self,
         download_id: str,
         status: str,
-        progress: float = None,
-        error_message: str = None,
-        downloaded_bytes: int = None,
-        total_bytes: int = None,
-        download_speed: float = None,
-        eta: float = None,
-        **kwargs,
+        progress: float | None = None,
+        error_message: str | None = None,
+        downloaded_bytes: int | None = None,
+        total_bytes: int | None = None,
+        download_speed: float | None = None,
+        eta: float | None = None,
+        **kwargs: object,
     ) -> Optional[Download]:
         """Update download status and progress."""
         download = await self.get_by_id(download_id)
@@ -99,7 +101,7 @@ class DownloadRepository(BaseRepository):
             return await self.get_by_id(download_id)
 
         previous_status = download.status
-        values = {"status": status}
+        values: dict[str, object] = {"status": status}
         for name, value in {
             "progress": 100.0 if status == "completed" else progress,
             "downloaded_bytes": downloaded_bytes,
@@ -123,6 +125,7 @@ class DownloadRepository(BaseRepository):
             .values(**values)
             .execution_options(synchronize_session=False)
         )
+        assert isinstance(result, CursorResult)
         if result.rowcount != 1:
             # Also roll back any file registration staged by the worker.
             await self.session.rollback()
@@ -139,14 +142,14 @@ class DownloadRepository(BaseRepository):
             .order_by(desc(Download.created_at))
             .limit(limit)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_all(self, limit: int = 1000) -> List[Download]:
         """Get all downloads."""
         result = await self.session.execute(
             select(Download).order_by(desc(Download.created_at)).limit(limit)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_pending_downloads(self, limit: int = 10) -> List[Download]:
         """Get pending downloads for processing."""
@@ -161,7 +164,7 @@ class DownloadRepository(BaseRepository):
             return True
         return False
 
-    async def get_by_batch_id(self, batch_id: str) -> List[Dict[str, Any]]:
+    async def get_by_batch_id(self, batch_id: str) -> List[dict[str, object]]:
         """
         Get all downloads for a specific batch.
 
@@ -223,7 +226,7 @@ class DownloadFileRepository(BaseRepository):
         filepath: str,
         file_size: int,
         file_type: str,
-        **kwargs,
+        **kwargs: object,
     ) -> DownloadFile:
         """Create a new download file record."""
         file_id = str(uuid.uuid4())
@@ -250,14 +253,14 @@ class DownloadFileRepository(BaseRepository):
             .where(DownloadFile.download_id == download_id)
             .order_by(DownloadFile.created_at)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_all(self, limit: int = 10000) -> List[DownloadFile]:
         """Get all downloaded file records."""
         result = await self.session.execute(
             select(DownloadFile).order_by(desc(DownloadFile.created_at)).limit(limit)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def delete(self, file_id: str) -> bool:
         """Delete a downloaded file record by ID."""
@@ -276,6 +279,7 @@ class DownloadFileRepository(BaseRepository):
             delete(DownloadFile).where(DownloadFile.download_id == download_id)
         )
         await self.commit()
+        assert isinstance(result, CursorResult)
         return result.rowcount
 
 
@@ -287,8 +291,8 @@ class WebhookRepository(BaseRepository):
         name: str,
         url: str,
         events: List[str],
-        secret: str = None,
-        headers: Dict[str, str] = None,
+        secret: str | None = None,
+        headers: Dict[str, str] | None = None,
     ) -> Webhook:
         """Create a new webhook."""
         webhook_id = str(uuid.uuid4())
@@ -313,7 +317,7 @@ class WebhookRepository(BaseRepository):
         result = await self.session.execute(
             select(Webhook).where(Webhook.is_active).order_by(Webhook.created_at)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_webhooks_for_event(self, event: str) -> List[Webhook]:
         """Get webhooks that subscribe to a specific event."""
@@ -322,7 +326,7 @@ class WebhookRepository(BaseRepository):
                 and_(Webhook.is_active, Webhook.events.contains([event]))
             )
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def update_last_triggered(self, webhook_id: str) -> Optional[Webhook]:
         """Update webhook's last triggered timestamp."""
@@ -348,9 +352,9 @@ class ApiKeyRepository(BaseRepository):
         user_id: str,
         name: str,
         key_hash: str,
-        permissions: List[str] = None,
+        permissions: List[str] | None = None,
         rate_limit: int = 60,
-        expires_at: datetime = None,
+        expires_at: datetime | None = None,
     ) -> ApiKey:
         """Create a new API key."""
         key_id = str(uuid.uuid4())
@@ -395,13 +399,13 @@ class ApiKeyRepository(BaseRepository):
         )
         return result.scalar_one_or_none()
 
-    async def get_all(self, user_id: str = None) -> list[ApiKey]:
+    async def get_all(self, user_id: str | None = None) -> list[ApiKey]:
         """Get all API keys, optionally filtered by user."""
         query = select(ApiKey)
         if user_id:
             query = query.where(ApiKey.user_id == user_id)
         result = await self.session.execute(query)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_by_user_id(self, user_id: str) -> list[ApiKey]:
         """Get all API keys for a specific user."""
@@ -422,7 +426,7 @@ class UserRepository(BaseRepository):
         username: str,
         password_hash: str,
         email: str,
-        avatar: str = None,
+        avatar: str | None = None,
         is_admin: bool = False,
     ) -> User:
         """Create a new user."""
@@ -465,7 +469,7 @@ class UserRepository(BaseRepository):
         from sqlalchemy import func
 
         result = await self.session.execute(select(func.count(User.id)))
-        return result.scalar_one()
+        return int(result.scalar_one())
 
     async def update_last_login(self, user_id: str) -> Optional[User]:
         """Update user's last login timestamp."""
@@ -492,7 +496,7 @@ class DownloadHistoryRepository(BaseRepository):
         status: str,
         started_at: datetime,
         completed_at: datetime,
-        **kwargs,
+        **kwargs: object,
     ) -> DownloadHistory:
         """Create a new history record."""
         history_id = str(uuid.uuid4())
@@ -530,9 +534,9 @@ class DownloadHistoryRepository(BaseRepository):
             .order_by(desc(DownloadHistory.started_at))
             .limit(limit)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
-    async def get_statistics(self, days: int = 30) -> Dict[str, Any]:
+    async def get_statistics(self, days: int = 30) -> dict[str, object]:
         """Get download statistics for the last N days."""
         cutoff_date = datetime.now(timezone.utc).replace(
             hour=0, minute=0, second=0, microsecond=0
@@ -622,7 +626,7 @@ class TokenBlacklistRepository(BaseRepository):
             .where(TokenBlacklist.user_id == user_id)
             .order_by(desc(TokenBlacklist.created_at))
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
 
 class BatchRepository(BaseRepository):
@@ -637,7 +641,7 @@ class BatchRepository(BaseRepository):
         source_url: Optional[str] = None,
         format_spec: str = DEFAULT_FORMAT_SPEC,
         output_directory: Optional[str] = None,
-        **kwargs,
+        **kwargs: object,
     ) -> str:
         """
         Create a new batch record.
@@ -680,7 +684,7 @@ class BatchRepository(BaseRepository):
         await self.commit()
         return batch_id
 
-    async def get_batch_by_id(self, batch_id: str) -> Optional[Dict[str, Any]]:
+    async def get_batch_by_id(self, batch_id: str) -> Optional[dict[str, object]]:
         """
         Get batch by ID.
 
@@ -729,7 +733,7 @@ class BatchRepository(BaseRepository):
         status: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[Dict[str, Any]]:
+    ) -> List[dict[str, object]]:
         """
         Get all batches for a user.
 
@@ -774,7 +778,9 @@ class BatchRepository(BaseRepository):
             for batch in batches
         ]
 
-    async def update_batch(self, batch_id: str, **kwargs) -> Optional[Dict[str, Any]]:
+    async def update_batch(
+        self, batch_id: str, **kwargs: object
+    ) -> Optional[dict[str, object]]:
         """
         Update batch fields.
 
@@ -804,7 +810,7 @@ class BatchRepository(BaseRepository):
         return await self.get_batch_by_id(batch_id)
 
     async def create_batch_videos(
-        self, batch_id: str, videos: List[Any]  # List[PlaylistVideoInfo]
+        self, batch_id: str, videos: list[PlaylistVideoInfo]
     ) -> None:
         """
         Create multiple batch_video records.
@@ -820,38 +826,14 @@ class BatchRepository(BaseRepository):
             batch_video = BatchVideo(
                 id=str(uuid.uuid4()),
                 batch_id=batch_id,
-                video_url=video.url if hasattr(video, "url") else video["url"],
-                video_id=(
-                    video.video_id
-                    if hasattr(video, "video_id")
-                    else video.get("video_id")
-                ),
-                title=video.title if hasattr(video, "title") else video.get("title"),
-                duration=(
-                    video.duration
-                    if hasattr(video, "duration")
-                    else video.get("duration")
-                ),
-                thumbnail_url=(
-                    video.thumbnail
-                    if hasattr(video, "thumbnail")
-                    else video.get("thumbnail")
-                ),
-                uploader=(
-                    video.uploader
-                    if hasattr(video, "uploader")
-                    else video.get("uploader")
-                ),
-                view_count=(
-                    video.view_count
-                    if hasattr(video, "view_count")
-                    else video.get("view_count")
-                ),
-                upload_date=(
-                    video.upload_date
-                    if hasattr(video, "upload_date")
-                    else video.get("upload_date")
-                ),
+                video_url=video.url,
+                video_id=video.video_id,
+                title=video.title,
+                duration=video.duration,
+                thumbnail_url=video.thumbnail,
+                uploader=video.uploader,
+                view_count=video.view_count,
+                upload_date=video.upload_date,
                 position=i,
                 status="pending",
                 retry_count=0,
@@ -864,7 +846,7 @@ class BatchRepository(BaseRepository):
 
     async def get_batch_videos(
         self, batch_id: str, status: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+    ) -> List[dict[str, object]]:
         """
         Get all videos in a batch.
 
@@ -954,7 +936,9 @@ class BatchRepository(BaseRepository):
             video.download_id = download_id
             await self.commit()
 
-    async def get_batch_with_downloads(self, batch_id: str) -> Optional[Dict[str, Any]]:
+    async def get_batch_with_downloads(
+        self, batch_id: str
+    ) -> Optional[dict[str, object]]:
         """
         Get batch with all associated downloads.
 

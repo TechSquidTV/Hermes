@@ -12,7 +12,11 @@ from app.api.dependencies import get_repositories_from_session
 from app.core.logging import get_logger
 from app.core.security import ApiKeyPermission, AuthPrincipal, require_api_permission
 from app.db.session import get_database_session
-from app.models.pydantic.download import CleanupOrphanedResponse, DownloadQueue
+from app.models.pydantic.download import (
+    CleanupOrphanedResponse,
+    DownloadQueue,
+    DownloadStatus,
+)
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -121,21 +125,23 @@ async def get_download_queue(
             }
 
         queue_items.append(
-            {
-                "download_id": download.id,
-                "status": download.status,
-                "progress": progress_info,
-                "current_filename": download.output_path,
-                "message": f"Download {download.status}",
-                "error": download.error_message,
-                "result": (
-                    {"url": download.url, "title": download.title}
-                    if download.title
-                    else {"url": download.url}
-                ),
-                "completed_at": download.completed_at,
-                "created_at": download.created_at,
-            }
+            DownloadStatus.model_validate(
+                {
+                    "download_id": download.id,
+                    "status": download.status,
+                    "progress": progress_info,
+                    "current_filename": download.output_path,
+                    "message": f"Download {download.status}",
+                    "error": download.error_message,
+                    "result": (
+                        {"url": download.url, "title": download.title}
+                        if download.title
+                        else {"url": download.url}
+                    ),
+                    "completed_at": download.completed_at,
+                    "created_at": download.created_at,
+                }
+            )
         )
 
     return DownloadQueue(

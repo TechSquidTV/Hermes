@@ -25,7 +25,7 @@ async def cleanup_downloads(
     request: CleanupRequest = CleanupRequest(),
     db_session: AsyncSession = Depends(get_database_session),
     principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.ADMIN)),
-):
+) -> CleanupResponse:
     """
     Clean up old downloads and temporary files.
 
@@ -131,7 +131,7 @@ async def cleanup_expired_tokens(
     dry_run: bool = False,
     db_session: AsyncSession = Depends(get_database_session),
     principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.ADMIN)),
-):
+) -> dict[str, object]:
     """
     Clean up expired tokens from the blacklist.
 

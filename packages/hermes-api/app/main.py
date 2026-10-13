@@ -3,11 +3,15 @@ Main FastAPI application for Hermes API server.
 """
 
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.middleware.base import RequestResponseEndpoint
+from starlette.responses import Response
 
 from app.api.v1.router import api_router
 from app.core.config import settings
@@ -18,7 +22,7 @@ from app.models.pydantic.response import ErrorResponse
 logger = logging.getLogger(__name__)
 setup_logging()
 
-STANDARD_ERROR_RESPONSES = {
+STANDARD_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     400: {"model": ErrorResponse, "description": "Bad Request"},
     401: {"model": ErrorResponse, "description": "Unauthorized"},
     403: {"model": ErrorResponse, "description": "Forbidden"},
@@ -40,13 +44,10 @@ async def initialize_admin_user() -> None:
     If both conditions are met, creates the first admin user.
     """
     # Check if initial admin credentials are configured
-    if not all(
-        [
-            settings.initial_admin_username,
-            settings.initial_admin_email,
-            settings.initial_admin_password,
-        ]
-    ):
+    username = settings.initial_admin_username
+    email = settings.initial_admin_email
+    password = settings.initial_admin_password
+    if not username or not email or not password:
         logger.info("No initial admin credentials configured, skipping admin creation")
         return
 
@@ -73,13 +74,13 @@ async def initialize_admin_user() -> None:
                 )
                 return
 
-            TypeAdapter(Password).validate_python(settings.initial_admin_password)
-            TypeAdapter(EmailStr).validate_python(settings.initial_admin_email)
+            TypeAdapter(Password).validate_python(password)
+            TypeAdapter(EmailStr).validate_python(email)
             # Create admin user
             await user_repository.create(
-                username=settings.initial_admin_username,
-                email=settings.initial_admin_email,
-                password_hash=get_password_hash(settings.initial_admin_password),
+                username=username,
+                email=email,
+                password_hash=get_password_hash(password),
                 is_admin=True,
             )
 
@@ -99,7 +100,7 @@ async def initialize_admin_user() -> None:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan context manager."""
     # Startup
     logger.info("Starting Hermes API server...")
@@ -191,7 +192,9 @@ def create_application() -> FastAPI:
 
     # Global exception handler for consistent error responses
     @app.exception_handler(HTTPException)
-    async def http_exception_handler(request: Request, exc: HTTPException):
+    async def http_exception_handler(
+        request: Request, exc: HTTPException
+    ) -> JSONResponse:
         """Handle HTTP exceptions with consistent error response format."""
         return JSONResponse(
             status_code=exc.status_code,
@@ -206,7 +209,9 @@ def create_application() -> FastAPI:
         )
 
     @app.exception_handler(Exception)
-    async def general_exception_handler(request: Request, exc: Exception):
+    async def general_exception_handler(
+        request: Request, exc: Exception
+    ) -> JSONResponse:
         """Handle general exceptions with consistent error response format."""
         logger.error(f"Unhandled exception: {exc}", exc_info=True)
         return JSONResponse(
@@ -222,7 +227,9 @@ def create_application() -> FastAPI:
 
     # Security headers middleware
     @app.middleware("http")
-    async def add_security_headers(request, call_next):
+    async def add_security_headers(
+        request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         response = await call_next(request)
 
         # Add security headers
@@ -254,13 +261,13 @@ app = create_application()
 
 
 @app.get("/health")
-async def health():
+async def health() -> dict[str, str]:
     """Basic health check endpoint (alias for health-check)."""
     return {"status": "healthy", "version": settings.api_version}
 
 
 @app.get("/health-check")
-async def health_check():
+async def health_check() -> dict[str, str]:
     """Basic health check endpoint."""
     return {"status": "healthy", "version": settings.api_version}
 

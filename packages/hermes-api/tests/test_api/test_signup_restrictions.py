@@ -2,6 +2,14 @@
 Tests for signup restrictions and first-user admin features.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.db.models import User
+
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +21,7 @@ class TestSignupRestrictions:
     @pytest.mark.asyncio
     async def test_first_user_becomes_admin(
         self, client: AsyncClient, db_session: AsyncSession
-    ):
+    ) -> None:
         """Test that the first user to sign up automatically becomes admin."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -48,7 +56,7 @@ class TestSignupRestrictions:
     @pytest.mark.asyncio
     async def test_second_user_not_admin(
         self, client: AsyncClient, db_session: AsyncSession
-    ):
+    ) -> None:
         """Test that subsequent users are not admins."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -82,8 +90,8 @@ class TestSignupRestrictions:
 
     @pytest.mark.asyncio
     async def test_signup_disabled_with_existing_users(
-        self, client: AsyncClient, test_user, monkeypatch
-    ):
+        self, client: AsyncClient, test_user: User, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test that signup is blocked when disabled and users exist."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -112,8 +120,8 @@ class TestSignupRestrictions:
 
     @pytest.mark.asyncio
     async def test_signup_allowed_when_enabled(
-        self, client: AsyncClient, test_user, monkeypatch
-    ):
+        self, client: AsyncClient, test_user: User, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test that signup works when allow_public_signup is True."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -142,8 +150,8 @@ class TestSignupRestrictions:
 
     @pytest.mark.asyncio
     async def test_first_user_signup_works_even_when_disabled(
-        self, client: AsyncClient, monkeypatch
-    ):
+        self, client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test that first user can sign up even when public signup is disabled."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -176,8 +184,8 @@ class TestPublicConfigEndpoint:
 
     @pytest.mark.asyncio
     async def test_public_config_returns_signup_status(
-        self, client: AsyncClient, monkeypatch
-    ):
+        self, client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test that public config endpoint returns allow_public_signup setting."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -197,8 +205,8 @@ class TestPublicConfigEndpoint:
 
     @pytest.mark.asyncio
     async def test_public_config_with_signup_disabled_and_existing_user(
-        self, client: AsyncClient, monkeypatch, test_user
-    ):
+        self, client: AsyncClient, monkeypatch: pytest.MonkeyPatch, test_user: User
+    ) -> None:
         """Test public config endpoint when signup is disabled and users exist."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -217,8 +225,8 @@ class TestPublicConfigEndpoint:
 
     @pytest.mark.asyncio
     async def test_public_config_allows_first_user_signup(
-        self, client: AsyncClient, monkeypatch
-    ):
+        self, client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test public config allows signup when no users exist."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -235,7 +243,7 @@ class TestPublicConfigEndpoint:
         assert data["allowPublicSignup"] is True
 
     @pytest.mark.asyncio
-    async def test_public_config_no_auth_required(self, client: AsyncClient):
+    async def test_public_config_no_auth_required(self, client: AsyncClient) -> None:
         """Test that public config endpoint doesn't require authentication."""
         # Clear ALL auth overrides to ensure no auth is needed
         from app.main import app

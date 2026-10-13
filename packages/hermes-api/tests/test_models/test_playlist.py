@@ -2,7 +2,10 @@
 Tests for playlist Pydantic models.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
+from typing import Literal
 
 import pytest
 from pydantic import ValidationError
@@ -31,7 +34,7 @@ from app.models.pydantic.playlist import (
 class TestPlaylistVideoInfo:
     """Tests for PlaylistVideoInfo model"""
 
-    def test_create_with_required_fields(self):
+    def test_create_with_required_fields(self) -> None:
         """Test creating PlaylistVideoInfo with only required fields"""
         video = PlaylistVideoInfo(
             url="https://youtube.com/watch?v=123",
@@ -47,7 +50,7 @@ class TestPlaylistVideoInfo:
         assert video.view_count is None
         assert video.upload_date is None
 
-    def test_create_with_all_fields(self):
+    def test_create_with_all_fields(self) -> None:
         """Test creating PlaylistVideoInfo with all fields"""
         video = PlaylistVideoInfo(
             url="https://youtube.com/watch?v=123",
@@ -68,16 +71,18 @@ class TestPlaylistVideoInfo:
         assert video.view_count == 1000
         assert video.upload_date == "20240101"
 
-    def test_missing_required_field(self):
+    def test_missing_required_field(self) -> None:
         """Test that missing required fields raise ValidationError"""
         with pytest.raises(ValidationError):
-            PlaylistVideoInfo(url="https://youtube.com/watch?v=123", video_id="123")
+            PlaylistVideoInfo.model_validate(
+                {"url": "https://youtube.com/watch?v=123", "video_id": "123"}
+            )
 
 
 class TestPlaylistInfo:
     """Tests for PlaylistInfo model"""
 
-    def test_create_with_required_fields(self):
+    def test_create_with_required_fields(self) -> None:
         """Test creating PlaylistInfo with required fields"""
         playlist = PlaylistInfo(
             is_playlist=True,
@@ -105,7 +110,7 @@ class TestPlaylistInfo:
         assert playlist.uploader_id is None
         assert playlist.description is None
 
-    def test_create_with_all_fields(self):
+    def test_create_with_all_fields(self) -> None:
         """Test creating PlaylistInfo with all fields"""
         videos = [
             PlaylistVideoInfo(
@@ -132,7 +137,7 @@ class TestPlaylistInfo:
         assert playlist.description == "A test playlist"
         assert len(playlist.videos) == 2
 
-    def test_valid_playlist_types(self):
+    def test_valid_playlist_types(self) -> None:
         """Test that valid playlist types are accepted"""
         valid_types: list[YTDLResultType] = [
             "video",
@@ -158,7 +163,7 @@ class TestPlaylistInfo:
 class TestSingleVideoInfo:
     """Tests for SingleVideoInfo model"""
 
-    def test_create_with_required_fields(self):
+    def test_create_with_required_fields(self) -> None:
         """Test creating SingleVideoInfo with required fields"""
         video = SingleVideoInfo(
             url="https://youtube.com/watch?v=123",
@@ -174,7 +179,7 @@ class TestSingleVideoInfo:
         assert video.uploader is None
         assert video.description is None
 
-    def test_create_with_all_fields(self):
+    def test_create_with_all_fields(self) -> None:
         """Test creating SingleVideoInfo with all fields"""
         video = SingleVideoInfo(
             url="https://youtube.com/watch?v=123",
@@ -190,7 +195,7 @@ class TestSingleVideoInfo:
         assert video.uploader == "Test Channel"
         assert video.description == "Test description"
 
-    def test_is_playlist_always_false(self):
+    def test_is_playlist_always_false(self) -> None:
         """Test that is_playlist is always False"""
         video = SingleVideoInfo(
             url="https://youtube.com/watch?v=123",
@@ -203,7 +208,7 @@ class TestSingleVideoInfo:
 class TestUrlDetectionResult:
     """Tests for UrlDetectionResult model"""
 
-    def test_create_without_metadata(self):
+    def test_create_without_metadata(self) -> None:
         """Test creating UrlDetectionResult without metadata"""
         result = UrlDetectionResult(
             url="https://youtube.com/watch?v=123",
@@ -213,7 +218,7 @@ class TestUrlDetectionResult:
         assert result.url_type == "video"
         assert result.metadata is None
 
-    def test_create_with_single_video_metadata(self):
+    def test_create_with_single_video_metadata(self) -> None:
         """Test creating UrlDetectionResult with SingleVideoInfo metadata"""
         video = SingleVideoInfo(
             url="https://youtube.com/watch?v=123",
@@ -227,7 +232,7 @@ class TestUrlDetectionResult:
         )
         assert result.metadata == video
 
-    def test_create_with_playlist_metadata(self):
+    def test_create_with_playlist_metadata(self) -> None:
         """Test creating UrlDetectionResult with PlaylistInfo metadata"""
         playlist = PlaylistInfo(
             is_playlist=True,
@@ -245,9 +250,14 @@ class TestUrlDetectionResult:
         )
         assert result.metadata == playlist
 
-    def test_valid_url_types(self):
+    def test_valid_url_types(self) -> None:
         """Test that valid URL types are accepted"""
-        for url_type in ["playlist", "video", "unknown"]:
+        url_types: tuple[Literal["playlist", "video", "unknown"], ...] = (
+            "playlist",
+            "video",
+            "unknown",
+        )
+        for url_type in url_types:
             result = UrlDetectionResult(url="https://example.com", url_type=url_type)
             assert result.url_type == url_type
 
@@ -255,7 +265,7 @@ class TestUrlDetectionResult:
 class TestBatchCreateParams:
     """Tests for BatchCreateParams model"""
 
-    def test_create_with_required_fields(self):
+    def test_create_with_required_fields(self) -> None:
         """Test creating BatchCreateParams with required fields"""
         params = BatchCreateParams(
             user_id="user123",
@@ -269,7 +279,7 @@ class TestBatchCreateParams:
         assert params.output_directory is None
         assert params.videos == []
 
-    def test_create_with_all_fields(self):
+    def test_create_with_all_fields(self) -> None:
         """Test creating BatchCreateParams with all fields"""
         videos = [
             PlaylistVideoInfo(
@@ -291,7 +301,7 @@ class TestBatchCreateParams:
         assert params.output_directory == "/downloads"
         assert len(params.videos) == 1
 
-    def test_valid_batch_types(self):
+    def test_valid_batch_types(self) -> None:
         """Test that valid batch types are accepted"""
         valid_types: list[BatchType] = ["playlist", "manual_batch", "api_batch"]
         for btype in valid_types:
@@ -302,7 +312,7 @@ class TestBatchCreateParams:
 class TestBatchProgressInfo:
     """Tests for BatchProgressInfo model"""
 
-    def test_create_batch_progress_info(self):
+    def test_create_batch_progress_info(self) -> None:
         """Test creating BatchProgressInfo"""
         progress = BatchProgressInfo(
             batch_id="batch123",
@@ -321,7 +331,7 @@ class TestBatchProgressInfo:
         assert progress.pending_videos == 4
         assert progress.overall_progress == 50.0
 
-    def test_progress_validation(self):
+    def test_progress_validation(self) -> None:
         """Test that progress is validated between 0 and 100"""
         # Valid values
         BatchProgressInfo(
@@ -343,7 +353,7 @@ class TestBatchProgressInfo:
             overall_progress=100.0,
         )
 
-    def test_valid_batch_statuses(self):
+    def test_valid_batch_statuses(self) -> None:
         """Test that valid batch statuses are accepted"""
         valid_statuses: list[BatchStatus] = [
             "pending",
@@ -368,7 +378,7 @@ class TestBatchProgressInfo:
 class TestBatchCreateResult:
     """Tests for BatchCreateResult model"""
 
-    def test_create_batch_result(self):
+    def test_create_batch_result(self) -> None:
         """Test creating BatchCreateResult"""
         now = datetime.now()
         result = BatchCreateResult(
@@ -390,7 +400,7 @@ class TestBatchCreateResult:
 class TestBatchStartResult:
     """Tests for BatchStartResult model"""
 
-    def test_create_batch_start_result(self):
+    def test_create_batch_start_result(self) -> None:
         """Test creating BatchStartResult"""
         result = BatchStartResult(
             batch_id="batch123",
@@ -407,7 +417,7 @@ class TestBatchStartResult:
 class TestDetectUrlTypeRequest:
     """Tests for DetectUrlTypeRequest model"""
 
-    def test_create_detect_url_type_request(self):
+    def test_create_detect_url_type_request(self) -> None:
         """Test creating DetectUrlTypeRequest"""
         request = DetectUrlTypeRequest(url="https://youtube.com/watch?v=123")
         assert request.url == "https://youtube.com/watch?v=123"
@@ -416,7 +426,7 @@ class TestDetectUrlTypeRequest:
 class TestDetectUrlTypeResponse:
     """Tests for DetectUrlTypeResponse model"""
 
-    def test_create_detect_url_type_response(self):
+    def test_create_detect_url_type_response(self) -> None:
         """Test creating DetectUrlTypeResponse"""
         response = DetectUrlTypeResponse(
             success=True,
@@ -427,7 +437,7 @@ class TestDetectUrlTypeResponse:
         assert response.url_type == "video"
         assert response.metadata == {"title": "Test Video"}
 
-    def test_create_without_metadata(self):
+    def test_create_without_metadata(self) -> None:
         """Test creating DetectUrlTypeResponse without metadata"""
         response = DetectUrlTypeResponse(success=False, url_type="unknown")
         assert response.success is False
@@ -438,13 +448,13 @@ class TestDetectUrlTypeResponse:
 class TestParsePlaylistRequest:
     """Tests for ParsePlaylistRequest model"""
 
-    def test_create_with_default_extract_flat(self):
+    def test_create_with_default_extract_flat(self) -> None:
         """Test creating ParsePlaylistRequest with default extract_flat"""
         request = ParsePlaylistRequest(url="https://youtube.com/playlist?list=PL123")
         assert request.url == "https://youtube.com/playlist?list=PL123"
         assert request.extract_flat is True
 
-    def test_create_with_extract_flat_false(self):
+    def test_create_with_extract_flat_false(self) -> None:
         """Test creating ParsePlaylistRequest with extract_flat=False"""
         request = ParsePlaylistRequest(
             url="https://youtube.com/playlist?list=PL123", extract_flat=False
@@ -455,7 +465,7 @@ class TestParsePlaylistRequest:
 class TestParsePlaylistResponse:
     """Tests for ParsePlaylistResponse model"""
 
-    def test_create_success_response(self):
+    def test_create_success_response(self) -> None:
         """Test creating successful ParsePlaylistResponse"""
         playlist = PlaylistInfo(
             is_playlist=True,
@@ -475,7 +485,7 @@ class TestParsePlaylistResponse:
         assert response.playlist == playlist
         assert response.message == "Successfully parsed playlist"
 
-    def test_create_error_response(self):
+    def test_create_error_response(self) -> None:
         """Test creating error ParsePlaylistResponse"""
         response = ParsePlaylistResponse(
             success=False,
@@ -490,7 +500,7 @@ class TestParsePlaylistResponse:
 class TestCreateBatchRequest:
     """Tests for CreateBatchRequest model"""
 
-    def test_create_playlist_batch_request(self):
+    def test_create_playlist_batch_request(self) -> None:
         """Test creating CreateBatchRequest for playlist"""
         request = CreateBatchRequest(
             source_type="playlist",
@@ -504,7 +514,7 @@ class TestCreateBatchRequest:
         assert request.output_directory is None
         assert request.start_immediately is True
 
-    def test_create_manual_batch_request(self):
+    def test_create_manual_batch_request(self) -> None:
         """Test creating CreateBatchRequest for manual batch"""
         urls = ["https://youtube.com/watch?v=1", "https://youtube.com/watch?v=2"]
         request = CreateBatchRequest(
@@ -520,7 +530,7 @@ class TestCreateBatchRequest:
         assert request.format_spec == "720p"
         assert request.start_immediately is False
 
-    def test_create_with_all_fields(self):
+    def test_create_with_all_fields(self) -> None:
         """Test creating CreateBatchRequest with all fields"""
         request = CreateBatchRequest(
             source_type="playlist",
@@ -540,7 +550,7 @@ class TestCreateBatchRequest:
 class TestCreateBatchResponse:
     """Tests for CreateBatchResponse model"""
 
-    def test_create_batch_response(self):
+    def test_create_batch_response(self) -> None:
         """Test creating CreateBatchResponse"""
         now = datetime.now()
         response = CreateBatchResponse(

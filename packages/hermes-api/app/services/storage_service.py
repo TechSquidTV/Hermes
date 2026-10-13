@@ -126,7 +126,7 @@ class StorageService:
         return recommendations
 
     @staticmethod
-    async def _check_old_files(directory: Path, days: int) -> dict:
+    async def _check_old_files(directory: Path, days: int) -> dict[str, int]:
         """Check for files older than specified days."""
         total_size = 0
         count = 0
@@ -147,7 +147,7 @@ class StorageService:
         return {"size": total_size, "count": count}
 
     @staticmethod
-    async def _check_temp_files(temp_dir: Path) -> dict:
+    async def _check_temp_files(temp_dir: Path) -> dict[str, int]:
         """Check for temporary files."""
         total_size = 0
         count = 0
@@ -163,7 +163,7 @@ class StorageService:
         return {"size": total_size, "count": count}
 
     @staticmethod
-    async def _check_partial_files(directory: Path) -> dict:
+    async def _check_partial_files(directory: Path) -> dict[str, int]:
         """Check for partial/incomplete download files."""
         total_size = 0
         count = 0

@@ -97,6 +97,8 @@ async def backfill_download_files(session: AsyncSession) -> int:
             return repaired
 
         for download in downloads:
+            if download.output_path is None:
+                continue
             try:
                 file_record = await register_download_file(
                     session, download.id, download.output_path

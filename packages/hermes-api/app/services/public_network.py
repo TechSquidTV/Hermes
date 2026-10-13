@@ -11,7 +11,7 @@ import socket
 import ssl
 import urllib.request
 from collections.abc import Iterable
-from typing import cast
+from typing import Protocol, cast
 
 import yt_dlp
 from yt_dlp.networking._urllib import HTTPHandler, UrllibRH
@@ -59,25 +59,23 @@ def _connection(
     return connection
 
 
+class _OpenerHandlers(Protocol):
+    handlers: list[urllib.request.BaseHandler]
+
+
 class PublicHTTPHandler(HTTPHandler):
     def http_open(self, request: urllib.request.Request) -> http.client.HTTPResponse:
         validate_public_url(request.full_url, resolve=False)
-        return cast(
-            http.client.HTTPResponse,
-            self.do_open(
-                functools.partial(_connection, http.client.HTTPConnection), request
-            ),
+        return self.do_open(
+            functools.partial(_connection, http.client.HTTPConnection), request
         )
 
     def https_open(self, request: urllib.request.Request) -> http.client.HTTPResponse:
         validate_public_url(request.full_url, resolve=False)
-        return cast(
-            http.client.HTTPResponse,
-            self.do_open(
-                functools.partial(_connection, http.client.HTTPSConnection),
-                request,
-                context=self._context,
-            ),
+        return self.do_open(
+            functools.partial(_connection, http.client.HTTPSConnection),
+            request,
+            context=self._context,
         )
 
 
@@ -93,7 +91,7 @@ class PublicUrllibRH(UrllibRH):
     ) -> urllib.request.OpenerDirector:
         opener = super()._create_instance({}, cookiejar, legacy_ssl_support)
         guarded = urllib.request.OpenerDirector()
-        for handler in opener.handlers:
+        for handler in cast(_OpenerHandlers, opener).handlers:
             if not isinstance(
                 handler,
                 (
@@ -117,7 +115,7 @@ class PublicYoutubeDL(yt_dlp.YoutubeDL):
     def build_request_director(
         self, handlers: Iterable[type[RequestHandler]], preferences: object = None
     ) -> RequestDirector:
-        return cast(RequestDirector, super().build_request_director([PublicUrllibRH]))
+        return super().build_request_director([PublicUrllibRH])
 
     def dl(
         self,
@@ -148,7 +146,10 @@ class PublicYoutubeDL(yt_dlp.YoutubeDL):
             cached_manifest = info.get("hls_media_playlist_data")
             manifest = cached_manifest if isinstance(cached_manifest, str) else ""
             if not manifest:
-                with self.urlopen(hls._prepare_url(info, info["url"])) as response:
+                url = info.get("url")
+                if not isinstance(url, str):
+                    raise DownloadError("Missing HLS URL")
+                with self.urlopen(hls._prepare_url(info, url)) as response:
                     manifest = response.read().decode("utf-8", "ignore")
                     info = {**info, "url": response.url}
             if not HlsFD.can_download(manifest, info) or (
@@ -162,6 +163,4 @@ class PublicYoutubeDL(yt_dlp.YoutubeDL):
                 # yt-dlp's test mode discards the external_downloader setting.
                 # Pin the native protocol so format probes cannot invoke ffmpeg.
                 info = {**info, "protocol": "m3u8_native"}
-        return cast(
-            tuple[bool, bool], super().dl(name, info, subtitle=subtitle, test=test)
-        )
+        return super().dl(name, info, subtitle=subtitle, test=test)

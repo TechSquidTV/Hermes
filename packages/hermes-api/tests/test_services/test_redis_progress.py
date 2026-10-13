@@ -2,6 +2,17 @@
 Tests for RedisProgressService
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.services.redis_progress import RedisProgressService
+
+
 import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -12,19 +23,19 @@ from app.services.redis_progress import RedisProgressService
 
 
 @pytest.fixture
-def redis_service():
+def redis_service() -> RedisProgressService:
     """Create a RedisProgressService instance for testing."""
     return RedisProgressService()
 
 
 @pytest.fixture
-def mock_sync_redis():
+def mock_sync_redis() -> MagicMock:
     """Mock synchronous Redis client."""
     return MagicMock()
 
 
 @pytest.fixture
-def mock_async_redis():
+def mock_async_redis() -> MagicMock:
     """Mock asynchronous Redis client."""
     mock = MagicMock()
     # Add connection_pool attribute to prevent get_async_redis from recreating connection
@@ -32,7 +43,9 @@ def mock_async_redis():
     return mock
 
 
-def setup_async_redis_mock(redis_service, mock_redis):
+def setup_async_redis_mock(
+    redis_service: RedisProgressService, mock_redis: MagicMock
+) -> None:
     """
     Helper to properly configure mocked async redis with event loop tracking.
 
@@ -50,7 +63,9 @@ def setup_async_redis_mock(redis_service, mock_redis):
 class TestRedisProgressServiceSync:
     """Test synchronous Redis operations."""
 
-    def test_set_progress_sync_success(self, redis_service, mock_sync_redis):
+    def test_set_progress_sync_success(
+        self, redis_service: RedisProgressService, mock_sync_redis: MagicMock
+    ) -> None:
         """Test setting progress data synchronously."""
         redis_service._sync_redis = mock_sync_redis
         download_id = "test-download-123"
@@ -71,7 +86,9 @@ class TestRedisProgressServiceSync:
         stored_data = json.loads(call_args[0][2])
         assert stored_data == progress_data
 
-    def test_set_progress_sync_default_ttl(self, redis_service, mock_sync_redis):
+    def test_set_progress_sync_default_ttl(
+        self, redis_service: RedisProgressService, mock_sync_redis: MagicMock
+    ) -> None:
         """Test setting progress with default TTL."""
         redis_service._sync_redis = mock_sync_redis
         download_id = "test-download-123"
@@ -83,7 +100,9 @@ class TestRedisProgressServiceSync:
         call_args = mock_sync_redis.setex.call_args
         assert call_args[0][1] == 3600
 
-    def test_set_progress_sync_redis_error(self, redis_service, mock_sync_redis):
+    def test_set_progress_sync_redis_error(
+        self, redis_service: RedisProgressService, mock_sync_redis: MagicMock
+    ) -> None:
         """Test error handling when Redis sync set fails."""
         redis_service._sync_redis = mock_sync_redis
         mock_sync_redis.setex.side_effect = Exception("Redis connection failed")
@@ -94,7 +113,9 @@ class TestRedisProgressServiceSync:
         redis_service.set_progress_sync(download_id, progress_data)
         mock_sync_redis.setex.assert_called_once()
 
-    def test_get_sync_redis_creates_connection(self, redis_service):
+    def test_get_sync_redis_creates_connection(
+        self, redis_service: RedisProgressService
+    ) -> None:
         """Test that get_sync_redis creates connection on first call."""
         with patch("app.services.redis_progress.redis.from_url") as mock_from_url:
             mock_redis = MagicMock()
@@ -114,7 +135,9 @@ class TestRedisProgressServiceAsync:
     """Test asynchronous Redis operations."""
 
     @pytest.mark.asyncio
-    async def test_delete_progress_async_success(self, redis_service, mock_async_redis):
+    async def test_delete_progress_async_success(
+        self, redis_service: RedisProgressService, mock_async_redis: MagicMock
+    ) -> None:
         """Test deleting progress data asynchronously."""
         setup_async_redis_mock(redis_service, mock_async_redis)
         download_id = "test-download-456"
@@ -127,7 +150,9 @@ class TestRedisProgressServiceAsync:
         )
 
     @pytest.mark.asyncio
-    async def test_get_progress_success(self, redis_service):
+    async def test_get_progress_success(
+        self, redis_service: RedisProgressService
+    ) -> None:
         """Test retrieving progress data."""
         download_id = "test-download-789"
         expected_data = {
@@ -151,7 +176,9 @@ class TestRedisProgressServiceAsync:
         )
 
     @pytest.mark.asyncio
-    async def test_get_progress_not_found(self, redis_service, mock_async_redis):
+    async def test_get_progress_not_found(
+        self, redis_service: RedisProgressService, mock_async_redis: MagicMock
+    ) -> None:
         """Test retrieving progress when key doesn't exist."""
         setup_async_redis_mock(redis_service, mock_async_redis)
         mock_async_redis.get.return_value = None
@@ -162,7 +189,9 @@ class TestRedisProgressServiceAsync:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_get_progress_invalid_json(self, redis_service, mock_async_redis):
+    async def test_get_progress_invalid_json(
+        self, redis_service: RedisProgressService, mock_async_redis: MagicMock
+    ) -> None:
         """Test handling invalid JSON from Redis."""
         setup_async_redis_mock(redis_service, mock_async_redis)
         mock_async_redis.get.return_value = "invalid-json-data"
@@ -174,7 +203,9 @@ class TestRedisProgressServiceAsync:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_get_progress_redis_error(self, redis_service, mock_async_redis):
+    async def test_get_progress_redis_error(
+        self, redis_service: RedisProgressService, mock_async_redis: MagicMock
+    ) -> None:
         """Test error handling when Redis get fails."""
         setup_async_redis_mock(redis_service, mock_async_redis)
         mock_async_redis.get.side_effect = Exception("Redis connection lost")
@@ -186,7 +217,9 @@ class TestRedisProgressServiceAsync:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_delete_progress_success(self, redis_service, mock_async_redis):
+    async def test_delete_progress_success(
+        self, redis_service: RedisProgressService, mock_async_redis: MagicMock
+    ) -> None:
         """Test deleting progress data."""
         setup_async_redis_mock(redis_service, mock_async_redis)
         download_id = "test-download-delete"
@@ -198,7 +231,9 @@ class TestRedisProgressServiceAsync:
         )
 
     @pytest.mark.asyncio
-    async def test_delete_progress_error(self, redis_service, mock_async_redis):
+    async def test_delete_progress_error(
+        self, redis_service: RedisProgressService, mock_async_redis: MagicMock
+    ) -> None:
         """Test error handling when Redis delete fails."""
         setup_async_redis_mock(redis_service, mock_async_redis)
         mock_async_redis.delete.side_effect = Exception("Redis error")
@@ -209,7 +244,9 @@ class TestRedisProgressServiceAsync:
         mock_async_redis.delete.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_get_async_redis_creates_connection(self, redis_service):
+    async def test_get_async_redis_creates_connection(
+        self, redis_service: RedisProgressService
+    ) -> None:
         """Test that get_async_redis creates connection on first call."""
         with patch("app.services.redis_progress.aioredis.from_url") as mock_from_url:
             mock_redis = MagicMock()
@@ -229,7 +266,9 @@ class TestRedisProgressServiceKeys:
     """Test Redis key formatting."""
 
     @pytest.mark.asyncio
-    async def test_progress_key_format(self, redis_service, mock_async_redis):
+    async def test_progress_key_format(
+        self, redis_service: RedisProgressService, mock_async_redis: MagicMock
+    ) -> None:
         """Test that progress keys use correct format."""
         setup_async_redis_mock(redis_service, mock_async_redis)
         download_id = "abc-123-def-456"
@@ -240,7 +279,9 @@ class TestRedisProgressServiceKeys:
         expected_key = "hermes:download:abc-123-def-456:progress"
         mock_async_redis.get.assert_called_once_with(expected_key)
 
-    def test_sync_progress_key_format(self, redis_service, mock_sync_redis):
+    def test_sync_progress_key_format(
+        self, redis_service: RedisProgressService, mock_sync_redis: MagicMock
+    ) -> None:
         """Test that sync progress keys use correct format."""
         redis_service._sync_redis = mock_sync_redis
         download_id = "xyz-789-abc-012"
@@ -255,7 +296,9 @@ class TestRedisProgressServiceKeys:
 class TestRedisProgressServiceDataIntegrity:
     """Test data serialization and integrity."""
 
-    def test_set_progress_preserves_data_types(self, redis_service, mock_sync_redis):
+    def test_set_progress_preserves_data_types(
+        self, redis_service: RedisProgressService, mock_sync_redis: MagicMock
+    ) -> None:
         """Test that different data types are preserved through JSON serialization."""
         redis_service._sync_redis = mock_sync_redis
         download_id = "test-types"
@@ -277,7 +320,9 @@ class TestRedisProgressServiceDataIntegrity:
         assert isinstance(stored_data["status"], str)
         assert stored_data["eta"] is None
 
-    def test_roundtrip_data_integrity(self, redis_service, mock_sync_redis):
+    def test_roundtrip_data_integrity(
+        self, redis_service: RedisProgressService, mock_sync_redis: MagicMock
+    ) -> None:
         """Test that data survives roundtrip through Redis (sync)."""
         redis_service._sync_redis = mock_sync_redis
         download_id = "test-roundtrip"
@@ -307,7 +352,9 @@ class TestRedisSSETokenStorage:
     """Test Redis SSE token storage operations."""
 
     @pytest.mark.asyncio
-    async def test_store_sse_token(self, redis_service, mock_async_redis):
+    async def test_store_sse_token(
+        self, redis_service: RedisProgressService, mock_async_redis: MagicMock
+    ) -> None:
         """Test storing SSE token with TTL in Redis."""
         setup_async_redis_mock(redis_service, mock_async_redis)
         mock_async_redis.setex = AsyncMock()
@@ -333,7 +380,9 @@ class TestRedisSSETokenStorage:
         assert stored_data["user_id"] == token_data["user_id"]
 
     @pytest.mark.asyncio
-    async def test_store_sse_token_with_datetime(self, redis_service, mock_async_redis):
+    async def test_store_sse_token_with_datetime(
+        self, redis_service: RedisProgressService, mock_async_redis: MagicMock
+    ) -> None:
         """Test storing SSE token with datetime fields serializes correctly."""
         from datetime import datetime, timedelta, timezone
 
@@ -364,7 +413,9 @@ class TestRedisSSETokenStorage:
         assert "Z" in stored_data["expires_at"] or "+" in stored_data["expires_at"]
 
     @pytest.mark.asyncio
-    async def test_get_sse_token(self, redis_service, mock_async_redis):
+    async def test_get_sse_token(
+        self, redis_service: RedisProgressService, mock_async_redis: MagicMock
+    ) -> None:
         """Test retrieving stored SSE token from Redis."""
         setup_async_redis_mock(redis_service, mock_async_redis)
 
@@ -387,7 +438,9 @@ class TestRedisSSETokenStorage:
         assert result["user_id"] == "user789"
 
     @pytest.mark.asyncio
-    async def test_get_nonexistent_sse_token(self, redis_service, mock_async_redis):
+    async def test_get_nonexistent_sse_token(
+        self, redis_service: RedisProgressService, mock_async_redis: MagicMock
+    ) -> None:
         """Test retrieving non-existent token returns None."""
         setup_async_redis_mock(redis_service, mock_async_redis)
         mock_async_redis.get = AsyncMock(return_value=None)
@@ -399,7 +452,9 @@ class TestRedisSSETokenStorage:
         mock_async_redis.get.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_delete_sse_token(self, redis_service, mock_async_redis):
+    async def test_delete_sse_token(
+        self, redis_service: RedisProgressService, mock_async_redis: MagicMock
+    ) -> None:
         """Test deleting SSE token from Redis."""
         setup_async_redis_mock(redis_service, mock_async_redis)
         mock_async_redis.delete = AsyncMock()
@@ -413,8 +468,8 @@ class TestRedisSSETokenStorage:
 
     @pytest.mark.asyncio
     async def test_revoke_user_sse_tokens_by_scope(
-        self, redis_service, mock_async_redis
-    ):
+        self, redis_service: RedisProgressService, mock_async_redis: MagicMock
+    ) -> None:
         """Test revoking SSE tokens filtered by scope prefix."""
         setup_async_redis_mock(redis_service, mock_async_redis)
 
@@ -425,7 +480,7 @@ class TestRedisSSETokenStorage:
             "sse:token:sse_ghi789",
         ]
 
-        async def mock_scan_iter(match):
+        async def mock_scan_iter(match: str) -> AsyncGenerator[str, None]:
             for key in token_keys:
                 yield key
 
@@ -453,8 +508,8 @@ class TestRedisSSETokenStorage:
 
     @pytest.mark.asyncio
     async def test_revoke_all_user_tokens_no_scope_filter(
-        self, redis_service, mock_async_redis
-    ):
+        self, redis_service: RedisProgressService, mock_async_redis: MagicMock
+    ) -> None:
         """Test revoking all SSE tokens for a user (no scope filter)."""
         setup_async_redis_mock(redis_service, mock_async_redis)
 
@@ -465,7 +520,7 @@ class TestRedisSSETokenStorage:
             "sse:token:sse_ccc333",
         ]
 
-        async def mock_scan_iter(match):
+        async def mock_scan_iter(match: str) -> AsyncGenerator[str, None]:
             for key in token_keys:
                 yield key
 
@@ -492,8 +547,8 @@ class TestRedisSSETokenStorage:
 
     @pytest.mark.asyncio
     async def test_store_sse_token_raises_on_redis_error(
-        self, redis_service, mock_async_redis
-    ):
+        self, redis_service: RedisProgressService, mock_async_redis: MagicMock
+    ) -> None:
         """Test that store_sse_token raises exception on Redis error."""
         setup_async_redis_mock(redis_service, mock_async_redis)
         mock_async_redis.setex = AsyncMock(
@@ -508,8 +563,8 @@ class TestRedisSSETokenStorage:
 
     @pytest.mark.asyncio
     async def test_get_sse_token_handles_json_decode_error(
-        self, redis_service, mock_async_redis
-    ):
+        self, redis_service: RedisProgressService, mock_async_redis: MagicMock
+    ) -> None:
         """Test that get_sse_token handles invalid JSON gracefully."""
         setup_async_redis_mock(redis_service, mock_async_redis)
         # Return invalid JSON
@@ -526,7 +581,9 @@ class TestRedisProgressServicePubSub:
     """Test Redis pub/sub functionality for SSE."""
 
     @pytest.mark.asyncio
-    async def test_serialize_data_with_datetime(self, redis_service):
+    async def test_serialize_data_with_datetime(
+        self, redis_service: RedisProgressService
+    ) -> None:
         """Verify datetime objects are converted to ISO strings."""
         from datetime import datetime, timezone
 
@@ -547,7 +604,9 @@ class TestRedisProgressServicePubSub:
         assert serialized["progress"] == 50.5
 
     @pytest.mark.asyncio
-    async def test_serialize_data_with_nested_datetime(self, redis_service):
+    async def test_serialize_data_with_nested_datetime(
+        self, redis_service: RedisProgressService
+    ) -> None:
         """Verify nested datetime objects are serialized."""
         from datetime import datetime, timezone
 
@@ -573,21 +632,26 @@ class TestRedisProgressServicePubSub:
         )
 
     @pytest.mark.asyncio
-    async def test_serialize_data_max_depth_protection(self, redis_service):
+    async def test_serialize_data_max_depth_protection(
+        self, redis_service: RedisProgressService
+    ) -> None:
         """Verify max recursion depth protection."""
         # Create deeply nested dict
-        data = {"level": 1}
+        data: dict[str, object] = {"level": 1}
         current = data
         for i in range(2, 15):
-            current["nested"] = {"level": i}
-            current = current["nested"]
+            nested: dict[str, object] = {"level": i}
+            current["nested"] = nested
+            current = nested
 
         # Should raise ValueError when exceeding max depth
         with pytest.raises(ValueError, match="Max recursion depth"):
             redis_service._serialize_data(data, max_depth=10)
 
     @pytest.mark.asyncio
-    async def test_publish_event_success(self, redis_service, mock_async_redis):
+    async def test_publish_event_success(
+        self, redis_service: RedisProgressService, mock_async_redis: MagicMock
+    ) -> None:
         """Test successful event publishing to Redis channel."""
         setup_async_redis_mock(redis_service, mock_async_redis)
         mock_async_redis.publish = AsyncMock()
@@ -611,7 +675,9 @@ class TestRedisProgressServicePubSub:
         assert "timestamp" in message
 
     @pytest.mark.asyncio
-    async def test_publish_event_with_datetime(self, redis_service, mock_async_redis):
+    async def test_publish_event_with_datetime(
+        self, redis_service: RedisProgressService, mock_async_redis: MagicMock
+    ) -> None:
         """Test event publishing with datetime fields."""
         from datetime import datetime, timezone
 
@@ -634,8 +700,8 @@ class TestRedisProgressServicePubSub:
 
     @pytest.mark.asyncio
     async def test_publish_event_handles_redis_error(
-        self, redis_service, mock_async_redis
-    ):
+        self, redis_service: RedisProgressService, mock_async_redis: MagicMock
+    ) -> None:
         """Test that Redis publish errors are handled gracefully."""
         setup_async_redis_mock(redis_service, mock_async_redis)
         mock_async_redis.publish = AsyncMock(
@@ -651,7 +717,9 @@ class TestRedisProgressServicePubSub:
         mock_async_redis.publish.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_subscribe_to_channels(self, redis_service, mock_async_redis):
+    async def test_subscribe_to_channels(
+        self, redis_service: RedisProgressService, mock_async_redis: MagicMock
+    ) -> None:
         """Test subscribing to multiple channels."""
         setup_async_redis_mock(redis_service, mock_async_redis)
 
@@ -663,7 +731,7 @@ class TestRedisProgressServicePubSub:
         mock_async_redis.pubsub = MagicMock(return_value=mock_pubsub)
 
         # Mock pubsub.listen() to yield test messages
-        async def mock_listen():
+        async def mock_listen() -> AsyncGenerator[dict[str, object], None]:
             # First message: subscription confirmation (skip)
             yield {"type": "subscribe", "channel": "hermes:download:updates"}
             # Second message: actual message
@@ -699,8 +767,8 @@ class TestRedisProgressServicePubSub:
 
     @pytest.mark.asyncio
     async def test_subscribe_handles_json_decode_error(
-        self, redis_service, mock_async_redis
-    ):
+        self, redis_service: RedisProgressService, mock_async_redis: MagicMock
+    ) -> None:
         """Test that invalid JSON messages are skipped gracefully."""
         setup_async_redis_mock(redis_service, mock_async_redis)
 
@@ -712,7 +780,7 @@ class TestRedisProgressServicePubSub:
         mock_async_redis.pubsub = MagicMock(return_value=mock_pubsub)
 
         # Mock pubsub.listen() to yield invalid JSON
-        async def mock_listen():
+        async def mock_listen() -> AsyncGenerator[dict[str, object], None]:
             yield {"type": "message", "channel": "test", "data": "not valid json{"}
             # Stop after invalid message
             return
@@ -728,7 +796,9 @@ class TestRedisProgressServicePubSub:
         assert len(messages) == 0
 
     @pytest.mark.asyncio
-    async def test_publish_download_progress(self, redis_service, mock_async_redis):
+    async def test_publish_download_progress(
+        self, redis_service: RedisProgressService, mock_async_redis: MagicMock
+    ) -> None:
         """Test download progress event publishing."""
         setup_async_redis_mock(redis_service, mock_async_redis)
         mock_async_redis.publish = AsyncMock()
@@ -758,7 +828,9 @@ class TestRedisProgressServicePubSub:
         assert message["data"]["eta"] == 120
 
     @pytest.mark.asyncio
-    async def test_publish_queue_update(self, redis_service, mock_async_redis):
+    async def test_publish_queue_update(
+        self, redis_service: RedisProgressService, mock_async_redis: MagicMock
+    ) -> None:
         """Test queue update event publishing."""
         setup_async_redis_mock(redis_service, mock_async_redis)
         mock_async_redis.publish = AsyncMock()
@@ -786,8 +858,8 @@ class TestRedisProgressServicePubSub:
 
     @pytest.mark.asyncio
     async def test_publish_queue_update_without_data(
-        self, redis_service, mock_async_redis
-    ):
+        self, redis_service: RedisProgressService, mock_async_redis: MagicMock
+    ) -> None:
         """Test queue update with no additional data."""
         setup_async_redis_mock(redis_service, mock_async_redis)
         mock_async_redis.publish = AsyncMock()
@@ -802,7 +874,9 @@ class TestRedisProgressServicePubSub:
         assert message["data"]["download_id"] == "test-123"
 
     @pytest.mark.asyncio
-    async def test_publish_system_notification(self, redis_service, mock_async_redis):
+    async def test_publish_system_notification(
+        self, redis_service: RedisProgressService, mock_async_redis: MagicMock
+    ) -> None:
         """Test system notification publishing."""
         setup_async_redis_mock(redis_service, mock_async_redis)
         mock_async_redis.publish = AsyncMock()
@@ -831,8 +905,8 @@ class TestRedisProgressServicePubSub:
 
     @pytest.mark.asyncio
     async def test_publish_system_notification_without_data(
-        self, redis_service, mock_async_redis
-    ):
+        self, redis_service: RedisProgressService, mock_async_redis: MagicMock
+    ) -> None:
         """Test system notification without additional data."""
         setup_async_redis_mock(redis_service, mock_async_redis)
         mock_async_redis.publish = AsyncMock()
@@ -845,3 +919,13 @@ class TestRedisProgressServicePubSub:
         message = json.loads(call_args[0][1])
         assert message["data"]["notification_type"] == "info"
         assert message["data"]["message"] == "System is healthy"
+
+
+@pytest.mark.parametrize("encoded", ["[]", "42", "null"])
+async def test_non_object_cache_values_are_ignored(
+    redis_service: RedisProgressService, mock_async_redis: MagicMock, encoded: str
+) -> None:
+    setup_async_redis_mock(redis_service, mock_async_redis)
+    mock_async_redis.get = AsyncMock(return_value=encoded)
+    assert await redis_service.get_progress("download") is None
+    assert await redis_service.get_sse_token("sse_invalid") is None

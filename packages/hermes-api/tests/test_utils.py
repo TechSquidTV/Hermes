@@ -1,12 +1,14 @@
 """Tests for shared utility helpers."""
 
+from __future__ import annotations
+
 from app.utils.download_progress import (
     build_download_progress_payload,
     progress_fields_from_payload,
 )
 
 
-def test_build_download_progress_payload_uses_nested_progress_shape():
+def test_build_download_progress_payload_uses_nested_progress_shape() -> None:
     payload = build_download_progress_payload(
         status="downloading",
         message="Downloading: 25.0%",
@@ -34,7 +36,7 @@ def test_build_download_progress_payload_uses_nested_progress_shape():
     }
 
 
-def test_build_download_progress_payload_preserves_empty_result_object():
+def test_build_download_progress_payload_preserves_empty_result_object() -> None:
     payload = build_download_progress_payload(
         status="downloading",
         result={},
@@ -43,7 +45,7 @@ def test_build_download_progress_payload_preserves_empty_result_object():
     assert payload["result"] == {}
 
 
-def test_progress_fields_from_payload_accepts_nested_task_payload():
+def test_progress_fields_from_payload_accepts_nested_task_payload() -> None:
     fields = progress_fields_from_payload(
         {
             "status": "downloading",
@@ -69,7 +71,7 @@ def test_progress_fields_from_payload_accepts_nested_task_payload():
     }
 
 
-def test_progress_fields_from_payload_accepts_legacy_flat_payload():
+def test_progress_fields_from_payload_accepts_legacy_flat_payload() -> None:
     fields = progress_fields_from_payload(
         {
             "percentage": 12.0,

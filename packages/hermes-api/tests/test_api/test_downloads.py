@@ -4,6 +4,8 @@ External work queues and Redis are mocked; these tests cover API-owned request
 handling, persistence, response shaping, and state transitions.
 """
 
+from __future__ import annotations
+
 from unittest.mock import AsyncMock, call, patch
 
 import pytest
@@ -22,7 +24,7 @@ class TestDownloadEndpoints:
     @pytest.mark.parametrize("format_spec", [None, "bestvideo+bestaudio", "best"])
     async def test_start_download_creates_record_and_queues_task(
         self, client: AsyncClient, db_session: AsyncSession, format_spec: str | None
-    ):
+    ) -> None:
         expected_format = format_spec or DEFAULT_FORMAT_SPEC
         with patch(
             "app.api.v1.endpoints.downloads.download_video_task.apply_async"
@@ -61,7 +63,7 @@ class TestDownloadEndpoints:
     @pytest.mark.asyncio
     async def test_start_download_forwards_supported_options(
         self, client: AsyncClient, db_session: AsyncSession
-    ):
+    ) -> None:
         with patch(
             "app.api.v1.endpoints.downloads.download_video_task.apply_async"
         ) as apply_async:
@@ -101,7 +103,7 @@ class TestDownloadEndpoints:
     @pytest.mark.asyncio
     async def test_completed_download_persists_full_progress(
         self, db_session: AsyncSession
-    ):
+    ) -> None:
         repo = DownloadRepository(db_session)
         download = await repo.create(
             url="https://example.test/watch",
@@ -118,7 +120,7 @@ class TestDownloadEndpoints:
     @pytest.mark.asyncio
     async def test_terminal_download_ignores_late_active_progress(
         self, db_session: AsyncSession
-    ):
+    ) -> None:
         repo = DownloadRepository(db_session)
         download = await repo.create(
             url="https://example.test/watch",
@@ -136,7 +138,7 @@ class TestDownloadEndpoints:
     @pytest.mark.asyncio
     async def test_get_download_status_uses_nested_redis_progress_from_task(
         self, client: AsyncClient, db_session: AsyncSession
-    ):
+    ) -> None:
         download = await DownloadRepository(db_session).create(
             url="https://example.test/watch",
             status="downloading",
@@ -183,7 +185,7 @@ class TestDownloadEndpoints:
     @pytest.mark.asyncio
     async def test_cancel_download_updates_cancellable_status(
         self, client: AsyncClient, db_session: AsyncSession
-    ):
+    ) -> None:
         download = await DownloadRepository(db_session).create(
             url="https://example.test/watch",
             status="pending",
@@ -213,7 +215,7 @@ class TestDownloadEndpoints:
     @pytest.mark.asyncio
     async def test_cancel_download_rejects_terminal_status(
         self, client: AsyncClient, db_session: AsyncSession
-    ):
+    ) -> None:
         download = await DownloadRepository(db_session).create(
             url="https://example.test/watch",
             status="completed",
@@ -234,7 +236,7 @@ class TestDownloadEndpoints:
     @pytest.mark.asyncio
     async def test_start_batch_download_creates_records_and_schedules_batch(
         self, client: AsyncClient, db_session: AsyncSession
-    ):
+    ) -> None:
         with patch(
             "app.api.v1.endpoints.downloads.download_video_task.apply_async"
         ) as apply_async:
@@ -263,11 +265,13 @@ class TestDownloadEndpoints:
         downloads = [
             await repo.get_by_id(download_id) for download_id in data["downloads"]
         ]
-        assert [download.url for download in downloads] == [
+        assert all(download is not None for download in downloads)
+        records = [download for download in downloads if download is not None]
+        assert [download.url for download in records] == [
             "https://example.test/one",
             "https://example.test/two",
         ]
-        assert [download.status for download in downloads] == ["pending", "pending"]
+        assert [download.status for download in records] == ["pending", "pending"]
 
         assert apply_async.call_args_list == [
             call(

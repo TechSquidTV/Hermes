@@ -11,6 +11,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import Integer, and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.logging import get_logger
 from app.core.security import ApiKeyPermission, AuthPrincipal, require_api_permission
@@ -28,11 +29,11 @@ logger = get_logger(__name__)
 
 
 async def calculate_daily_stats(
-    filters: list,
+    filters: list[ColumnElement[bool]],
     db_session: AsyncSession,
     start_date: Optional[date_type] = None,
     end_date: Optional[date_type] = None,
-) -> list:
+) -> list[DailyStats]:
     """
     Calculate daily statistics for downloads within the given filters and date range.
     """
@@ -114,7 +115,7 @@ async def get_download_history(
     offset: int = Query(0, ge=0, description="Number of items to skip"),
     db_session: AsyncSession = Depends(get_database_session),
     principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.READ)),
-):
+) -> DownloadHistory:
     """
     Get download history with statistics.
 
@@ -166,8 +167,8 @@ async def get_download_history(
         .offset(offset)
     )
 
-    result = await db_session.execute(query)
-    history_records = result.scalars().all()
+    history_result = await db_session.execute(query)
+    history_records = history_result.scalars().all()
 
     # Convert to response items
     items = [

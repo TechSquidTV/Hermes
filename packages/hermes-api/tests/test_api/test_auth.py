@@ -2,6 +2,18 @@
 Tests for authentication endpoints and token validation.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.db.models import User
+
+
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -16,7 +28,7 @@ class TestAuthentication:
     """Test authentication endpoints and token validation."""
 
     @pytest.mark.asyncio
-    async def test_login_success(self, client: AsyncClient, test_user):
+    async def test_login_success(self, client: AsyncClient, test_user: User) -> None:
         """Test successful login returns valid tokens."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -35,7 +47,7 @@ class TestAuthentication:
         assert data["tokenType"] == "bearer"
 
     @pytest.mark.asyncio
-    async def test_login_invalid_credentials(self, client: AsyncClient):
+    async def test_login_invalid_credentials(self, client: AsyncClient) -> None:
         """Test login with invalid credentials fails."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -54,8 +66,8 @@ class TestAuthentication:
 
     @pytest.mark.asyncio
     async def test_get_current_user_valid_token(
-        self, client: AsyncClient, test_user, auth_token
-    ):
+        self, client: AsyncClient, test_user: User, auth_token: str
+    ) -> None:
         """Test /me endpoint with valid token."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -72,7 +84,7 @@ class TestAuthentication:
         assert data["email"] == "test@example.com"
 
     @pytest.mark.asyncio
-    async def test_get_current_user_invalid_token(self, client: AsyncClient):
+    async def test_get_current_user_invalid_token(self, client: AsyncClient) -> None:
         """Test /me endpoint with invalid token."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -86,7 +98,9 @@ class TestAuthentication:
         assert response.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_token_refresh_success(self, client: AsyncClient, test_user):
+    async def test_token_refresh_success(
+        self, client: AsyncClient, test_user: User
+    ) -> None:
         """Test token refresh with valid refresh token."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -105,7 +119,7 @@ class TestAuthentication:
         assert "accessToken" in data  # API uses camelCase
 
     @pytest.mark.asyncio
-    async def test_protected_endpoint_requires_auth(self, client: AsyncClient):
+    async def test_protected_endpoint_requires_auth(self, client: AsyncClient) -> None:
         """Test that protected endpoints require authentication."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -120,7 +134,7 @@ class TestAuthentication:
         assert response.status_code in [403, 307]
 
     @pytest.mark.asyncio
-    async def test_invalid_long_api_key_is_rejected(self, client: AsyncClient):
+    async def test_invalid_long_api_key_is_rejected(self, client: AsyncClient) -> None:
         """Test long bearer strings are not accepted unless they match a stored key."""
         from app.main import app
 
@@ -135,8 +149,8 @@ class TestAuthentication:
 
     @pytest.mark.asyncio
     async def test_database_api_key_authenticates(
-        self, client: AsyncClient, test_user, auth_token
-    ):
+        self, client: AsyncClient, test_user: User, auth_token: str
+    ) -> None:
         """Test database-backed API keys are validated by the shared dependency."""
         from app.main import app
 
@@ -158,7 +172,7 @@ class TestAuthentication:
         assert response.status_code != 401
 
     @pytest.mark.asyncio
-    async def test_rate_limiting_login(self, client: AsyncClient):
+    async def test_rate_limiting_login(self, client: AsyncClient) -> None:
         """Test rate limiting on login endpoint."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -186,8 +200,8 @@ class TestProfileManagement:
 
     @pytest.mark.asyncio
     async def test_update_profile_success(
-        self, client: AsyncClient, test_user, auth_token
-    ):
+        self, client: AsyncClient, test_user: User, auth_token: str
+    ) -> None:
         """Test successful profile update."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -207,8 +221,8 @@ class TestProfileManagement:
 
     @pytest.mark.asyncio
     async def test_update_profile_email_conflict(
-        self, client: AsyncClient, test_user, test_user2, auth_token
-    ):
+        self, client: AsyncClient, test_user: User, test_user2: User, auth_token: str
+    ) -> None:
         """Test profile update fails when email is already taken."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -225,8 +239,8 @@ class TestProfileManagement:
 
     @pytest.mark.asyncio
     async def test_update_profile_invalid_fields(
-        self, client: AsyncClient, test_user, auth_token
-    ):
+        self, client: AsyncClient, test_user: User, auth_token: str
+    ) -> None:
         """Test profile update ignores invalid fields."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -247,7 +261,7 @@ class TestProfileManagement:
         assert response.status_code in [400, 422]
 
     @pytest.mark.asyncio
-    async def test_update_profile_no_auth(self, client: AsyncClient):
+    async def test_update_profile_no_auth(self, client: AsyncClient) -> None:
         """Test profile update requires authentication."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -262,8 +276,8 @@ class TestProfileManagement:
 
     @pytest.mark.asyncio
     async def test_change_password_success(
-        self, client: AsyncClient, test_user, auth_token
-    ):
+        self, client: AsyncClient, test_user: User, auth_token: str
+    ) -> None:
         """Test successful password change."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -280,8 +294,8 @@ class TestProfileManagement:
 
     @pytest.mark.asyncio
     async def test_change_password_wrong_current(
-        self, client: AsyncClient, test_user, auth_token
-    ):
+        self, client: AsyncClient, test_user: User, auth_token: str
+    ) -> None:
         """Test password change fails with wrong current password."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -298,8 +312,8 @@ class TestProfileManagement:
 
     @pytest.mark.asyncio
     async def test_change_password_same_as_current(
-        self, client: AsyncClient, test_user, auth_token
-    ):
+        self, client: AsyncClient, test_user: User, auth_token: str
+    ) -> None:
         """Test password change fails when new password is same as current."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -316,8 +330,8 @@ class TestProfileManagement:
 
     @pytest.mark.asyncio
     async def test_change_password_validation(
-        self, client: AsyncClient, test_user, auth_token
-    ):
+        self, client: AsyncClient, test_user: User, auth_token: str
+    ) -> None:
         """Test password change validates minimum length."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -336,7 +350,7 @@ class TestProfileManagement:
         assert response.status_code == 422
 
     @pytest.mark.asyncio
-    async def test_change_password_no_auth(self, client: AsyncClient):
+    async def test_change_password_no_auth(self, client: AsyncClient) -> None:
         """Test password change requires authentication."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -356,8 +370,8 @@ class TestApiKeyManagement:
 
     @pytest.mark.asyncio
     async def test_create_api_key_success(
-        self, client: AsyncClient, test_user, auth_token
-    ):
+        self, client: AsyncClient, test_user: User, auth_token: str
+    ) -> None:
         """Test successful API key creation."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -391,8 +405,8 @@ class TestApiKeyManagement:
 
     @pytest.mark.asyncio
     async def test_create_api_key_rejects_unknown_permission(
-        self, client: AsyncClient, test_user, auth_token
-    ):
+        self, client: AsyncClient, test_user: User, auth_token: str
+    ) -> None:
         """Test API key creation rejects unsupported permissions."""
         from app.main import app
 
@@ -408,8 +422,8 @@ class TestApiKeyManagement:
 
     @pytest.mark.asyncio
     async def test_create_api_key_persists_expiration(
-        self, client: AsyncClient, test_user, auth_token
-    ):
+        self, client: AsyncClient, test_user: User, auth_token: str
+    ) -> None:
         """Test API key creation stores expiresAt."""
         from app.main import app
 
@@ -430,7 +444,7 @@ class TestApiKeyManagement:
         assert response.json()["expiresAt"] is not None
 
     @pytest.mark.asyncio
-    async def test_create_api_key_no_auth(self, client: AsyncClient):
+    async def test_create_api_key_no_auth(self, client: AsyncClient) -> None:
         """Test API key creation requires authentication."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -445,8 +459,8 @@ class TestApiKeyManagement:
 
     @pytest.mark.asyncio
     async def test_create_api_key_validation(
-        self, client: AsyncClient, test_user, auth_token
-    ):
+        self, client: AsyncClient, test_user: User, auth_token: str
+    ) -> None:
         """Test API key creation validation."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -463,8 +477,8 @@ class TestApiKeyManagement:
 
     @pytest.mark.asyncio
     async def test_list_api_keys_success(
-        self, client: AsyncClient, test_user, auth_token
-    ):
+        self, client: AsyncClient, test_user: User, auth_token: str
+    ) -> None:
         """Test listing API keys for authenticated user."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -499,7 +513,7 @@ class TestApiKeyManagement:
         assert "createdAt" in api_key_data
 
     @pytest.mark.asyncio
-    async def test_list_api_keys_no_auth(self, client: AsyncClient):
+    async def test_list_api_keys_no_auth(self, client: AsyncClient) -> None:
         """Test API key listing requires authentication."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -511,8 +525,8 @@ class TestApiKeyManagement:
 
     @pytest.mark.asyncio
     async def test_revoke_api_key_success(
-        self, client: AsyncClient, test_user, auth_token
-    ):
+        self, client: AsyncClient, test_user: User, auth_token: str
+    ) -> None:
         """Test successful API key revocation."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -538,8 +552,8 @@ class TestApiKeyManagement:
 
     @pytest.mark.asyncio
     async def test_revoke_api_key_not_found(
-        self, client: AsyncClient, test_user, auth_token
-    ):
+        self, client: AsyncClient, test_user: User, auth_token: str
+    ) -> None:
         """Test revoking non-existent API key."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -553,7 +567,7 @@ class TestApiKeyManagement:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_revoke_api_key_no_auth(self, client: AsyncClient):
+    async def test_revoke_api_key_no_auth(self, client: AsyncClient) -> None:
         """Test API key revocation requires authentication."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -569,8 +583,8 @@ class TestApiKeyAuthentication:
 
     @pytest.mark.asyncio
     async def test_api_key_authentication_success(
-        self, client: AsyncClient, test_user, auth_token
-    ):
+        self, client: AsyncClient, test_user: User, auth_token: str
+    ) -> None:
         """Test that created API keys work for authentication."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -597,8 +611,8 @@ class TestApiKeyAuthentication:
 
     @pytest.mark.asyncio
     async def test_database_api_key_validation(
-        self, client: AsyncClient, test_user, auth_token
-    ):
+        self, client: AsyncClient, test_user: User, auth_token: str
+    ) -> None:
         """Test database API key validation in protected endpoints."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -626,12 +640,12 @@ class TestApiKeyAuthentication:
     async def test_database_api_key_permissions_by_route(
         self,
         client: AsyncClient,
-        test_user,
-        auth_token,
-        db_session,
-        tmp_path,
-        monkeypatch,
-    ):
+        test_user: User,
+        auth_token: str,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         """Test read, write, and download permissions are distinct."""
         from app.main import app
 
@@ -710,8 +724,8 @@ class TestApiKeySecurity:
 
     @pytest.mark.asyncio
     async def test_user_isolation_api_keys(
-        self, client: AsyncClient, test_user, auth_token
-    ):
+        self, client: AsyncClient, test_user: User, auth_token: str
+    ) -> None:
         """Test that users can only see their own API keys."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -751,7 +765,9 @@ class TestSignup:
     """Test signup endpoint and validation."""
 
     @pytest.mark.asyncio
-    async def test_signup_success(self, client: AsyncClient, db_session):
+    async def test_signup_success(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         """Test successful user signup."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -776,7 +792,9 @@ class TestSignup:
         assert data["user"]["email"] == "newsignup@example.com"
 
     @pytest.mark.asyncio
-    async def test_signup_duplicate_username(self, client: AsyncClient, test_user):
+    async def test_signup_duplicate_username(
+        self, client: AsyncClient, test_user: User
+    ) -> None:
         """Test signup with duplicate username fails."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -798,7 +816,9 @@ class TestSignup:
         assert "unable to create account" in data["error"]["message"].lower()
 
     @pytest.mark.asyncio
-    async def test_signup_duplicate_email(self, client: AsyncClient, test_user):
+    async def test_signup_duplicate_email(
+        self, client: AsyncClient, test_user: User
+    ) -> None:
         """Test signup with duplicate email fails."""
         # Clear any auth overrides for this test
         from app.main import app
@@ -820,7 +840,7 @@ class TestSignup:
         assert "unable to create account" in data["error"]["message"].lower()
 
     @pytest.mark.asyncio
-    async def test_first_user_becomes_admin(self, client: AsyncClient):
+    async def test_first_user_becomes_admin(self, client: AsyncClient) -> None:
         """Test that the first user to sign up becomes admin."""
         # Clear any auth overrides for this test
         from app.main import app

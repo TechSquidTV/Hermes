@@ -1,5 +1,15 @@
 """Validate actual connection destinations without making network requests."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from app.utils.urls import SocketInfo
+
+
 import io
 import socket
 from unittest.mock import Mock
@@ -13,7 +23,7 @@ from app.services.public_network import PublicYoutubeDL, public_connection
 from app.utils.urls import validate_public_url
 
 
-def addresses(ip, port=80):
+def addresses(ip: str, port: int = 80) -> list[SocketInfo]:
     family = socket.AF_INET6 if ":" in ip else socket.AF_INET
     return [(family, socket.SOCK_STREAM, 6, "", (ip, port))]
 
@@ -36,7 +46,9 @@ def addresses(ip, port=80):
         "::ffff:127.0.0.1",
     ],
 )
-def test_private_addresses_never_open_a_socket(monkeypatch, ip):
+def test_private_addresses_never_open_a_socket(
+    monkeypatch: pytest.MonkeyPatch, ip: str
+) -> None:
     monkeypatch.setattr(socket, "getaddrinfo", lambda *args, **kwargs: addresses(ip))
     make_socket = Mock()
     monkeypatch.setattr(socket, "socket", make_socket)
@@ -45,7 +57,7 @@ def test_private_addresses_never_open_a_socket(monkeypatch, ip):
     make_socket.assert_not_called()
 
 
-def test_mixed_dns_answer_is_rejected(monkeypatch):
+def test_mixed_dns_answer_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         socket,
         "getaddrinfo",
@@ -55,7 +67,9 @@ def test_mixed_dns_answer_is_rejected(monkeypatch):
         validate_public_url("https://mixed.test/")
 
 
-def test_connection_uses_validated_address_without_resolving_again(monkeypatch):
+def test_connection_uses_validated_address_without_resolving_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     lookup = Mock(return_value=addresses("93.184.216.34"))
     connection = Mock()
     monkeypatch.setattr(socket, "getaddrinfo", lookup)
@@ -66,26 +80,26 @@ def test_connection_uses_validated_address_without_resolving_again(monkeypatch):
 
 
 class FakeSocket:
-    def __init__(self, response):
+    def __init__(self, response: bytes) -> None:
         self.response = response
-        self.sent = []
+        self.sent: list[bytes] = []
 
-    def settimeout(self, value):
+    def settimeout(self, value: float | None) -> None:
         pass
 
-    def setsockopt(self, *args):
+    def setsockopt(self, *args: object) -> None:
         pass
 
-    def connect(self, address):
+    def connect(self, address: tuple[str, int]) -> None:
         self.address = address
 
-    def sendall(self, data):
+    def sendall(self, data: bytes) -> None:
         self.sent.append(data)
 
-    def makefile(self, *args, **kwargs):
+    def makefile(self, *args: object, **kwargs: object) -> io.BytesIO:
         return io.BytesIO(self.response)
 
-    def close(self):
+    def close(self) -> None:
         pass
 
 
@@ -97,18 +111,20 @@ class FakeSocket:
         "ftp://example.test/secret",
     ],
 )
-def test_redirects_are_confined_by_the_real_request_handler(monkeypatch, location):
+def test_redirects_are_confined_by_the_real_request_handler(
+    monkeypatch: pytest.MonkeyPatch, location: str
+) -> None:
     connection = FakeSocket(
         f"HTTP/1.1 302 Found\r\nLocation: {location}\r\nContent-Length: 0\r\n\r\n".encode()
     )
     make_socket = Mock(return_value=connection)
     original = socket.getaddrinfo
 
-    def lookup(host, port, **kwargs):
+    def lookup(host: str, port: int, **kwargs: Any) -> list[SocketInfo]:
         return (
             addresses("93.184.216.34", port)
             if host == "example.test"
-            else original(host, port, **kwargs)
+            else cast("list[SocketInfo]", original(host, port, **kwargs))
         )
 
     monkeypatch.setattr(socket, "getaddrinfo", lookup)
@@ -121,7 +137,9 @@ def test_redirects_are_confined_by_the_real_request_handler(monkeypatch, locatio
     assert b"Host: example.test" in connection.sent[0]
 
 
-def test_dns_rebinding_is_checked_again_at_connection_time(monkeypatch):
+def test_dns_rebinding_is_checked_again_at_connection_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     lookup = Mock(side_effect=[addresses("93.184.216.34"), addresses("127.0.0.1")])
     make_socket = Mock()
     monkeypatch.setattr(socket, "getaddrinfo", lookup)
@@ -133,7 +151,9 @@ def test_dns_rebinding_is_checked_again_at_connection_time(monkeypatch):
     make_socket.assert_not_called()
 
 
-def test_http_download_uses_guarded_transport_and_preserves_host(monkeypatch, tmp_path):
+def test_http_download_uses_guarded_transport_and_preserves_host(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     connection = FakeSocket(b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nmedia")
     monkeypatch.setattr(
         socket,
@@ -160,7 +180,7 @@ def test_http_download_uses_guarded_transport_and_preserves_host(monkeypatch, tm
 
 
 @pytest.mark.parametrize("protocol", ["m3u8", "rtmp", "websocket_frag"])
-def test_unguarded_downloaders_are_refused(protocol, tmp_path):
+def test_unguarded_downloaders_are_refused(protocol: str, tmp_path: Path) -> None:
     with PublicYoutubeDL(
         {"quiet": True, "proxy": "", "external_downloader": "native"}
     ) as downloader:
@@ -176,7 +196,9 @@ def test_unguarded_downloaders_are_refused(protocol, tmp_path):
             )
 
 
-def test_hls_cannot_fall_back_to_ffmpeg(monkeypatch, tmp_path):
+def test_hls_cannot_fall_back_to_ffmpeg(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     # Byte ranges requiring unsupported encryption cause native HLS to delegate.
     manifest = '#EXTM3U\n#EXT-X-KEY:METHOD=SAMPLE-AES,URI="http://127.0.0.1/key"\n#EXTINF:1,\nhttp://127.0.0.1/segment.ts\n#EXT-X-ENDLIST'
     with PublicYoutubeDL(
@@ -194,7 +216,9 @@ def test_hls_cannot_fall_back_to_ffmpeg(monkeypatch, tmp_path):
             )
 
 
-def test_hls_format_probes_cannot_select_external_downloader(monkeypatch, tmp_path):
+def test_hls_format_probes_cannot_select_external_downloader(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     import yt_dlp
 
     native_download = Mock(return_value=(True, True))
@@ -216,7 +240,7 @@ def test_hls_format_probes_cannot_select_external_downloader(monkeypatch, tmp_pa
     assert native_download.call_args.args[1]["protocol"] == "m3u8_native"
 
 
-def test_live_dash_format_probes_cannot_select_ffmpeg(tmp_path):
+def test_live_dash_format_probes_cannot_select_ffmpeg(tmp_path: Path) -> None:
     with PublicYoutubeDL(
         {"quiet": True, "proxy": "", "external_downloader": "native"}
     ) as downloader:
@@ -233,7 +257,9 @@ def test_live_dash_format_probes_cannot_select_ffmpeg(tmp_path):
             )
 
 
-def test_https_preserves_tls_hostname_and_certificate_checks(monkeypatch):
+def test_https_preserves_tls_hostname_and_certificate_checks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     import ssl
 
     from app.services.public_network import PublicUrllibRH

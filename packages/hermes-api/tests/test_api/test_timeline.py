@@ -1,5 +1,7 @@
 """Tests for timeline analytics endpoints."""
 
+from __future__ import annotations
+
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -16,7 +18,7 @@ class TestTimeline:
     @pytest.mark.asyncio
     async def test_timeline_stats_uses_camelcase_fields(
         self, client: AsyncClient, db_session: AsyncSession
-    ):
+    ) -> None:
         """Timeline stats should serialize DailyStats with API camelCase aliases."""
         completed_at = datetime.now(timezone.utc)
         db_session.add(
@@ -47,7 +49,7 @@ class TestTimeline:
     @pytest.mark.asyncio
     async def test_timeline_summary_uses_camelcase_fields(
         self, client: AsyncClient, db_session: AsyncSession
-    ):
+    ) -> None:
         """Timeline summary should expose the typed camelCase API contract."""
         completed_at = datetime.now(timezone.utc)
         db_session.add(
