@@ -95,7 +95,6 @@ class Settings(BaseSettings):
 
     # Redis/Cache
     redis_url: str = Field(default="redis://localhost:6379")
-    redis_db: int = Field(default=0)
 
     # Security
     secret_key: str = Field(

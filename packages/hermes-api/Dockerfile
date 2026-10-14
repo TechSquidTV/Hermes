@@ -42,6 +42,9 @@ RUN apt-get update && apt-get install -y \
 COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=node-runtime /usr/local/bin/node /usr/local/bin/node
+# Fail the build if Node's loader or shared libraries are incompatible with Python's base.
+RUN ldd /usr/local/bin/node && node --version \
+    && node -e "require('node:crypto').randomBytes(16)"
 
 # Set work directory
 WORKDIR /app

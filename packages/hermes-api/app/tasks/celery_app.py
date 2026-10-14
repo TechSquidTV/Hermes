@@ -44,6 +44,10 @@ celery_app.conf.update(
     task_max_retries=3,
     # Beat scheduler settings (for periodic tasks)
     beat_schedule={
+        "cleanup-expired-tokens": {
+            "task": "app.tasks.cleanup_tasks.cleanup_expired_tokens",
+            "schedule": 3600.0,
+        },
         "cleanup-temp-files": {
             "task": "app.tasks.cleanup_tasks.cleanup_temp_files",
             "schedule": 1800.0,  # Every 30 minutes

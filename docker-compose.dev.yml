@@ -1,16 +1,31 @@
-# Hermes Development Stack
-# Features hot reload for both frontend and backend
-#
-# Usage: docker compose -f docker-compose.dev.yml up
-#
-# Services:
-#   - Frontend: http://localhost:5173 (Vite dev server with hot reload)
-#   - API: http://localhost:5173/api/v1 (proxied to the API container)
-#   - Direct API: http://localhost:8000 (exposed for debugging)
-#   - Redis: localhost:6379 (exposed for debugging)
+# Hermes development stack. Run one scheduler per deployment.
+# Copy .env.example to .env and set HERMES_SECRET_KEY before starting.
+
+x-backend: &backend
+  build:
+    context: ./packages/hermes-api
+    dockerfile: Dockerfile
+    args:
+      USER_UID: ${USER_UID:-1000}
+      USER_GID: ${USER_GID:-1000}
+  restart: unless-stopped
+  env_file:
+    - .env
+  environment:
+    HERMES_SECRET_KEY: ${HERMES_SECRET_KEY:?Set HERMES_SECRET_KEY in .env}
+    HERMES_REDIS_URL: ${HERMES_REDIS_URL:-redis://redis:6379/0}
+    HERMES_TRUSTED_PROXY_HOSTS: ${HERMES_TRUSTED_PROXY_HOSTS:-app}
+    HERMES_DEBUG: "true"
+    HERMES_ALLOWED_ORIGINS: '["http://localhost:5173","http://localhost:3000","http://localhost:8000"]'
+  volumes:
+    - ./data/downloads:/app/downloads
+    - ./data/temp:/app/temp
+    - ./data/data:/app/data
+    - ./packages/hermes-api/app:/app/app
+  networks:
+    - hermes-network
 
 services:
-  # Frontend development server (Vite with hot reload)
   app:
     build:
       context: .
@@ -43,33 +58,11 @@ services:
       retries: 3
       start_period: 20s
 
-  # Backend API with hot reload
   api:
-    build:
-      context: ./packages/hermes-api
-      dockerfile: Dockerfile
+    <<: *backend
     container_name: hermes-api-dev
-    restart: unless-stopped
     ports:
-      # Expose direct API access for debugging; browser traffic normally uses the app proxy.
       - "${API_PORT:-8000}:8000"
-    env_file:
-      - .env
-    environment:
-      # Trust only the frontend proxy container when reading forwarded client IPs.
-      - HERMES_TRUSTED_PROXY_HOSTS=${HERMES_TRUSTED_PROXY_HOSTS:-app}
-      - HERMES_SECRET_KEY=${HERMES_SECRET_KEY}
-      - HERMES_DEBUG=true
-      - HERMES_REDIS_URL=${HERMES_REDIS_URL:-redis://redis:6379}
-      - HERMES_ALLOWED_ORIGINS=["http://localhost:5173","http://localhost:3000","http://localhost:8000"]
-    volumes:
-      - ./data/downloads:/app/downloads
-      - ./data/temp:/app/temp
-      - ./data/data:/app/data
-      # Mount source code for hot reload
-      - ./packages/hermes-api/app:/app/app
-    networks:
-      - hermes-network
     depends_on:
       redis:
         condition: service_healthy
@@ -79,44 +72,41 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-    # Enable auto-reload on code changes
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --log-level debug
 
-  # Celery worker with hot reload
   celery_worker:
-    build:
-      context: ./packages/hermes-api
-      dockerfile: Dockerfile
+    <<: *backend
     container_name: hermes-worker-dev
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      - HERMES_SECRET_KEY=${HERMES_SECRET_KEY}
-      - HERMES_DEBUG=true
-      - HERMES_REDIS_URL=${HERMES_REDIS_URL:-redis://redis:6379}
-    volumes:
-      - ./data/downloads:/app/downloads
-      - ./data/temp:/app/temp
-      - ./data/data:/app/data
-      # Mount source code for hot reload
-      - ./packages/hermes-api/app:/app/app
-    networks:
-      - hermes-network
+    hostname: hermes-worker-dev
     depends_on:
       redis:
         condition: service_healthy
       api:
         condition: service_healthy
-    command: celery -A app.tasks.celery_app worker --loglevel=debug --concurrency=1 --hostname=hermes-worker@%h --queues=hermes.downloads,hermes.cleanup,hermes.default
+    command: celery -A app.worker worker --loglevel=debug --concurrency=1 --hostname=hermes-worker@%h --queues=hermes.downloads,hermes.cleanup,hermes.default
     healthcheck:
-      test: ["CMD", "celery", "-A", "app.tasks.celery_app", "inspect", "ping"]
+      test: ["CMD", "celery", "-A", "app.worker", "inspect", "ping", "--destination=hermes-worker@hermes-worker-dev"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
 
-  # Redis for caching and task queue
+  celery_beat:
+    <<: *backend
+    container_name: hermes-beat-dev
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    command: celery -A app.worker beat --loglevel=info --schedule=/app/data/celerybeat-schedule --pidfile=/tmp/hermes-beat.pid
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os; from pathlib import Path; os.kill(int(Path('/tmp/hermes-beat.pid').read_text()), 0)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   redis:
     image: redis:8-alpine
     container_name: hermes-redis-dev
