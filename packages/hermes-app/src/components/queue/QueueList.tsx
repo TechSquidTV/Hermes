@@ -1,13 +1,14 @@
-import { useQueueUpdatesSSE } from '@/hooks/useQueueUpdatesSSE'
+import type { useQueueUpdatesSSE } from '@/hooks/useQueueUpdatesSSE'
 import { QueueCard } from './QueueCard'
 import { QueueSkeleton } from './QueueSkeleton'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ErrorDisplay } from '@/components/ui/error-display'
 import { ConnectionStatus } from '@/components/ui/ConnectionStatus'
-import { FileVideo, Clock, CheckCircle } from 'lucide-react'
+import { CheckCircle, Clock, FileVideo } from 'lucide-react'
 import type { DownloadStatus } from '@/lib/queueData'
 
 interface QueueListProps {
+  connection: Pick<ReturnType<typeof useQueueUpdatesSSE>, 'isConnected' | 'isReconnecting' | 'reconnectAttempts'>
   viewMode: 'active' | 'history' | 'all'
   searchQuery: string
   items: DownloadStatus[]
@@ -23,6 +24,7 @@ interface QueueListProps {
 }
 
 export function QueueList({
+  connection,
   viewMode,
   searchQuery,
   items,
@@ -37,7 +39,7 @@ export function QueueList({
 }: QueueListProps) {
 
   // SSE for real-time updates (invalidates query cache when updates arrive)
-  const { isConnected, isReconnecting, reconnectAttempts } = useQueueUpdatesSSE();
+  const { isConnected, isReconnecting, reconnectAttempts } = connection
 
   if (isLoading) {
     return <QueueSkeleton />

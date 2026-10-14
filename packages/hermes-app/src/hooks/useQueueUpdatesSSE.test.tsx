@@ -47,7 +47,7 @@ describe('useQueueUpdatesSSE', () => {
     it('fetches SSE token with queue scope on mount', async () => {
       const mockCreateSSEToken = vi.fn().mockResolvedValue({
         token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
         scope: 'queue',
         permissions: ['read'],
         ttl: 600,
@@ -73,14 +73,14 @@ describe('useQueueUpdatesSSE', () => {
         expect(mockCreateSSEToken).toHaveBeenCalledWith({
           scope: 'queue',
           ttl: 600,
-        })
+        }, expect.any(AbortSignal))
       })
     })
 
     it('only fetches token once on mount', async () => {
       const mockCreateSSEToken = vi.fn().mockResolvedValue({
         token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
         scope: 'queue',
         permissions: ['read'],
         ttl: 600,
@@ -139,10 +139,7 @@ describe('useQueueUpdatesSSE', () => {
       })
 
       await waitFor(() => {
-        expect(consoleErrorSpy).toHaveBeenCalledWith(
-          'Failed to fetch SSE token for queue:',
-          mockError
-        )
+        expect(result.current.error).toBe(mockError)
         expect(result.current.error).toBeTruthy()
       })
 
@@ -154,7 +151,7 @@ describe('useQueueUpdatesSSE', () => {
     it('fetches token and prepares SSE connection', async () => {
       const mockCreateSSEToken = vi.fn().mockResolvedValue({
         token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
         scope: 'queue',
         permissions: ['read'],
         ttl: 600,
@@ -181,7 +178,7 @@ describe('useQueueUpdatesSSE', () => {
         expect(mockCreateSSEToken).toHaveBeenCalledWith({
           scope: 'queue',
           ttl: 600,
-        })
+        }, expect.any(AbortSignal))
       })
 
       // Verify useSSE is being called (URL construction is tested in "configures SSE with correct options")
@@ -191,7 +188,7 @@ describe('useQueueUpdatesSSE', () => {
     it('configures SSE with correct options', async () => {
       const mockCreateSSEToken = vi.fn().mockResolvedValue({
         token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
         scope: 'queue',
         permissions: ['read'],
         ttl: 600,
@@ -233,7 +230,7 @@ describe('useQueueUpdatesSSE', () => {
     it('receives queue update data from SSE', async () => {
       const mockCreateSSEToken = vi.fn().mockResolvedValue({
         token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
         scope: 'queue',
         permissions: ['read'],
         ttl: 600,
@@ -271,7 +268,7 @@ describe('useQueueUpdatesSSE', () => {
     it('handles added action', async () => {
       const mockCreateSSEToken = vi.fn().mockResolvedValue({
         token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
         scope: 'queue',
         permissions: ['read'],
         ttl: 600,
@@ -284,7 +281,7 @@ describe('useQueueUpdatesSSE', () => {
       const queueUpdate = {
         action: 'added' as const,
         download_id: 'new-download-456',
-        status: 'queued',
+        status: 'pending',
       }
 
       vi.spyOn(useSSEModule, 'useSSE').mockReturnValue({
@@ -310,7 +307,7 @@ describe('useQueueUpdatesSSE', () => {
     it('handles removed action', async () => {
       const mockCreateSSEToken = vi.fn().mockResolvedValue({
         token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
         scope: 'queue',
         permissions: ['read'],
         ttl: 600,
@@ -350,7 +347,7 @@ describe('useQueueUpdatesSSE', () => {
     it('invalidates queue queries when updates arrive', async () => {
       const mockCreateSSEToken = vi.fn().mockResolvedValue({
         token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
         scope: 'queue',
         permissions: ['read'],
         ttl: 600,
@@ -393,7 +390,7 @@ describe('useQueueUpdatesSSE', () => {
     it('uses the queue prefix so stats queries refresh when updates arrive', async () => {
       const mockCreateSSEToken = vi.fn().mockResolvedValue({
         token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
         scope: 'queue',
         permissions: ['read'],
         ttl: 600,
@@ -435,7 +432,7 @@ describe('useQueueUpdatesSSE', () => {
     it('invalidates specific download query when download_id present', async () => {
       const mockCreateSSEToken = vi.fn().mockResolvedValue({
         token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
         scope: 'queue',
         permissions: ['read'],
         ttl: 600,
@@ -469,7 +466,7 @@ describe('useQueueUpdatesSSE', () => {
 
       await waitFor(() => {
         expect(invalidateQueriesSpy).toHaveBeenCalledWith({
-          queryKey: ['download', 'progress', downloadId],
+          queryKey: ['queue'],
           exact: false,
         })
       })
@@ -480,7 +477,7 @@ describe('useQueueUpdatesSSE', () => {
     it('tracks connection state correctly', async () => {
       const mockCreateSSEToken = vi.fn().mockResolvedValue({
         token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
         scope: 'queue',
         permissions: ['read'],
         ttl: 600,
@@ -512,7 +509,7 @@ describe('useQueueUpdatesSSE', () => {
     it('tracks reconnection state', async () => {
       const mockCreateSSEToken = vi.fn().mockResolvedValue({
         token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
         scope: 'queue',
         permissions: ['read'],
         ttl: 600,
@@ -578,7 +575,7 @@ describe('useQueueUpdatesSSE', () => {
     it('returns SSE error when connection fails', async () => {
       const mockCreateSSEToken = vi.fn().mockResolvedValue({
         token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
         scope: 'queue',
         permissions: ['read'],
         ttl: 600,
@@ -613,7 +610,7 @@ describe('useQueueUpdatesSSE', () => {
     it('cleans up on unmount', async () => {
       const mockCreateSSEToken = vi.fn().mockResolvedValue({
         token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
         scope: 'queue',
         permissions: ['read'],
         ttl: 600,

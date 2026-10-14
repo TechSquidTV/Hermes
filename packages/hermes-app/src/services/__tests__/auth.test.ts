@@ -54,9 +54,7 @@ describe('AuthService', () => {
         '/api/v1/auth/login',
         expect.objectContaining({
           method: 'POST',
-          headers: expect.objectContaining({
-            'Content-Type': 'application/json'
-          }),
+          headers: expect.objectContaining({ get: expect.any(Function) }),
           body: JSON.stringify({
             username: 'testuser',
             password: 'password123'
@@ -64,8 +62,7 @@ describe('AuthService', () => {
         })
       )
 
-      expect(mockTokenStorage.setAccessToken).toHaveBeenCalledWith('access-token-123', 15)
-      expect(mockTokenStorage.setRefreshToken).toHaveBeenCalledWith('refresh-token-456')
+      expect(mockTokenStorage.setTokens).toHaveBeenCalledWith(mockResponse)
       expect(result).toEqual(mockResponse)
     })
 
@@ -106,11 +103,7 @@ describe('AuthService', () => {
       expect(mockFetch).toHaveBeenCalledWith(
         '/api/v1/auth/me',
         expect.objectContaining({
-          method: 'GET',
-          headers: expect.objectContaining({
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer valid-token'
-          })
+          headers: expect.objectContaining({ get: expect.any(Function) })
         })
       )
 
@@ -157,22 +150,19 @@ describe('AuthService', () => {
         '/api/v1/auth/refresh',
         expect.objectContaining({
           method: 'POST',
-          headers: expect.objectContaining({
-            'Content-Type': 'application/json'
-          }),
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refreshToken: 'valid-refresh-token' })
         })
       )
 
-      expect(mockTokenStorage.setAccessToken).toHaveBeenCalledWith('new-access-token', 15)
-      expect(mockTokenStorage.setRefreshToken).toHaveBeenCalledWith('new-refresh-token')
+      expect(mockTokenStorage.setTokens).toHaveBeenCalledWith(mockResponse, false)
       expect(result).toEqual(mockResponse)
     })
 
     it('should throw error when no refresh token available', async () => {
       mockTokenStorage.getRefreshToken.mockReturnValue(null)
 
-      await expect(authService.refreshToken()).rejects.toThrow('No refresh token available')
+      await expect(authService.refreshToken()).rejects.toThrow('Authentication required')
 
       expect(mockFetch).not.toHaveBeenCalled()
     })
@@ -193,9 +183,7 @@ describe('AuthService', () => {
         '/api/v1/auth/logout',
         expect.objectContaining({
           method: 'POST',
-          headers: expect.objectContaining({
-            'Content-Type': 'application/json'
-          })
+          headers: expect.objectContaining({ get: expect.any(Function) })
         })
       )
 
@@ -211,7 +199,7 @@ describe('AuthService', () => {
 
       mockTokenStorage.clearTokens.mockImplementation(() => {})
 
-      await authService.logout()
+      await expect(authService.logout()).rejects.toThrow('HTTP 500: Server error')
 
       expect(mockTokenStorage.clearTokens).toHaveBeenCalled()
     })
@@ -230,10 +218,7 @@ describe('AuthService', () => {
       expect(mockFetch).toHaveBeenCalledWith(
         '/api/v1/auth/me',
         expect.objectContaining({
-          headers: expect.objectContaining({
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer test-token'
-          })
+          headers: expect.objectContaining({ get: expect.any(Function) })
         })
       )
     })

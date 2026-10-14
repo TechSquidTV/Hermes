@@ -1,10 +1,13 @@
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
+import { useConfirmation } from '@/hooks/useConfirmation'
+import { ErrorDisplay } from '@/components/ui/error-display'
 import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Key, Plus, Copy, Trash2, Clock, Eye, Shield } from 'lucide-react'
+import { Clock, Copy, Eye, Key, Plus, Shield, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useApiKeys } from '@/hooks/useApiKeys'
 import { TokenStorage } from '@/utils/tokenStorage'
@@ -13,6 +16,7 @@ import type { components } from '@/types/api.generated'
 const API_KEY_PERMISSIONS = ['read', 'write', 'download', 'admin'] as const satisfies readonly components['schemas']['ApiKeyPermission'][]
 
 export function ApiKeySettings() {
+  const confirmation = useConfirmation()
   const { keys, createKey, revokeKey } = useApiKeys()
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [newKeyName, setNewKeyName] = useState('')
@@ -55,7 +59,7 @@ export function ApiKeySettings() {
   }
 
   const handleRevokeKey = async (keyId: string, keyName: string) => {
-    if (confirm(`Are you sure you want to revoke the API key "${keyName}"? This action cannot be undone.`)) {
+    if (await confirmation.askConfirmation({ title: 'Revoke API key', description: `Revoke "${keyName}"? This action cannot be undone.`, confirmText: 'Revoke', variant: 'destructive' })) {
       try {
         await revokeKey.mutateAsync(keyId)
       } catch (_error) {
@@ -92,6 +96,9 @@ export function ApiKeySettings() {
 
   return (
     <div className="space-y-6">
+      <ConfirmationDialog isOpen={confirmation.isOpen} onClose={confirmation.hideConfirmation} onConfirm={confirmation.confirm}
+        title={confirmation.title ?? 'Revoke API key'} description={confirmation.description ?? ''} confirmText={confirmation.confirmText} variant={confirmation.variant} />
+      {keys.isError && <ErrorDisplay message="Failed to load API keys" onRetry={() => { void keys.refetch() }} />}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -169,7 +176,7 @@ export function ApiKeySettings() {
 
           {/* API Keys List */}
           <div className="space-y-3">
-            {keys.isLoading ? (
+            {keys.isError ? null : keys.isLoading ? (
               <div className="text-center py-8 text-muted-foreground">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
                 <p className="text-sm">Loading API keys...</p>

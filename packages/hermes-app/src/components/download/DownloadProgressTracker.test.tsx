@@ -23,12 +23,12 @@ describe('DownloadProgressTracker', () => {
   })
 
   describe('Loading State', () => {
-    it('renders nothing when SSE data is not yet loaded', () => {
+    it('shows connection recovery while the initial snapshot is loading', () => {
       vi.spyOn(useDownloadProgressSSEModule, 'useDownloadProgressSSE').mockReturnValue({
         data: null,
         isConnected: false,
         isReconnecting: false,
-        reconnectAttempts: 0,
+        reconnectAttempts: 0, reconnect: vi.fn(),
         error: null,
       })
 
@@ -36,7 +36,8 @@ describe('DownloadProgressTracker', () => {
         <DownloadProgressTracker downloadId={mockDownloadId} />
       )
 
-      expect(container).toBeEmptyDOMElement()
+      expect(container).toHaveTextContent('Disconnected')
+      expect(screen.getByRole('button', { name: 'Reconnect live updates' })).toBeInTheDocument()
     })
   })
 
@@ -61,7 +62,7 @@ describe('DownloadProgressTracker', () => {
         },
         isConnected: true,
         isReconnecting: false,
-        reconnectAttempts: 0,
+        reconnectAttempts: 0, reconnect: vi.fn(),
         error: null,
       })
 
@@ -95,7 +96,7 @@ describe('DownloadProgressTracker', () => {
         },
         isConnected: true,
         isReconnecting: false,
-        reconnectAttempts: 0,
+        reconnectAttempts: 0, reconnect: vi.fn(),
         error: null,
       })
 
@@ -107,7 +108,7 @@ describe('DownloadProgressTracker', () => {
       )
 
       // Verify monotonic hook was called with raw progress
-      expect(mockMonotonic).toHaveBeenCalledWith(50, 'downloading')
+      expect(mockMonotonic).toHaveBeenCalledWith(50, 'downloading', mockDownloadId)
 
       // Simulate progress going backwards (shouldn't happen but test the protection)
       mockUseSSE.mockReturnValue({
@@ -123,7 +124,7 @@ describe('DownloadProgressTracker', () => {
         },
         isConnected: true,
         isReconnecting: false,
-        reconnectAttempts: 0,
+        reconnectAttempts: 0, reconnect: vi.fn(),
         error: null,
       })
 
@@ -133,7 +134,7 @@ describe('DownloadProgressTracker', () => {
       rerender(<DownloadProgressTracker downloadId={mockDownloadId} isActive={true} />)
 
       // Should still show 50% (monotonic progress)
-      expect(mockMonotonic).toHaveBeenCalledWith(45, 'downloading')
+      expect(mockMonotonic).toHaveBeenCalledWith(45, 'downloading', mockDownloadId)
     })
 
     it('displays download speed and ETA when available', () => {
@@ -154,7 +155,7 @@ describe('DownloadProgressTracker', () => {
         },
         isConnected: true,
         isReconnecting: false,
-        reconnectAttempts: 0,
+        reconnectAttempts: 0, reconnect: vi.fn(),
         error: null,
       })
 
@@ -180,7 +181,7 @@ describe('DownloadProgressTracker', () => {
       vi.spyOn(useDownloadProgressSSEModule, 'useDownloadProgressSSE').mockReturnValue({
         data: {
           downloadId: mockDownloadId,
-          status: 'queued',
+          status: 'pending',
           progress: null,
           result: null,
           currentFilename: null,
@@ -190,7 +191,7 @@ describe('DownloadProgressTracker', () => {
         },
         isConnected: true,
         isReconnecting: false,
-        reconnectAttempts: 0,
+        reconnectAttempts: 0, reconnect: vi.fn(),
         error: null,
       })
 
@@ -220,7 +221,7 @@ describe('DownloadProgressTracker', () => {
         },
         isConnected: true,
         isReconnecting: false,
-        reconnectAttempts: 0,
+        reconnectAttempts: 0, reconnect: vi.fn(),
         error: null,
       })
 
@@ -250,7 +251,7 @@ describe('DownloadProgressTracker', () => {
         },
         isConnected: false, // Connection closed after completion
         isReconnecting: false,
-        reconnectAttempts: 0,
+        reconnectAttempts: 0, reconnect: vi.fn(),
         error: null,
       })
 
@@ -288,7 +289,7 @@ describe('DownloadProgressTracker', () => {
         },
         isConnected: false,
         isReconnecting: false,
-        reconnectAttempts: 0,
+        reconnectAttempts: 0, reconnect: vi.fn(),
         error: null,
       })
 
@@ -318,7 +319,7 @@ describe('DownloadProgressTracker', () => {
         },
         isConnected: true,
         isReconnecting: false,
-        reconnectAttempts: 0,
+        reconnectAttempts: 0, reconnect: vi.fn(),
         error: null,
       })
 
@@ -351,7 +352,7 @@ describe('DownloadProgressTracker', () => {
         },
         isConnected: true,
         isReconnecting: false,
-        reconnectAttempts: 0,
+        reconnectAttempts: 0, reconnect: vi.fn(),
         error: null,
       })
 
@@ -385,7 +386,7 @@ describe('DownloadProgressTracker', () => {
         },
         isConnected: true,
         isReconnecting: false,
-        reconnectAttempts: 0,
+        reconnectAttempts: 0, reconnect: vi.fn(),
         error: null,
       })
 
@@ -416,7 +417,7 @@ describe('DownloadProgressTracker', () => {
         },
         isConnected: true,
         isReconnecting: false,
-        reconnectAttempts: 0,
+        reconnectAttempts: 0, reconnect: vi.fn(),
         error: null,
       })
 
@@ -455,7 +456,7 @@ describe('DownloadProgressTracker', () => {
         },
         isConnected: true,
         isReconnecting: false,
-        reconnectAttempts: 0,
+        reconnectAttempts: 0, reconnect: vi.fn(),
         error: null,
       })
 
@@ -487,7 +488,7 @@ describe('DownloadProgressTracker', () => {
         },
         isConnected: true,
         isReconnecting: false,
-        reconnectAttempts: 0,
+        reconnectAttempts: 0, reconnect: vi.fn(),
         error: null,
       })
 

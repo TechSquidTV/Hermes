@@ -40,18 +40,22 @@ describe('useQueueData helpers', () => {
   it('keys queue data by effective request filter and pagination', () => {
     expect(getQueueQueryKey('downloading', 'active', 50, 20)).toEqual([
       'queue',
+      'active',
       'downloading',
       50,
       20,
+      '', 'date', 'desc',
     ])
   })
 
   it('normalizes ignored filters to avoid duplicate cache entries', () => {
     expect(getQueueQueryKey('all', 'history')).toEqual([
       'queue',
+      'history',
       'completed',
       20,
       0,
+      '', 'date', 'desc',
     ])
     expect(getQueueQueryKey('failed', 'history')).toEqual(
       getQueueQueryKey('all', 'history')
@@ -59,8 +63,10 @@ describe('useQueueData helpers', () => {
     expect(getQueueQueryKey('downloading', 'all')).toEqual([
       'queue',
       'all',
+      'downloading',
       20,
       0,
+      '', 'date', 'desc',
     ])
   })
 
@@ -80,7 +86,7 @@ describe('useQueueData helpers', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
-    expect(mockGetDownloadQueue).toHaveBeenCalledWith('completed', 10, 5)
+    expect(mockGetDownloadQueue).toHaveBeenCalledWith('completed', 10, 5, { viewMode: 'history', search: '', sortBy: 'date', sortOrder: 'desc' }, expect.any(AbortSignal))
     expect(result.current.data?.items).toEqual([])
   })
 })

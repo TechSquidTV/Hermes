@@ -11,3 +11,14 @@ def resolve_download_path(path: str) -> Path:
     requested_path = Path(path).resolve()
     requested_path.relative_to(downloads_root)
     return requested_path
+
+
+def relative_download_path(path: str | None) -> str | None:
+    """Expose a root-relative media path without leaking server directories."""
+    if not path:
+        return None
+    try:
+        root = Path(settings.download_dir).resolve()
+        return resolve_download_path(path).relative_to(root).as_posix()
+    except (OSError, ValueError, RuntimeError):
+        return None

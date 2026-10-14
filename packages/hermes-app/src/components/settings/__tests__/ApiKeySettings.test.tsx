@@ -28,7 +28,7 @@ function setup() {
 beforeEach(() => {
   vi.resetAllMocks()
   vi.mocked(apiClient.getApiKeys).mockResolvedValue(keys)
-  vi.mocked(apiClient.createApiKey).mockResolvedValue({ ...keys[0], name: 'New Key', key: 'hm_new_key' })
+  vi.mocked(apiClient.createApiKey).mockResolvedValue({ ...keys[0]!, name: 'New Key', key: 'hm_new_key' })
   vi.mocked(apiClient.revokeApiKey).mockResolvedValue({ message: 'Revoked' })
   vi.spyOn(window, 'confirm').mockReturnValue(true)
   vi.mocked(TokenStorage.getAccessToken).mockReturnValue(null)
@@ -114,14 +114,14 @@ describe('ApiKeySettings', () => {
   it('revokes a key after confirmation', async () => {
     const user = setup()
     await user.click(await screen.findByRole('button', { name: 'Revoke key Sonarr Integration' }))
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('Sonarr Integration'))
+    await user.click(screen.getByRole('button', { name: 'Revoke' }))
     await waitFor(() => expect(apiClient.revokeApiKey).toHaveBeenCalledWith('1'))
   })
 
   it('does not revoke a key when confirmation is cancelled', async () => {
-    vi.mocked(window.confirm).mockReturnValue(false)
     const user = setup()
     await user.click(await screen.findByRole('button', { name: 'Revoke key Sonarr Integration' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(apiClient.revokeApiKey).not.toHaveBeenCalled()
   })
 

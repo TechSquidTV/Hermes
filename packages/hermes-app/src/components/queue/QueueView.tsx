@@ -1,103 +1,56 @@
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { QueueFilters } from './QueueFilters'
 import { QueueCharts } from './QueueCharts'
 import { QueueTabContent } from './QueueTabContent'
-import { useViewMode } from '@/hooks/useViewMode'
-import { useFilters } from '@/hooks/useFilters'
-import type { FilterState } from '@/hooks/useFilters'
+import { getQueueDisplayStatusFilter } from '@/lib/queueData'
+import type { QueueSearch } from '@/lib/queueSearch'
 
-export function QueueView() {
-  const { mode: viewMode, setMode: setViewMode } = useViewMode()
-  const { filters, updateFilter } = useFilters({ initialViewMode: viewMode as FilterState['viewMode'] })
-
+interface QueueViewProps {
+  search: QueueSearch
+  onChange: (patch: Partial<QueueSearch>) => void
+}
+export function QueueView({ search, onChange }: QueueViewProps) {
   return (
-    <div className="space-y-6">
-      <Tabs value={viewMode} onValueChange={(value: string) => setViewMode(value as FilterState['viewMode'])}>
-        <TabsList>
-          <TabsTrigger value="active">Active</TabsTrigger>
-          <TabsTrigger value="history">History</TabsTrigger>
-          <TabsTrigger value="all">All</TabsTrigger>
-          <TabsTrigger value="charts">Analytics</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="active" className="space-y-4">
+    <Tabs
+      value={search.view}
+      onValueChange={(view) => {
+        if (view === 'active' || view === 'history' || view === 'all' || view === 'charts')
+          onChange({ view, status: 'all' })
+      }}
+      className="space-y-6"
+    >
+      <TabsList>
+        <TabsTrigger value="active">Active</TabsTrigger>
+        <TabsTrigger value="history">History</TabsTrigger>
+        <TabsTrigger value="all">All</TabsTrigger>
+        <TabsTrigger value="charts">Analytics</TabsTrigger>
+      </TabsList>
+      {(['active', 'history', 'all'] as const).map((view) => (
+        <TabsContent key={view} value={view} className="space-y-4">
           <QueueFilters
-            statusFilter={filters.statusFilter}
-            onStatusFilterChange={(status) => updateFilter('statusFilter', status)}
-            searchQuery={filters.searchQuery}
-            onSearchQueryChange={(query) => updateFilter('searchQuery', query)}
-            viewMode="active"
-            sortBy={filters.sortBy}
-            sortOrder={filters.sortOrder}
-            onSortChange={(sortBy, sortOrder) => {
-              updateFilter('sortBy', sortBy as FilterState['sortBy'])
-              updateFilter('sortOrder', sortOrder as FilterState['sortOrder'])
-            }}
+            statusFilter={getQueueDisplayStatusFilter(view, search.status)}
+            onStatusFilterChange={(status) => onChange({ status })}
+            searchQuery={search.search}
+            onSearchQueryChange={(value) => onChange({ search: value })}
+            viewMode={view}
+            sortBy={search.sort}
+            sortOrder={search.order}
+            onSortChange={(sort, order) => onChange({ sort, order })}
           />
-
           <QueueTabContent
-            viewMode="active"
-            statusFilter={filters.statusFilter}
-            searchQuery={filters.searchQuery}
-            sortBy={filters.sortBy}
-            sortOrder={filters.sortOrder}
+            key={`${view}:${search.status}:${search.search}:${search.sort}:${search.order}`}
+            viewMode={view}
+            statusFilter={search.status}
+            searchQuery={search.search}
+            sortBy={search.sort}
+            sortOrder={search.order}
+            showStats={view === 'history'}
           />
         </TabsContent>
-
-        <TabsContent value="history" className="mt-6">
-          <QueueFilters
-            statusFilter={filters.statusFilter}
-            onStatusFilterChange={(status) => updateFilter('statusFilter', status)}
-            searchQuery={filters.searchQuery}
-            onSearchQueryChange={(query) => updateFilter('searchQuery', query)}
-            viewMode="history"
-            sortBy={filters.sortBy}
-            sortOrder={filters.sortOrder}
-            onSortChange={(sortBy, sortOrder) => {
-              updateFilter('sortBy', sortBy as FilterState['sortBy'])
-              updateFilter('sortOrder', sortOrder as FilterState['sortOrder'])
-            }}
-          />
-
-          <QueueTabContent
-            viewMode="history"
-            statusFilter={filters.statusFilter}
-            searchQuery={filters.searchQuery}
-            sortBy={filters.sortBy}
-            sortOrder={filters.sortOrder}
-            showStats={true}
-          />
-        </TabsContent>
-
-        <TabsContent value="all" className="mt-6">
-          <QueueFilters
-            statusFilter={filters.statusFilter}
-            onStatusFilterChange={(status) => updateFilter('statusFilter', status)}
-            searchQuery={filters.searchQuery}
-            onSearchQueryChange={(query) => updateFilter('searchQuery', query)}
-            viewMode="all"
-            sortBy={filters.sortBy}
-            sortOrder={filters.sortOrder}
-            onSortChange={(sortBy, sortOrder) => {
-              updateFilter('sortBy', sortBy as FilterState['sortBy'])
-              updateFilter('sortOrder', sortOrder as FilterState['sortOrder'])
-            }}
-          />
-
-          <QueueTabContent
-            viewMode="all"
-            statusFilter={filters.statusFilter}
-            searchQuery={filters.searchQuery}
-            sortBy={filters.sortBy}
-            sortOrder={filters.sortOrder}
-          />
-        </TabsContent>
-
-        <TabsContent value="charts" className="mt-6">
-          <QueueCharts />
-        </TabsContent>
-      </Tabs>
-    </div>
+      ))}
+      <TabsContent value="charts">
+        <QueueCharts />
+      </TabsContent>
+    </Tabs>
   )
 }
-

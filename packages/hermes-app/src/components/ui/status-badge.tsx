@@ -1,10 +1,10 @@
 import { Badge } from '@/components/ui/badge'
 import {
-  XCircle,
-  Loader2,
   AlertCircle,
   CheckCircle2,
-  Clock
+  Clock,
+  Loader2,
+  XCircle
 } from 'lucide-react'
 import { getStatusVariant } from '@/lib/utils'
 import { cn } from '@/lib/utils'
@@ -22,7 +22,7 @@ const statusIcons = {
   failed: XCircle,
   downloading: Loader2,
   processing: Loader2,
-  queued: Clock,
+  pending: Clock,
   default: AlertCircle,
 } as const
 
@@ -64,7 +64,7 @@ export function StatusBadge({
           )}
         />
       )}
-      <span className="capitalize">{status}</span>
+      <span className="capitalize">{status === 'pending' ? 'Queued' : status}</span>
     </Badge>
   )
 }

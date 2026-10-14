@@ -24,14 +24,14 @@ function run(command, args, options = {}) {
 }
 
 try {
-  run('uv', ['run', 'python', 'scripts/export_openapi.py', schemaPath], {
+  run('uv', ['run', '--locked', 'python', 'scripts/export_openapi.py', schemaPath], {
     cwd: apiDir,
     env: {
       ...process.env,
       HERMES_SECRET_KEY: process.env.HERMES_SECRET_KEY ?? 'openapi-schema-export',
     },
   })
-  run('pnpm', ['exec', 'openapi-typescript', schemaPath, '-o', outputPath], {
+  run(process.execPath, [join(appDir, 'node_modules/openapi-typescript/bin/cli.js'), schemaPath, '-o', outputPath], {
     cwd: appDir,
   })
 } finally {

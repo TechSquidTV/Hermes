@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { motion, isMotionComponent, type HTMLMotionProps } from 'framer-motion';
+import { type HTMLMotionProps, isMotionComponent, motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
 type AnyProps = Record<string, unknown>;
@@ -15,10 +15,7 @@ type WithAsChild<Base extends object> =
   | (Base & { asChild: true; children: React.ReactElement })
   | (Base & { asChild?: false | undefined });
 
-type SlotProps<T extends HTMLElement = HTMLElement> = {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  children?: any;
-} & DOMMotionProps<T>;
+type SlotProps<T extends HTMLElement = HTMLElement> = DOMMotionProps<T>;
 
 // TODO: Implement ref merging if needed
 // function mergeRefs<T>(

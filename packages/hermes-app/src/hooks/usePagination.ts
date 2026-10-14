@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 
 interface UsePaginationOptions {
   initialPage?: number
@@ -13,12 +13,15 @@ export function usePagination(options: UsePaginationOptions = {}) {
     totalItems = 0
   } = options
 
-  const [currentPage, setCurrentPage] = useState(initialPage)
+  const [requestedPage, setCurrentPage] = useState(initialPage)
   const [pageSize, setPageSize] = useState(initialPageSize)
 
   const totalPages = useMemo(() => {
-    return Math.ceil(totalItems / pageSize)
+    return Math.max(1, Math.ceil(totalItems / pageSize))
   }, [totalItems, pageSize])
+
+  const currentPage = Math.max(1, Math.min(requestedPage, totalPages))
+  if (requestedPage !== currentPage) setCurrentPage(currentPage)
 
   const startIndex = useMemo(() => {
     return (currentPage - 1) * pageSize
@@ -39,15 +42,15 @@ export function usePagination(options: UsePaginationOptions = {}) {
 
   const goToNextPage = useCallback(() => {
     if (hasNextPage) {
-      setCurrentPage(prev => prev + 1)
+      setCurrentPage(currentPage + 1)
     }
-  }, [hasNextPage])
+  }, [hasNextPage, currentPage])
 
   const goToPreviousPage = useCallback(() => {
     if (hasPreviousPage) {
-      setCurrentPage(prev => prev - 1)
+      setCurrentPage(currentPage - 1)
     }
-  }, [hasPreviousPage])
+  }, [hasPreviousPage, currentPage])
 
   const goToFirstPage = useCallback(() => {
     setCurrentPage(1)
@@ -142,7 +145,7 @@ export function usePagination(options: UsePaginationOptions = {}) {
     getPageNumbers,
 
     // Computed properties
-    showingStart: startIndex + 1,
+    showingStart: totalItems === 0 ? 0 : startIndex + 1,
     showingEnd: endIndex,
     isFirstPage: currentPage === 1,
     isLastPage: currentPage === totalPages,

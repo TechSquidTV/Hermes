@@ -14,20 +14,20 @@ describe('queueData helpers', () => {
     expect(getQueueStatusFilter('active', 'downloading')).toBe('downloading')
     expect(getQueueStatusFilter('active', 'completed')).toBeUndefined()
     expect(getQueueStatusFilter('history', 'failed')).toBe('completed')
-    expect(getQueueStatusFilter('all', 'failed')).toBeUndefined()
+    expect(getQueueStatusFilter('all', 'failed')).toBe('failed')
   })
 
   it('normalizes stale status filters for visible queue data', () => {
     expect(getQueueDisplayStatusFilter('active', 'completed')).toBe('all')
     expect(getQueueDisplayStatusFilter('active', 'failed')).toBe('failed')
-    expect(getQueueDisplayStatusFilter('history', 'failed')).toBe('all')
+    expect(getQueueDisplayStatusFilter('history', 'failed')).toBe('completed')
     expect(getQueueDisplayStatusFilter('history', 'completed')).toBe('completed')
     expect(getQueueDisplayStatusFilter('all', 'failed')).toBe('failed')
   })
 
   it('filters queue items by visible view mode', () => {
     const items = [
-      { downloadId: 'queued', status: 'queued' },
+      { downloadId: 'pending', status: 'pending' },
       { downloadId: 'completed', status: 'completed' },
       {
         downloadId: 'active-completed',
@@ -42,9 +42,7 @@ describe('queueData helpers', () => {
     ] as DownloadStatus[]
 
     expect(getVisibleQueueItems(items, 'active').map((item) => item.downloadId)).toEqual([
-      'queued',
-      'completed',
-      'active-completed',
+      'pending',
     ])
     expect(getVisibleQueueItems(items, 'history').map((item) => item.downloadId)).toEqual([
       'completed',
@@ -77,7 +75,7 @@ describe('queueData helpers', () => {
   it('falls back to download id and handles empty lists', () => {
     const item = {
       downloadId: 'download-123',
-      status: 'queued',
+      status: 'pending',
       message: 'Queued',
       createdAt: '2026-01-01T00:00:00Z',
     } as DownloadStatus
@@ -87,7 +85,7 @@ describe('queueData helpers', () => {
         id: 'download-123',
         title: 'download-123',
         filePath: undefined,
-        status: 'queued',
+        status: 'pending',
       },
     ])
     expect(toBulkOperationItems(undefined)).toEqual([])

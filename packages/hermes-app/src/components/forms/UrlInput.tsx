@@ -1,9 +1,10 @@
-import { useState, useRef, useCallback } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useDebounce } from '@/hooks/useDebounce'
 import { useQuery } from '@tanstack/react-query'
+import { ErrorDisplay } from '@/components/ui/error-display'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Loader2, Upload, Link } from 'lucide-react'
+import { Link, Loader2, Upload } from 'lucide-react'
 import { apiClient } from '@/services/api/client'
 import { VideoPreview } from '@/components/download/VideoPreview'
 import { VideoPreviewSkeleton } from '@/components/loading/VideoPreviewSkeleton'
@@ -21,7 +22,7 @@ export function UrlInput() {
 
   const { data: videoInfo, isLoading, error } = useQuery({
     queryKey: ['videoInfo', debouncedUrl],
-    queryFn: () => apiClient.getVideoInfo(debouncedUrl),
+    queryFn: ({ signal }) => apiClient.getVideoInfo(debouncedUrl, true, signal),
     enabled: debouncedUrl.length > 0 && isValidUrl(debouncedUrl),
     staleTime: 5 * 60 * 1000, // 5 minutes
   })
@@ -112,6 +113,7 @@ export function UrlInput() {
           >
             <Input
               ref={inputRef}
+              aria-label="Video or playlist URL"
               placeholder="Paste video URL here or drag & drop..."
               value={url}
               onChange={(e) => setUrl(e.target.value)}
@@ -158,16 +160,7 @@ export function UrlInput() {
           isDownloading={startDownload.isPending}
         />
       )}
-      {error && !isLoading && <ErrorMessage error={error} />}
-    </div>
-  )
-}
-
-function ErrorMessage({ error }: { error: unknown }) {
-  const errorMessage = error instanceof Error ? error.message : 'Failed to fetch video info'
-  return (
-    <div className="p-4 border border-destructive rounded-md text-destructive">
-      <p className="text-sm">Error: {errorMessage}</p>
+      {error && !isLoading && <ErrorDisplay message={error instanceof Error ? error.message : 'Unable to load video information'} />}
     </div>
   )
 }

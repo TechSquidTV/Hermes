@@ -1,15 +1,8 @@
 // Authentication Types
 
-export interface User {
-  id: string
-  username: string
-  email: string
-  avatar?: string
-  createdAt: string
-  isAdmin: boolean
-  isActive: boolean
-  preferences?: UserPreferences
-}
+import type { components } from '@/types/api.generated'
+
+export type User = Omit<components['schemas']['UserResponse'], 'preferences'> & { preferences?: UserPreferences | null }
 
 export interface UserPreferences {
   defaultFormat?: string
@@ -21,28 +14,16 @@ export interface UserPreferences {
   notifications?: boolean
 }
 
-export interface LoginCredentials {
-  username?: string
-  email?: string
-  password: string
-}
-
-export interface SignupCredentials {
-  username: string
-  email: string
-  password: string
-}
-
-export interface AuthResponse {
-  user: User
-  accessToken: string
-  refreshToken: string
-}
+export type LoginCredentials = components['schemas']['UserLogin']
+export type SignupCredentials = components['schemas']['UserCreate']
+export type AuthResponse = Omit<components['schemas']['AuthResponse'], 'user'> & { user: User }
 
 export interface AuthContextType {
   user: User | null
   isLoading: boolean
   isValidating: boolean
+  validationError: Error | null
+  retryValidation: () => void
   isAuthenticated: boolean
   login: (credentials: LoginCredentials) => Promise<void>
   signup: (credentials: SignupCredentials) => Promise<void>

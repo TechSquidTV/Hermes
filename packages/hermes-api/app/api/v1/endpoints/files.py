@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_repositories_from_session
+from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.security import ApiKeyPermission, AuthPrincipal, require_api_permission
 from app.db.models import DownloadFile
@@ -30,7 +31,10 @@ logger = get_logger(__name__)
 def _resolve_download_path(path: str) -> Path:
     """Resolve a requested path and ensure it stays inside the download root."""
     try:
-        return resolve_download_path(path)
+        requested = Path(path)
+        if not requested.is_absolute():
+            requested = Path(settings.download_dir) / requested
+        return resolve_download_path(str(requested))
     except (OSError, ValueError, RuntimeError):
         raise HTTPException(status_code=404, detail="File not found")
 

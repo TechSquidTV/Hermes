@@ -1,5 +1,6 @@
+import { debug } from '@/lib/debug'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -7,11 +8,13 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Loader2, Check, X, AlertCircle } from 'lucide-react'
+import { AlertCircle, Check, Loader2, X } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 import { HermesLogoLight } from '@/components/hermes-logo'
-import { configService } from '@/services/config'
+import { usePublicConfig } from '@/hooks/usePublicConfig'
+import { ErrorDisplay } from '@/components/ui/error-display'
+import { ApiError } from '@/lib/errors'
 
 function SignupPage() {
   const [username, setUsername] = useState('')
@@ -19,29 +22,13 @@ function SignupPage() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [signupDisabled, setSignupDisabled] = useState(false)
-  const [checkingConfig, setCheckingConfig] = useState(true)
+  const publicConfig = usePublicConfig()
+  const signupDisabled = publicConfig.data?.allowPublicSignup === false
+  const checkingConfig = publicConfig.isLoading
   const { signup } = useAuth()
   const navigate = useNavigate()
 
   // Check if signup is disabled
-  useEffect(() => {
-    const checkSignupStatus = async () => {
-      try {
-        const config = await configService.getPublicConfig()
-        setSignupDisabled(!config.allowPublicSignup)
-      } catch (error) {
-        console.error('[Signup] Failed to fetch public config:', error)
-        // On error, assume signup is allowed (fail open for better UX)
-        setSignupDisabled(false)
-      } finally {
-        setCheckingConfig(false)
-      }
-    }
-
-    checkSignupStatus()
-  }, [])
-
   // Password validation
   const passwordRequirements = {
     minLength: password.length >= 8,
@@ -71,16 +58,15 @@ function SignupPage() {
     try {
       await signup({ username, email, password })
       toast.success('Account created successfully!')
-      navigate({ to: '/' })
+      void navigate({ to: '/' })
     } catch (error) {
-      console.error('[Signup] Failed:', error)
+      debug.error('[Signup] Failed:', error)
 
       // Handle 403 Forbidden (signup disabled)
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      if (errorMessage.includes('403')) {
+      if (error instanceof ApiError && error.status === 403) {
         toast.error('Public signup is disabled. Contact your administrator.')
-        setSignupDisabled(true)
-      } else if (errorMessage.includes('409')) {
+        void publicConfig.refetch()
+      } else if (error instanceof ApiError && error.status === 409) {
         toast.error('Username or email already exists')
       } else {
         toast.error('Signup failed. Please try again.')
@@ -91,6 +77,8 @@ function SignupPage() {
   }
 
   // Show loading state while checking config
+  if (publicConfig.isError) return <ErrorDisplay message="Unable to check signup availability" onRetry={() => { void publicConfig.refetch() }} />
+
   if (checkingConfig) {
     return (
       <div className="flex items-center justify-center p-4">

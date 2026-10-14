@@ -3,6 +3,8 @@
 from collections.abc import Mapping
 from typing import Any
 
+from app.utils.files import relative_download_path
+
 
 def build_progress_object(
     *,
@@ -42,6 +44,9 @@ def build_download_progress_payload(
         "status": status,
         **extra,
     }
+
+    if isinstance(payload.get("output_path"), str):
+        payload["output_path"] = relative_download_path(payload["output_path"])
 
     if message is not None:
         payload["message"] = message

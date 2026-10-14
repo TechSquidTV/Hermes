@@ -1,5 +1,6 @@
-import { useState, useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { useDeleteFiles } from './useDownloadActions'
+import { isActiveDownloadStatus } from '@/lib/queueData'
 import { apiClient } from '@/services/api/client'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -94,7 +95,7 @@ export function useBulkOperations(options: UseBulkOperationsOptions = {}) {
 
     const cancellableItems = items.filter(item =>
       selectedItemIds.includes(item.id) &&
-      (item.status === 'queued' || item.status === 'downloading' || item.status === 'processing')
+      isActiveDownloadStatus(item.status)
     )
 
     if (cancellableItems.length === 0) {
@@ -105,15 +106,17 @@ export function useBulkOperations(options: UseBulkOperationsOptions = {}) {
     setIsProcessing(true)
 
     try {
-      await Promise.all(cancellableItems.map(item => apiClient.cancelDownload(item.id)))
-      toast.success(`Cancelled ${cancellableItems.length} download${cancellableItems.length !== 1 ? 's' : ''}`)
+      const results = await Promise.allSettled(cancellableItems.map(item => apiClient.cancelDownload(item.id)))
+      const succeeded = results.filter(result => result.status === 'fulfilled' && result.value.cancelled).length
+      const failed = results.length - succeeded
+      if (failed) {
+        const error = new Error(`Cancelled ${succeeded} of ${results.length} downloads (${failed} failed)`)
+        toast.error(error.message)
+        onError?.(error)
+      } else { toast.success(`Cancelled ${succeeded} download${succeeded === 1 ? '' : 's'}`); onSuccess?.() }
+    } finally {
       deselectAll()
       invalidateQueueQueries(queryClient)
-      onSuccess?.()
-    } catch (error) {
-      toast.error(`Failed to cancel downloads: ${error instanceof Error ? error.message : 'Unknown error'}`)
-      onError?.(error as Error)
-    } finally {
       setIsProcessing(false)
     }
   }, [selectedItems, deselectAll, queryClient, onSuccess, onError])

@@ -1,64 +1,32 @@
-import { useReducer, useEffect } from 'react';
+import { useState } from 'react'
 
-/**
- * Hook for tracking monotonically increasing progress values.
- *
- * Prevents progress bars from moving backwards due to SSE update timing,
- * network jitter, or out-of-order events.
- *
- * Uses useReducer for semantic state management and useEffect to synchronize
- * external SSE data with component state (valid use case for effects).
- *
- * @param rawProgress - The raw progress value from SSE/API (0-100 or null)
- * @param status - The current download/task status
- * @returns The monotonic (never-decreasing) progress value
- *
- * @example
- * ```tsx
- * const { data: downloadStatus } = useDownloadProgressSSE(downloadId);
- * const maxProgress = useMonotonicProgress(
- *   downloadStatus?.progress?.percentage,
- *   downloadStatus?.status
- * );
- * ```
- */
-
-type ProgressAction = {
-  type: 'update';
-  progress: number | null | undefined;
-  status: string | undefined;
-};
-
-function progressReducer(state: number, action: ProgressAction): number {
-  const { progress, status } = action;
-
-  // Reset progress when queued (before download starts)
-  if (status === 'queued') {
-    return 0;
-  }
-
-  // Track maximum progress for active downloads
-  if (status === 'downloading' || status === 'processing') {
-    if (progress !== null && progress !== undefined) {
-      return Math.max(state, progress);
-    }
-  }
-
-  // For completed, failed, or other states: keep last known max
-  return state;
+interface Progress {
+  id: string
+  status: string | undefined
+  value: number
 }
-
 export function useMonotonicProgress(
   rawProgress: number | null | undefined,
-  status: string | undefined
+  status: string | undefined,
+  downloadId: string
 ): number {
-  const [maxProgress, dispatch] = useReducer(progressReducer, 0);
-
-  // Synchronize external SSE data with component state
-  // This is a valid use case for useEffect - syncing external data
-  useEffect(() => {
-    dispatch({ type: 'update', progress: rawProgress, status });
-  }, [rawProgress, status]);
-
-  return maxProgress;
+  const [previous, setPrevious] = useState<Progress>({ id: downloadId, status, value: 0 })
+  const reset =
+    previous.id !== downloadId ||
+    status === 'pending' ||
+    (status === 'downloading' &&
+      ['failed', 'cancelled', 'completed'].includes(previous.status ?? ''))
+  const value =
+    status === 'pending'
+      ? 0
+      : status === 'completed'
+        ? 100
+        : reset
+          ? (rawProgress ?? 0)
+          : status === 'downloading' || status === 'processing'
+            ? Math.max(previous.value, rawProgress ?? 0)
+            : previous.value
+  if (previous.id !== downloadId || previous.status !== status || previous.value !== value)
+    setPrevious({ id: downloadId, status, value })
+  return value
 }

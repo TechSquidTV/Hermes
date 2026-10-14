@@ -1,25 +1,26 @@
+import { ErrorDisplay } from '@/components/ui/error-display'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useStatsSSE } from '@/hooks/useStatsSSE'
 import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '@/services/api/client'
 import { useState } from 'react'
 import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
+  Bar,
   BarChart,
-  Bar
+  CartesianGrid,
+  Cell,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis
 } from 'recharts'
-import { TrendingUp, TrendingDown, Activity, ChevronDown } from 'lucide-react'
+import { Activity, ChevronDown, TrendingDown, TrendingUp } from 'lucide-react'
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d']
 
@@ -30,17 +31,17 @@ export function QueueCharts() {
   useStatsSSE()
 
   // Use React Query for data fetching (will be invalidated by SSE updates)
-  const { data: timelineData, isLoading: isLoadingTimeline } = useQuery({
+  const { data: timelineData, isLoading: isLoadingTimeline, error: errorTimeline, refetch: refetchTimeline } = useQuery({
     queryKey: ['timeline', selectedPeriod],
     queryFn: () => apiClient.getTimelineStats(selectedPeriod),
   })
 
-  const { data: timelineSummary, isLoading: isLoadingSummary } = useQuery({
+  const { data: timelineSummary, isLoading: isLoadingSummary, error: errorSummary, refetch: refetchSummary } = useQuery({
     queryKey: ['timeline', 'summary', selectedPeriod],
     queryFn: () => apiClient.getTimelineSummary(selectedPeriod),
   })
 
-  const { data: statsData, isLoading: isLoadingStats } = useQuery({
+  const { data: statsData, isLoading: isLoadingStats, error: errorStats, refetch: refetchStats } = useQuery({
     queryKey: ['analytics', 'stats', selectedPeriod],
     queryFn: () => apiClient.getApiStats(selectedPeriod),
   })
@@ -70,6 +71,8 @@ export function QueueCharts() {
     percentage: item.percentage,
     fill: COLORS[index % COLORS.length],
   })) || []
+
+  if (errorTimeline || errorSummary || errorStats) return <ErrorDisplay message="Failed to load analytics" onRetry={() => { void refetchTimeline(); void refetchSummary(); void refetchStats() }} />
 
   if (isLoading) {
     return (

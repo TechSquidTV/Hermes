@@ -13,6 +13,7 @@ import { useDownloadProgressSSE } from '@/hooks/useDownloadProgressSSE'
 import { useMonotonicProgress } from '@/hooks/useMonotonicProgress'
 import { DownloadProgress } from '@/components/ui/download-progress'
 import { ConnectionStatus } from '@/components/ui/ConnectionStatus'
+import { Button } from '@/components/ui/button'
 
 interface DownloadProgressTrackerProps {
   downloadId: string
@@ -49,48 +50,55 @@ interface DownloadProgressTrackerProps {
 export function DownloadProgressTracker({
   downloadId,
   isActive = true,
-  showConnectionStatus = false,
+  showConnectionStatus = true,
   size = 'default',
   showDetails = true,
-  className
+  className,
 }: DownloadProgressTrackerProps) {
-  // Use SSE for real-time updates
-  const {
-    data: downloadStatus,
-    isConnected,
-    isReconnecting,
-    reconnectAttempts
-  } = useDownloadProgressSSE(downloadId)
+  const progress = useDownloadProgressSSE(downloadId, isActive)
+  return (
+    <DownloadProgressDisplay
+      downloadId={downloadId}
+      isActive={isActive}
+      showConnectionStatus={showConnectionStatus}
+      size={size}
+      showDetails={showDetails}
+      className={className}
+      progress={progress}
+    />
+  )
+}
+
+export function DownloadProgressDisplay({
+  downloadId,
+  isActive = true,
+  showConnectionStatus = true,
+  size = 'default',
+  showDetails = true,
+  className,
+  progress: live,
+}: DownloadProgressTrackerProps & { progress: ReturnType<typeof useDownloadProgressSSE> }) {
+  const { data: downloadStatus, isConnected, isReconnecting, reconnectAttempts, reconnect } = live
 
   // Calculate progress percentage from SSE data
   const rawProgress = downloadStatus?.progress?.percentage ?? null
   const status = downloadStatus?.status
 
   // Track maximum progress to prevent jittery backwards movement
-  const maxProgress = useMonotonicProgress(rawProgress, status)
+  const maxProgress = useMonotonicProgress(rawProgress, status, downloadId)
 
   // Use maxProgress for display, ensuring it never goes backwards
   // Only apply monotonic progress for downloading/processing states
   const progressPercentage =
-    status === 'completed' ? 100
-    : status === 'failed' ? null
-    : status === 'queued' ? 0
-    : maxProgress > 0 ? maxProgress
-    : null
-
-  // Helper to extract numeric values from progress object
-  const getProgressValue = (key: string): number | undefined => {
-    if (!downloadStatus?.progress || typeof downloadStatus.progress !== 'object') {
-      return undefined
-    }
-    const value = downloadStatus.progress[key as keyof typeof downloadStatus.progress]
-    return typeof value === 'number' ? value : undefined
-  }
-
-  if (!downloadStatus) {
-    // Still loading SSE connection
-    return null
-  }
+    status === 'completed'
+      ? 100
+      : status === 'failed'
+        ? null
+        : status === 'pending'
+          ? 0
+          : maxProgress > 0
+            ? maxProgress
+            : null
 
   return (
     <div className={className}>
@@ -104,17 +112,25 @@ export function DownloadProgressTracker({
         />
       )}
 
+      {showConnectionStatus && isActive && !isConnected && (
+        <Button variant="outline" size="sm" onClick={reconnect}>
+          Reconnect live updates
+        </Button>
+      )}
+
       {/* Progress Display */}
-      <DownloadProgress
-        progress={progressPercentage ?? undefined}
-        status={status || 'unknown'}
-        downloadedBytes={getProgressValue('downloaded_bytes')}
-        totalBytes={getProgressValue('total_bytes')}
-        speed={getProgressValue('speed')}
-        estimatedTimeRemaining={getProgressValue('eta')}
-        size={size}
-        showDetails={showDetails}
-      />
+      {downloadStatus && (
+        <DownloadProgress
+          progress={progressPercentage ?? undefined}
+          status={status || 'unknown'}
+          downloadedBytes={downloadStatus.progress?.downloadedBytes ?? undefined}
+          totalBytes={downloadStatus.progress?.totalBytes ?? undefined}
+          speed={downloadStatus.progress?.speed ?? undefined}
+          estimatedTimeRemaining={downloadStatus.progress?.eta ?? undefined}
+          size={size}
+          showDetails={showDetails}
+        />
+      )}
     </div>
   )
 }

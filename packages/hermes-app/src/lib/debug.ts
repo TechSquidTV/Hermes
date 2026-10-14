@@ -28,14 +28,10 @@ export const debug = {
   },
 
   /**
-   * Log error messages (always logged, but prefixed in dev)
+   * Log error messages (only in dev)
    */
   error: (...args: unknown[]) => {
     if (isDev) {
-      console.error(...args)
-    } else {
-      // In production, you might want to send to error tracking service
-      // errorReporter.log(...args)
       console.error(...args)
     }
   },

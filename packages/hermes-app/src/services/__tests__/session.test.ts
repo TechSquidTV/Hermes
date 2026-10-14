@@ -20,7 +20,7 @@ describe('Session refresh coordination', () => {
   beforeEach(() => {
     sessionStorage.clear()
     localStorage.clear()
-    TokenStorage.setAccessToken('old-access', 15)
+    TokenStorage.setAccessToken('old-access')
     TokenStorage.setRefreshToken('old-refresh')
   })
 
@@ -82,7 +82,7 @@ describe('Session refresh coordination', () => {
     const exchange = deferred<Response>()
     vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockReturnValue(exchange.promise))
     const refresh = refreshSession()
-    TokenStorage.setAccessToken('other-access', 15)
+    TokenStorage.setAccessToken('other-access')
     TokenStorage.setRefreshToken('other-refresh')
     const rejected = expect(refresh).rejects.toThrow('Session changed')
     exchange.resolve(new Response(JSON.stringify(replacement)))
@@ -121,8 +121,40 @@ describe('Session refresh coordination', () => {
     vi.stubGlobal('fetch', fetchMock)
     await authService.logout()
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/v1/auth/refresh', '/api/v1/auth/logout'])
-    expect(new Headers(fetchMock.mock.calls[1][1]?.headers).get('Authorization')).toBe('Bearer new-access')
+    expect(new Headers(fetchMock.mock.calls.at(1)?.[1]?.headers).get('Authorization')).toBe('Bearer new-access')
     expect(TokenStorage.getAccessToken()).toBeNull()
     expect(TokenStorage.getRefreshToken()).toBeNull()
   })
+})
+
+it('retains rotated credentials when the retried request loses the network', async () => {
+  TokenStorage.setTokens({ accessToken: 'old', refreshToken: 'refresh' })
+  vi.stubGlobal('fetch', vi.fn<typeof fetch>()
+    .mockResolvedValueOnce(new Response('{}', { status: 401 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify(replacement)))
+    .mockRejectedValueOnce(new TypeError('Network unavailable')))
+  try {
+    await expect(apiClient.request('/download/one')).rejects.toThrow('Network unavailable')
+    expect(TokenStorage.getRefreshToken()).toBe('new-refresh')
+    expect(TokenStorage.getAccessToken()).toBe('new-access')
+  } finally { vi.unstubAllGlobals() }
+})
+
+it('forwards cancellation and bounds requests with a timeout', async () => {
+  TokenStorage.setTokens({ accessToken: 'access', refreshToken: 'refresh' })
+  vi.useFakeTimers()
+  const fetchMock = vi.fn<typeof fetch>().mockImplementation((_url, options) => new Promise((_resolve, reject) => {
+    options?.signal?.addEventListener('abort', () => reject(options.signal?.reason), { once: true })
+  }))
+  vi.stubGlobal('fetch', fetchMock)
+  try {
+    const controller = new AbortController()
+    const aborted = expect(apiClient.request('/slow', { signal: controller.signal })).rejects.toThrow('cancelled')
+    controller.abort(new DOMException('cancelled', 'AbortError'))
+    await aborted
+    const timeout = expect(apiClient.request('/slow', { timeoutMs: 100 })).rejects.toThrow('Request timed out')
+    await vi.advanceTimersByTimeAsync(100)
+    await timeout
+    expect(TokenStorage.getRefreshToken()).toBe('refresh')
+  } finally { vi.useRealTimers(); vi.unstubAllGlobals() }
 })

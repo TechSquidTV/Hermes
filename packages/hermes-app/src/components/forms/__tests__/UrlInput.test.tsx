@@ -339,7 +339,7 @@ describe('UrlInput Component', () => {
       await user.type(input, 'https://youtube.com/watch?v=invalid')
 
       await waitFor(() => {
-        expect(screen.getByText(/error:/i)).toBeInTheDocument()
+        expect(screen.getByText('Something went wrong')).toBeInTheDocument()
         expect(screen.getByText(/failed to fetch video info/i)).toBeInTheDocument()
       })
     })
@@ -354,8 +354,8 @@ describe('UrlInput Component', () => {
       await user.type(input, 'https://youtube.com/watch?v=invalid')
 
       await waitFor(() => {
-        expect(screen.getByText(/error:/i)).toBeInTheDocument()
-        expect(screen.getByText(/failed to fetch video info/i)).toBeInTheDocument()
+        expect(screen.getByText('Something went wrong')).toBeInTheDocument()
+        expect(screen.getByText('Unable to load video information')).toBeInTheDocument()
       })
     })
   })

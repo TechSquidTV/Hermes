@@ -2,7 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Palette, Sun, Moon, Monitor } from 'lucide-react'
+import { Monitor, Moon, Palette, Sun } from 'lucide-react'
 import { useTheme } from '@/hooks/useTheme'
 import { Badge } from '@/components/ui/badge'
 

@@ -1,4 +1,5 @@
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { debug } from '@/lib/debug'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 // Stable default to prevent unnecessary re-renders
 const DEFAULT_EVENTS: string[] = [];
@@ -97,8 +98,8 @@ export interface SSEState<T = unknown> {
  *     reconnect: true,
  *     maxReconnectAttempts: 5,
  *     events: ['download_progress', 'queue_update'],
- *     onOpen: () => console.log('Connected'),
- *     onError: (err) => console.error('SSE error:', err)
+ *     onOpen: () => debug.log('Connected'),
+ *     onError: (err) => debug.error('SSE error:', err)
  *   }
  * );
  * ```
@@ -233,7 +234,7 @@ export function useSSE<T = unknown>(
           const parsedData: T = JSON.parse(event.data);
           setData(parsedData);
         } catch (error) {
-          console.error('Failed to parse SSE data:', error, 'Data:', event.data);
+          debug.error('Failed to parse SSE data:', error, 'Data:', event.data);
         }
       };
 

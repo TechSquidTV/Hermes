@@ -16,7 +16,7 @@ describe('usePagination', () => {
       expect(result.current.currentPage).toBe(1)
       expect(result.current.pageSize).toBe(20)
       expect(result.current.totalItems).toBe(0)
-      expect(result.current.totalPages).toBe(0)
+      expect(result.current.totalPages).toBe(1)
       expect(result.current.hasNextPage).toBe(false)
       expect(result.current.hasPreviousPage).toBe(false)
     })
@@ -69,7 +69,7 @@ describe('usePagination', () => {
         usePagination({ totalItems: 0 })
       )
 
-      expect(result.current.totalPages).toBe(0)
+      expect(result.current.totalPages).toBe(1)
     })
 
     it('handles single page', () => {

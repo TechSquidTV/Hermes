@@ -1,8 +1,9 @@
+import { ChangePassword } from './ChangePassword'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { User, Mail, LogOut, Key } from 'lucide-react'
+import { LogOut, Mail, User } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '@/services/api/client'
@@ -111,10 +112,7 @@ export function GeneralSettings() {
           <Separator />
 
           <div className="flex flex-col sm:flex-row gap-2">
-            <Button variant="outline" size="sm">
-              <Key className="h-4 w-4 mr-2" />
-              Change Password
-            </Button>
+            <ChangePassword />
             <Button
               variant="destructive"
               size="sm"

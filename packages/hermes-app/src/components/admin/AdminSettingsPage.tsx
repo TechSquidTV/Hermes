@@ -1,13 +1,14 @@
+import { ErrorDisplay } from '@/components/ui/error-display'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { Settings, UserPlus, Info } from 'lucide-react'
+import { Info, Settings, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSystemSettings, useUpdateSignupSetting } from '@/hooks/useSystemSettings'
 import { formatDistanceToNow } from 'date-fns'
 
 export function AdminSettingsPage() {
-  const { data: settings, isLoading } = useSystemSettings()
+  const { data: settings, isLoading, error, refetch } = useSystemSettings()
   const updateSignup = useUpdateSignupSetting()
 
   const handleSignupToggle = async (enabled: boolean) => {
@@ -27,6 +28,8 @@ export function AdminSettingsPage() {
       })
     }
   }
+
+  if (error) return <ErrorDisplay message="Failed to load system settings" onRetry={() => { void refetch() }} />
 
   if (isLoading) {
     return (

@@ -8,6 +8,8 @@ export default tseslint.config(
   {
     ignores: [
       'dist/**',
+      'coverage/**',
+      'scripts/**',
       'node_modules/**',
       'public/**', // Static assets and runtime config
       '*.config.js',
@@ -23,19 +25,9 @@ export default tseslint.config(
   // Base JS config
   js.configs.recommended,
 
-  // TypeScript configs - using recommended only (not type-checked for now)
+  // TypeScript rules with project-aware promise checks
   ...tseslint.configs.recommended,
-
-  // General settings - removed type-checking for better performance
-  // Uncomment below to enable type-aware linting (slower but more thorough)
-  // {
-  //   languageOptions: {
-  //     parserOptions: {
-  //       projectService: true,
-  //       tsconfigRootDir: import.meta.dirname,
-  //     },
-  //   },
-  // },
+  { languageOptions: { parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname } } },
 
   // React hooks and refresh rules
   {
@@ -66,11 +58,12 @@ export default tseslint.config(
           caughtErrorsIgnorePattern: '^_',
         },
       ],
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-explicit-any': 'error',
+      'sort-imports': ['error', { ignoreDeclarationSort: true }],
 
-      // Disabled type-aware rules (enable when type-checking is enabled)
-      '@typescript-eslint/no-floating-promises': 'off',
-      '@typescript-eslint/no-misused-promises': 'off',
+      // Check asynchronous control flow without weakening public API types
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/no-misused-promises': ['error', { checksVoidReturn: false }],
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
       '@typescript-eslint/no-unsafe-call': 'off',

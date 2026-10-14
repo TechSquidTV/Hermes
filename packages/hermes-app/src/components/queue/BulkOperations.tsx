@@ -1,9 +1,9 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Trash2, X, CheckSquare, Square, RefreshCw } from 'lucide-react'
+import { CheckSquare, RefreshCw, Square, Trash2, X } from 'lucide-react'
 import { useConfirmation } from '@/hooks/useConfirmation'
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
-import type { BulkOperationItem } from '@/lib/queueData'
+import { type BulkOperationItem, isActiveDownloadStatus } from '@/lib/queueData'
 
 interface BulkOperationsProps {
   selectedCount: number
@@ -40,7 +40,7 @@ export function BulkOperations({
   }
 
   const cancellableCount = selectedItems.filter(item =>
-    item.status === 'queued' || item.status === 'downloading' || item.status === 'processing'
+    isActiveDownloadStatus(item.status)
   ).length
 
   const handleBulkCancel = () => {

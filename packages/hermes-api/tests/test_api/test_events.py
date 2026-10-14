@@ -50,7 +50,7 @@ class TestSSETokenEndpoint:
     """Test POST /api/v1/events/token endpoint."""
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("scope", ["queue", "stats", "system"])
+    @pytest.mark.parametrize("scope", ["queue", "stats", "system", "downloads"])
     async def test_create_token_for_each_global_scope(
         self, client: AsyncClient, mock_redis_for_sse: MagicMock, scope: str
     ) -> None:
@@ -175,7 +175,8 @@ class TestSSETokenEndpoint:
     async def test_create_token_default_ttl(self, client: AsyncClient) -> None:
         """Test that default TTL is 300s (5 minutes)."""
         response = await client.post(
-            "/api/v1/events/token", json={"scope": "queue"}  # No TTL specified
+            "/api/v1/events/token",
+            json={"scope": "queue"},  # No TTL specified
         )
 
         assert response.status_code == 200
@@ -852,3 +853,21 @@ class TestSSEHealthEndpoint:
 
         # Should work without auth
         assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_shared_download_scope_cannot_subscribe_to_other_channels() -> None:
+    from app.api.v1.endpoints.events import event_stream
+    from app.services.event_service import event_service
+
+    async def empty() -> AsyncGenerator[dict[str, str], None]:
+        return
+        yield {}
+
+    with patch.object(event_service, "event_stream", return_value=empty()) as stream:
+        await event_stream(
+            channels="hermes:queue:updates,hermes:system:notifications",
+            download_id=None,
+            token_data={"scope": "downloads", "user_id": "reader"},
+        )
+    stream.assert_called_once_with(channels=["hermes:download:updates"], filters=None)

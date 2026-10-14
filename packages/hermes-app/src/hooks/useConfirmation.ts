@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 interface ConfirmationOptions {
   title?: string
@@ -15,6 +15,8 @@ interface ConfirmationState extends ConfirmationOptions {
 }
 
 export function useConfirmation() {
+  const pending = useRef<((confirmed: boolean) => void) | null>(null)
+  useEffect(() => () => { pending.current?.(false) }, [])
   const [state, setState] = useState<ConfirmationState>({
     isOpen: false,
     title: 'Are you sure?',
@@ -37,10 +39,14 @@ export function useConfirmation() {
   }, [])
 
   const hideConfirmation = useCallback(() => {
+    pending.current?.(false)
+    pending.current = null
     setState(prev => ({ ...prev, isOpen: false }))
   }, [])
 
   const confirm = useCallback(() => {
+    pending.current?.(true)
+    pending.current = null
     state.onConfirm?.()
     hideConfirmation()
   }, [state, hideConfirmation])
@@ -50,8 +56,17 @@ export function useConfirmation() {
     hideConfirmation()
   }, [state, hideConfirmation])
 
+  const askConfirmation = useCallback((options: ConfirmationOptions): Promise<boolean> => {
+    pending.current?.(false)
+    return new Promise(resolve => {
+      pending.current = resolve
+      setState({ ...options, isOpen: true })
+    })
+  }, [])
+
   return {
     ...state,
+    askConfirmation,
     showConfirmation,
     hideConfirmation,
     confirm,

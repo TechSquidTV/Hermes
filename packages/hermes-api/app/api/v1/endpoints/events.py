@@ -116,6 +116,8 @@ async def event_stream(
             download_id=download_id_from_scope,
             user_id=token_data.get("user_id"),
         )
+    elif token_scope == "downloads":
+        channel_list = ["hermes:download:updates"]
     elif token_scope == "queue":
         # Queue-scoped token can only access queue updates
         channel_list = ["hermes:queue:updates"]
@@ -370,6 +372,7 @@ async def create_sse_token(
 
     **Scopes:**
     - `download:<download_id>` - Single download progress
+    - `downloads` - Progress across the shared download library
     - `queue` - Queue updates
     - `stats` - Download statistics
     - `system` - System notifications

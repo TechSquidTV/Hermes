@@ -1,40 +1,41 @@
+import { ApiError } from '@/lib/errors'
 import { getApiBaseUrl } from '@/lib/config'
 import type { components } from '@/types/api.generated'
 import { TokenStorage } from '@/utils/tokenStorage'
+import { checkResponse, withRequestSignal } from './http'
 
 type TokenResponse = components['schemas']['TokenResponse']
+let pendingRefresh: { token: string; version: number; promise: Promise<TokenResponse> } | null =
+  null
 
-let pendingRefresh: Promise<TokenResponse> | null = null
-
-async function exchangeRefreshToken(): Promise<TokenResponse> {
-  const refreshToken = TokenStorage.getRefreshToken()
-  if (!refreshToken) {
-    throw new Error('No refresh token available')
-  }
-
-  const response = await fetch(`${getApiBaseUrl()}/auth/refresh`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refreshToken }),
+async function exchangeRefreshToken(refreshToken: string, version: number): Promise<TokenResponse> {
+  return withRequestSignal(undefined, 30_000, async (signal) => {
+    const response = await checkResponse(
+      await fetch(`${getApiBaseUrl()}/auth/refresh`, {
+        method: 'POST',
+        signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      })
+    )
+    const tokens: TokenResponse = await response.json()
+    if (TokenStorage.getRefreshToken() !== refreshToken || TokenStorage.getVersion() !== version) {
+      throw new DOMException('Session changed during token refresh', 'AbortError')
+    }
+    TokenStorage.setTokens(tokens, false)
+    return tokens
   })
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: Token refresh failed`)
-  }
-
-  const tokens: TokenResponse = await response.json()
-  // An earlier refresh response must never restore a session after logout or
-  // replace credentials from a subsequent login.
-  if (TokenStorage.getRefreshToken() !== refreshToken) {
-    throw new Error('Session changed during token refresh')
-  }
-  TokenStorage.setAccessToken(tokens.accessToken, 15)
-  TokenStorage.setRefreshToken(tokens.refreshToken)
-  return tokens
 }
 
 export function refreshSession(): Promise<TokenResponse> {
-  pendingRefresh ??= exchangeRefreshToken().finally(() => {
-    pendingRefresh = null
+  const token = TokenStorage.getRefreshToken()
+  if (!token) return Promise.reject(new ApiError(401, 'Authentication required'))
+  const version = TokenStorage.getVersion()
+  if (pendingRefresh?.token === token && pendingRefresh.version === version)
+    return pendingRefresh.promise
+  const promise = exchangeRefreshToken(token, version).finally(() => {
+    if (pendingRefresh?.promise === promise) pendingRefresh = null
   })
-  return pendingRefresh
+  pendingRefresh = { token, version, promise }
+  return promise
 }

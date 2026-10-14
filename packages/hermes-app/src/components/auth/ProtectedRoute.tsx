@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useLocation, useNavigate } from '@tanstack/react-router'
 import { useAuth } from '@/contexts/AuthContext'
 import { Loader2 } from 'lucide-react'
+import { ErrorDisplay } from '@/components/ui/error-display'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
@@ -9,7 +10,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, requireAuth = true }: ProtectedRouteProps) {
-  const { isAuthenticated, isLoading, isValidating } = useAuth()
+  const { isAuthenticated, isLoading, isValidating, validationError, retryValidation } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const isAuthRoute = location.pathname.startsWith('/auth')
@@ -17,12 +18,12 @@ export function ProtectedRoute({ children, requireAuth = true }: ProtectedRouteP
   const shouldRedirectToDashboard = !requireAuth && isAuthenticated
 
   useEffect(() => {
-    if (isLoading || isValidating) {
+    if (isLoading || isValidating || validationError) {
       return
     }
 
     if (shouldRedirectToLogin) {
-      navigate({
+      void navigate({
         to: '/auth/login',
         search: { redirect: location.pathname },
         replace: true,
@@ -31,11 +32,12 @@ export function ProtectedRoute({ children, requireAuth = true }: ProtectedRouteP
     }
 
     if (shouldRedirectToDashboard) {
-      navigate({ to: '/', replace: true })
+      void navigate({ to: '/', replace: true })
     }
   }, [
     isLoading,
     isValidating,
+    validationError,
     location.pathname,
     navigate,
     shouldRedirectToDashboard,
@@ -49,6 +51,8 @@ export function ProtectedRoute({ children, requireAuth = true }: ProtectedRouteP
       </div>
     )
   }
+
+  if (validationError) return <ErrorDisplay message="Unable to verify your session. Your credentials have been kept; try again when the connection is available." onRetry={retryValidation} />
 
   if (shouldRedirectToLogin || shouldRedirectToDashboard) {
     return null

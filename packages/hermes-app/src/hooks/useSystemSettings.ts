@@ -5,11 +5,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '@/services/api/client'
 
-export interface SystemSettings {
-  allowPublicSignup: boolean
-  updatedAt?: string
-  updatedByUserId?: string
-}
+export type SystemSettings = Awaited<ReturnType<typeof apiClient.getAdminSettings>>
 
 /**
  * Fetch system settings.
@@ -54,9 +50,9 @@ export function useUpdateSignupSetting() {
     },
     onSuccess: () => {
       // Invalidate to refetch with server data
-      queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
       // Also invalidate public config since it includes signup setting
-      queryClient.invalidateQueries({ queryKey: ['config', 'public'] })
+      void queryClient.invalidateQueries({ queryKey: ['config', 'public'] })
     },
   })
 }

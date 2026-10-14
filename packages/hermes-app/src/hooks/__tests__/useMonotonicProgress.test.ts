@@ -13,7 +13,7 @@ describe('useMonotonicProgress', () => {
   describe('Initial State', () => {
     it('starts at 0 progress', () => {
       const { result } = renderHook(() =>
-        useMonotonicProgress(null, undefined)
+        useMonotonicProgress(null, undefined, 'download-1')
       )
 
       expect(result.current).toBe(0)
@@ -21,7 +21,7 @@ describe('useMonotonicProgress', () => {
 
     it('accepts initial progress value', () => {
       const { result } = renderHook(() =>
-        useMonotonicProgress(25, 'downloading')
+        useMonotonicProgress(25, 'downloading', 'download-1')
       )
 
       expect(result.current).toBe(25)
@@ -31,7 +31,7 @@ describe('useMonotonicProgress', () => {
   describe('Queued Status', () => {
     it('resets progress to 0 when status is queued', () => {
       const { result, rerender } = renderHook(
-        ({ progress, status }) => useMonotonicProgress(progress, status),
+        ({ progress, status }) => useMonotonicProgress(progress, status, 'download-1'),
         {
           initialProps: { progress: 50, status: 'downloading' }
         }
@@ -40,14 +40,14 @@ describe('useMonotonicProgress', () => {
       expect(result.current).toBe(50)
 
       // Change to queued status
-      rerender({ progress: 0, status: 'queued' })
+      rerender({ progress: 0, status: 'pending' })
 
       expect(result.current).toBe(0)
     })
 
     it('resets even if progress value is higher', () => {
       const { result, rerender } = renderHook(
-        ({ progress, status }) => useMonotonicProgress(progress, status),
+        ({ progress, status }) => useMonotonicProgress(progress, status, 'download-1'),
         {
           initialProps: { progress: 75, status: 'downloading' }
         }
@@ -56,7 +56,7 @@ describe('useMonotonicProgress', () => {
       expect(result.current).toBe(75)
 
       // Queued with high progress value (shouldn't happen but test defensive behavior)
-      rerender({ progress: 100, status: 'queued' })
+      rerender({ progress: 100, status: 'pending' })
 
       expect(result.current).toBe(0)
     })
@@ -65,7 +65,7 @@ describe('useMonotonicProgress', () => {
   describe('Downloading Status', () => {
     it('tracks maximum progress during downloading', () => {
       const { result, rerender } = renderHook(
-        ({ progress, status }: { progress: number | null | undefined; status: string | undefined }) => useMonotonicProgress(progress, status),
+        ({ progress, status }: { progress: number | null | undefined; status: string | undefined }) => useMonotonicProgress(progress, status, 'download-1'),
         {
           initialProps: { progress: 10 as number | null | undefined, status: 'downloading' as string | undefined }
         }
@@ -83,7 +83,7 @@ describe('useMonotonicProgress', () => {
 
     it('prevents progress from going backwards', () => {
       const { result, rerender } = renderHook(
-        ({ progress, status }: { progress: number | null | undefined; status: string | undefined }) => useMonotonicProgress(progress, status),
+        ({ progress, status }: { progress: number | null | undefined; status: string | undefined }) => useMonotonicProgress(progress, status, 'download-1'),
         {
           initialProps: { progress: 50 as number | null | undefined, status: 'downloading' as string | undefined }
         }
@@ -100,7 +100,7 @@ describe('useMonotonicProgress', () => {
 
     it('handles null progress values', () => {
       const { result, rerender } = renderHook(
-        ({ progress, status }: { progress: number | null | undefined; status: string | undefined }) => useMonotonicProgress(progress, status),
+        ({ progress, status }: { progress: number | null | undefined; status: string | undefined }) => useMonotonicProgress(progress, status, 'download-1'),
         {
           initialProps: { progress: 50 as number | null | undefined, status: 'downloading' as string | undefined }
         }
@@ -117,7 +117,7 @@ describe('useMonotonicProgress', () => {
 
     it('handles undefined progress values', () => {
       const { result, rerender } = renderHook(
-        ({ progress, status }: { progress: number | null | undefined; status: string | undefined }) => useMonotonicProgress(progress, status),
+        ({ progress, status }: { progress: number | null | undefined; status: string | undefined }) => useMonotonicProgress(progress, status, 'download-1'),
         {
           initialProps: { progress: 40 as number | null | undefined, status: 'downloading' as string | undefined }
         }
@@ -136,7 +136,7 @@ describe('useMonotonicProgress', () => {
   describe('Processing Status', () => {
     it('tracks maximum progress during processing', () => {
       const { result, rerender } = renderHook(
-        ({ progress, status }) => useMonotonicProgress(progress, status),
+        ({ progress, status }) => useMonotonicProgress(progress, status, 'download-1'),
         {
           initialProps: { progress: 60, status: 'processing' }
         }
@@ -151,7 +151,7 @@ describe('useMonotonicProgress', () => {
 
     it('prevents backwards progress during processing', () => {
       const { result, rerender } = renderHook(
-        ({ progress, status }) => useMonotonicProgress(progress, status),
+        ({ progress, status }) => useMonotonicProgress(progress, status, 'download-1'),
         {
           initialProps: { progress: 80, status: 'processing' }
         }
@@ -170,7 +170,7 @@ describe('useMonotonicProgress', () => {
   describe('Completed/Failed Status', () => {
     it('maintains progress when completed', () => {
       const { result, rerender } = renderHook(
-        ({ progress, status }) => useMonotonicProgress(progress, status),
+        ({ progress, status }) => useMonotonicProgress(progress, status, 'download-1'),
         {
           initialProps: { progress: 100, status: 'downloading' }
         }
@@ -187,7 +187,7 @@ describe('useMonotonicProgress', () => {
 
     it('keeps last known progress when failed', () => {
       const { result, rerender } = renderHook(
-        ({ progress, status }) => useMonotonicProgress(progress, status),
+        ({ progress, status }) => useMonotonicProgress(progress, status, 'download-1'),
         {
           initialProps: { progress: 75, status: 'downloading' }
         }
@@ -206,9 +206,9 @@ describe('useMonotonicProgress', () => {
   describe('Complex Scenarios', () => {
     it('handles complete download lifecycle with jitter', () => {
       const { result, rerender } = renderHook(
-        ({ progress, status }) => useMonotonicProgress(progress, status),
+        ({ progress, status }) => useMonotonicProgress(progress, status, 'download-1'),
         {
-          initialProps: { progress: 0, status: 'queued' }
+          initialProps: { progress: 0, status: 'pending' }
         }
       )
 
@@ -238,12 +238,12 @@ describe('useMonotonicProgress', () => {
 
       // Complete - maintains last known progress from processing phase
       rerender({ progress: 100, status: 'completed' })
-      expect(result.current).toBe(75) // Keeps last max from active phase
+      expect(result.current).toBe(100) // Completed progress is 100 percent
     })
 
     it('handles SSE reconnection with null progress', () => {
       const { result, rerender } = renderHook(
-        ({ progress, status }: { progress: number | null | undefined; status: string | undefined }) => useMonotonicProgress(progress, status),
+        ({ progress, status }: { progress: number | null | undefined; status: string | undefined }) => useMonotonicProgress(progress, status, 'download-1'),
         {
           initialProps: { progress: 60 as number | null | undefined, status: 'downloading' as string | undefined }
         }
@@ -266,9 +266,9 @@ describe('useMonotonicProgress', () => {
 
     it('handles rapid status changes', () => {
       const { result, rerender } = renderHook(
-        ({ progress, status }) => useMonotonicProgress(progress, status),
+        ({ progress, status }) => useMonotonicProgress(progress, status, 'download-1'),
         {
-          initialProps: { progress: 0, status: 'queued' }
+          initialProps: { progress: 0, status: 'pending' }
         }
       )
 
@@ -280,15 +280,15 @@ describe('useMonotonicProgress', () => {
       rerender({ progress: 50, status: 'processing' })
       rerender({ progress: 100, status: 'completed' })
 
-      // Maintains last max from active phase (50 from processing)
-      expect(result.current).toBe(50)
+      // Completed progress is 100 percent
+      expect(result.current).toBe(100)
     })
   })
 
   describe('Edge Cases', () => {
     it('handles 0 progress during downloading', () => {
       const { result } = renderHook(() =>
-        useMonotonicProgress(0, 'downloading')
+        useMonotonicProgress(0, 'downloading', 'download-1')
       )
 
       expect(result.current).toBe(0)
@@ -296,7 +296,7 @@ describe('useMonotonicProgress', () => {
 
     it('handles 100 progress during downloading', () => {
       const { result } = renderHook(() =>
-        useMonotonicProgress(100, 'downloading')
+        useMonotonicProgress(100, 'downloading', 'download-1')
       )
 
       expect(result.current).toBe(100)
@@ -304,7 +304,7 @@ describe('useMonotonicProgress', () => {
 
     it('handles undefined status', () => {
       const { result, rerender } = renderHook(
-        ({ progress, status }: { progress: number | null | undefined; status: string | undefined }) => useMonotonicProgress(progress, status),
+        ({ progress, status }: { progress: number | null | undefined; status: string | undefined }) => useMonotonicProgress(progress, status, 'download-1'),
         {
           initialProps: { progress: 50 as number | null | undefined, status: 'downloading' as string | undefined }
         }
@@ -321,7 +321,7 @@ describe('useMonotonicProgress', () => {
 
     it('handles unknown status values', () => {
       const { result, rerender } = renderHook(
-        ({ progress, status }) => useMonotonicProgress(progress, status),
+        ({ progress, status }) => useMonotonicProgress(progress, status, 'download-1'),
         {
           initialProps: { progress: 75, status: 'downloading' }
         }
@@ -330,10 +330,22 @@ describe('useMonotonicProgress', () => {
       expect(result.current).toBe(75)
 
       // Unknown status (future-proofing)
-      rerender({ progress: 60, status: 'unknown-status' as any })
+      rerender({ progress: 60, status: 'unknown-status' })
 
       // Should maintain progress for unknown status
       expect(result.current).toBe(75)
     })
   })
+  it('resets progress when the download identity changes', () => {
+    const { result, rerender } = renderHook(({ id, progress }) => useMonotonicProgress(progress, 'downloading', id), { initialProps: { id: 'one', progress: 80 } })
+    rerender({ id: 'two', progress: 5 })
+    expect(result.current).toBe(5)
+  })
+  it('resets a failed attempt when it starts downloading again', () => {
+    const { result, rerender } = renderHook(({ status, progress }) => useMonotonicProgress(progress, status, 'one'), { initialProps: { status: 'downloading', progress: 80 } })
+    rerender({ status: 'failed', progress: 80 })
+    rerender({ status: 'downloading', progress: 5 })
+    expect(result.current).toBe(5)
+  })
+
 })

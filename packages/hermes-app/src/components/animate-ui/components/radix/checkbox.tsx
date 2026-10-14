@@ -1,10 +1,10 @@
 import {
-  Checkbox as CheckboxPrimitive,
   CheckboxIndicator as CheckboxIndicatorPrimitive,
+  Checkbox as CheckboxPrimitive,
   type CheckboxProps as CheckboxPrimitiveProps,
 } from '@/components/animate-ui/primitives/radix/checkbox';
 import { cn } from '@/lib/utils';
-import { cva, type VariantProps } from 'class-variance-authority';
+import { type VariantProps, cva } from 'class-variance-authority';
 
 const checkboxVariants = cva(
   'peer shrink-0 flex items-center justify-center outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-500 focus-visible:ring-offset-2 [&[data-state=checked],&[data-state=indeterminate]]:bg-primary [&[data-state=checked],&[data-state=indeterminate]]:text-primary-foreground',

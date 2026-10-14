@@ -1,4 +1,7 @@
-import { useState, useMemo } from 'react'
+import { debug } from '@/lib/debug'
+import { useConfirmation } from '@/hooks/useConfirmation'
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
+import { useMemo, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -6,7 +9,7 @@ import { ButtonGroup } from '@/components/ui/button-group'
 import { Separator } from '@/components/ui/separator'
 import { Input } from '@/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { Checkbox, CheckboxIndicator } from '@/components/animate-ui/primitives/radix/checkbox'
+import { Checkbox } from '@/components/animate-ui/components/radix/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -16,7 +19,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Calendar, Clock, Eye, User, Download, Settings, Loader2, Check, List, ExternalLink } from 'lucide-react'
+import { Calendar, Check, Clock, Download, ExternalLink, Eye, List, Loader2, Settings, User } from 'lucide-react'
 import type { components } from '@/types/api.generated'
 
 type VideoInfo = components["schemas"]["VideoInfo"]
@@ -41,6 +44,7 @@ interface VideoPreviewProps {
 }
 
 export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewProps) {
+  const confirmation = useConfirmation()
   const [selectedFormat, setSelectedFormat] = useState<string>(DEFAULT_FORMAT)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const queryClient = useQueryClient()
@@ -121,7 +125,7 @@ export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewPr
       
       // Warn for very large downloads
       if (urls.length > 100) {
-        const confirmed = window.confirm(`You're about to download ${urls.length} videos. This may take a long time. Continue?`)
+        const confirmed = await confirmation.askConfirmation({ title: 'Download playlist', description: `Queue ${urls.length} videos? This may take a long time.`, confirmText: 'Queue videos' })
         if (!confirmed) {
           setIsBatchDownloading(false)
           return
@@ -139,21 +143,21 @@ export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewPr
       // Queue all batches
       let successfulBatches = 0
       let successfulVideoCount = 0
-      for (let i = 0; i < batches.length; i++) {
+      for (const [i, batch] of batches.entries()) {
         try {
           setBatchProgress({ current: i + 1, total: batches.length })
           
-          console.log(`Queueing batch ${i + 1}/${batches.length}:`, batches[i])
+          debug.log(`Queueing batch ${i + 1}/${batches.length}:`, batch)
           
           const response = await apiClient.startBatchDownload({
-            urls: batches[i],
+            urls: batch,
             format: selectedFormat,
             downloadSubtitles: false,
             downloadThumbnail: false,
             priority: 'normal',
           })
           
-          console.log(`Batch ${i + 1} queued successfully:`, response)
+          debug.log(`Batch ${i + 1} queued successfully:`, response)
           
           // Track download IDs on home page (same as single download behavior)
           if (response?.downloads && Array.isArray(response.downloads)) {
@@ -161,22 +165,20 @@ export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewPr
           }
           
           successfulBatches++
-          successfulVideoCount += batches[i].length
+          successfulVideoCount += batch.length
           
           // Small delay between batches to avoid overwhelming the server
           if (i < batches.length - 1) {
             await new Promise(resolve => setTimeout(resolve, 500))
           }
         } catch (batchError: unknown) {
-          console.error(`Error queueing batch ${i + 1}:`, batchError)
+          debug.error(`Error queueing batch ${i + 1}:`, batchError)
           const errorMessage = batchError instanceof Error ? batchError.message : 'Unknown error'
           toast.error(`Failed to queue batch ${i + 1}/${batches.length}: ${errorMessage}`)
           
           // Ask user if they want to continue with remaining batches
           if (i < batches.length - 1) {
-            const continueQueuing = window.confirm(
-              `Batch ${i + 1} failed. Continue with remaining ${batches.length - i - 1} batches?`
-            )
+            const continueQueuing = await confirmation.askConfirmation({ title: 'Continue queueing?', description: `Batch ${i + 1} failed. Continue with ${batches.length - i - 1} remaining batches?`, confirmText: 'Continue' })
             if (!continueQueuing) {
               break
             }
@@ -196,7 +198,7 @@ export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewPr
       }
       
     } catch (error: unknown) {
-      console.error('Playlist download error:', error)
+      debug.error('Playlist download error:', error)
       const errorMessage = error instanceof Error ? error.message : error?.toString() || 'Unknown error'
       
       // Provide more helpful error messages
@@ -239,6 +241,9 @@ export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewPr
   ]
 
   return (
+    <>
+      <ConfirmationDialog isOpen={confirmation.isOpen} onClose={confirmation.hideConfirmation} onConfirm={confirmation.confirm}
+        title={confirmation.title ?? 'Confirm download'} description={confirmation.description ?? ''} confirmText={confirmation.confirmText} />
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-start gap-4">
@@ -369,6 +374,7 @@ export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewPr
                       className="flex items-center gap-3 p-2 rounded hover:bg-muted/50 transition-colors"
                     >
                       <Checkbox
+                        aria-label={`Select ${entry.title}`}
                         checked={selectedVideos.has(entry.id)}
                         onCheckedChange={(checked) => {
                           const newSelected = new Set(selectedVideos)
@@ -386,7 +392,7 @@ export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewPr
                           "disabled:cursor-not-allowed disabled:opacity-50"
                         )}
                       >
-                        <CheckboxIndicator className="size-4 text-primary-foreground" />
+
                       </Checkbox>
                       {entry.thumbnail && (
                         <img
@@ -552,5 +558,6 @@ export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewPr
         </div>
       </CardContent>
     </Card>
+    </>
   )
 }
