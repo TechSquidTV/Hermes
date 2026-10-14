@@ -4,7 +4,6 @@ Download management endpoints.
 
 import asyncio
 import uuid
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +26,7 @@ from app.services.redis_progress import redis_progress_service
 from app.tasks.celery_app import celery_app
 from app.tasks.download_tasks import download_video_task
 from app.utils.download_progress import progress_fields_from_payload
+from app.utils.files import relative_download_path
 from app.utils.urls import validate_public_url
 
 router = APIRouter()
@@ -217,9 +217,7 @@ async def get_download_status(
         download_id=download.id,
         status=download.status,
         progress=progress_info,
-        current_filename=(
-            Path(download.output_path).name if download.output_path else None
-        ),
+        current_filename=relative_download_path(download.output_path),
         message=f"Download {download.status}",
         error=download.error_message,
         result=result_info,

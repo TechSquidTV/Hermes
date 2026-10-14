@@ -1133,6 +1133,7 @@ export interface paths {
          *
          *     **Scopes:**
          *     - `download:<download_id>` - Single download progress
+         *     - `downloads` - Progress across the shared download library
          *     - `queue` - Queue updates
          *     - `stats` - Download statistics
          *     - `system` - System notifications
@@ -4110,6 +4111,10 @@ export interface operations {
                 limit?: number;
                 /** @description Number of items to skip */
                 offset?: number;
+                view_mode?: "active" | "history" | "all";
+                search?: string;
+                sort_by?: "date" | "title" | "size" | "status";
+                sort_order?: "asc" | "desc";
             };
             header?: never;
             path?: never;

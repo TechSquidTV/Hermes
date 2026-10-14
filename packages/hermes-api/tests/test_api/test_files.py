@@ -149,3 +149,24 @@ async def test_file_listing_rejects_inverted_size_range(client: AsyncClient) -> 
         "/api/v1/files/", params={"min_size": 10, "max_size": 0}
     )
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_download_file_accepts_nested_root_relative_path(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "download_dir", str(tmp_path / "downloads"))
+    media = tmp_path / "downloads/nested/video.mp4"
+    await _create_managed_file(db_session, media, b"nested media")
+    response = await client.get(
+        "/api/v1/files/download", params={"path": "nested/video.mp4"}
+    )
+    assert response.status_code == 200
+    assert response.content == b"nested media"
+    response = await client.get(
+        "/api/v1/files/download", params={"path": "../outside.mp4"}
+    )
+    assert response.status_code == 404

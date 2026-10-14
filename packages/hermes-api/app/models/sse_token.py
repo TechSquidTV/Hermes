@@ -23,6 +23,7 @@ from app.models.base import CamelCaseModel
 class SSETokenScope(str, Enum):
     """Available SSE token scopes."""
 
+    DOWNLOADS = "downloads"  # Shared progress stream for the authenticated library
     DOWNLOAD = "download"  # download:download_id format
     QUEUE = "queue"  # Queue updates (all queue events)
     STATS = "stats"  # Download statistics
