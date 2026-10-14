@@ -40,6 +40,9 @@ jobs:
               - '.github/workflows/**'
             backend:
               - 'packages/hermes-api/**'
+              - 'packages/hermes-app/src/types/api.generated.ts'
+              - 'packages/hermes-app/scripts/generate-openapi-types.mjs'
+              - 'pnpm-lock.yaml'
               - 'package.json'
               - '.github/renovate.json'
               - 'docker-compose*.yml'
@@ -149,6 +152,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ffmpeg
           uv sync --locked --all-groups
+
+      - name: Set up pnpm for schema verification
+        uses: pnpm/action-setup@v6
+
+      - name: Verify generated frontend API types
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter hermes-app generate:types
+          git diff --exit-code -- packages/hermes-app/src/types/api.generated.ts
 
       - name: Run black (format check)
         working-directory: packages/hermes-api
