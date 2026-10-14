@@ -1,268 +1,188 @@
 # Configuration Guide
 
-This document provides detailed information about all configuration options available in Hermes.
+Start with `.env.example`. Docker Compose loads the root `.env` and passes its
+settings to the API, worker, and scheduler. Native processes must receive these
+settings through their environment or their launcher's env-file option. Relative
+paths resolve from the process working directory, which is `/app` in Docker.
 
-## Environment Variables
+## Docker defaults and native development
 
-All configuration is managed through environment variables with the `HERMES_` prefix. Below are all available options:
+The example is configured for the bundled Docker network and persistent mounts:
 
-### Core Settings
+| Setting | Bundled Docker value | Native process example |
+|---------|----------------------|------------------------|
+| `HERMES_REDIS_URL` | `redis://redis:6379/0` | `redis://localhost:6379/0` |
+| `HERMES_DATABASE_URL` | `sqlite+aiosqlite:///./data/hermes.db` | Same value when launched from `packages/hermes-api` |
+| `HERMES_DOWNLOAD_DIR` | `/app/downloads` | `./downloads` from the API directory |
+| `HERMES_TEMP_DIR` | `/app/temp` | `./temp` from the API directory |
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `HERMES_SECRET_KEY` | *(required)* | JWT secret key for token signing. Generate a strong random key for production. |
-| `HERMES_DEBUG` | `false` | Enable debug logging. HTTP tracebacks and exception details are never exposed. |
+API, worker, and scheduler must use the same database, Redis URL, and storage
+roots. Native processes cannot resolve the Docker service hostname `redis`.
+Docker processes must use the service hostname rather than `localhost`.
 
-### API Configuration
+## API settings
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `API_PORT` | `8000` | Port for the API server |
-| `API_TITLE` | `Hermes API` | API title displayed in documentation |
-| `API_DESCRIPTION` | `Video downloader API` | API description |
-| `API_VERSION` | `1.0.0` | API version |
+These variables are read by `packages/hermes-api/app/core/config.py`.
+Defaults below are application defaults; `.env.example` supplies Docker paths.
 
-### Database Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `HERMES_DATABASE_URL` | `sqlite+aiosqlite:///./data/hermes.db` | Database connection URL. **SQLite only** - uses aiosqlite for async support. |
-| `HERMES_DATABASE_ECHO` | `false` | Enable SQL query logging for debugging |
-
-### Redis Configuration
+### Core and API metadata
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HERMES_REDIS_URL` | `redis://localhost:6379` | Redis connection URL for task queuing and caching |
-| `HERMES_REDIS_DB` | `0` | Redis database number |
+| `HERMES_SECRET_KEY` | Required | JWT signing secret. Generate a long random value before startup. |
+| `HERMES_DEBUG` | `false` | Development logging and environment metadata. HTTP tracebacks remain disabled. |
+| `HERMES_API_TITLE` | `Hermes API` | Title in interactive documentation. |
+| `HERMES_API_DESCRIPTION` | `Video downloader API` | API description. |
+| `HERMES_BUILD_VERSION` | Package version | Build metadata supplied by release builds; otherwise version comes from installed metadata or `pyproject.toml`. |
 
-### JWT Authentication
+Interactive documentation is served at `/api/v1/docs` and `/api/v1/redoc`.
+The schema is `/api/v1/openapi.json`. All three work through the bundled nginx
+proxy. The former direct-server `/docs`, `/redoc`, and `/openapi.json` paths have
+moved; update bookmarks and clients that read the schema.
+
+### Database and Redis
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HERMES_ACCESS_TOKEN_EXPIRE_MINUTES` | `15` | Access token expiration in minutes |
-| `HERMES_REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh token expiration in days |
-| `HERMES_ALGORITHM` | `HS256` | JWT signing algorithm |
+| `HERMES_DATABASE_URL` | `sqlite+aiosqlite:///./data/hermes.db` | Async SQLite database URL. SQLite is the supported bundled database. |
+| `HERMES_DATABASE_ECHO` | `false` | SQL query logging. |
+| `HERMES_REDIS_URL` | `redis://localhost:6379` | Complete Redis URL, shared by Celery and application services. Compose defaults to the `redis` service. |
 
-Refresh tokens are single-use and must be replaced after every refresh. Logout
-revokes the access and refresh token family. Revocation is always enabled;
-`HERMES_ENABLE_TOKEN_BLACKLIST` has been removed.
+Select a Redis database in the URL, for example `redis://redis:6379/2`.
+`HERMES_REDIS_DB` was unused and has been removed. There is no separate database
+selector to override the URL.
+
+### Authentication and API keys
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HERMES_ACCESS_TOKEN_EXPIRE_MINUTES` | `15` | Access token lifetime, minimum one minute. |
+| `HERMES_REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh token lifetime, minimum one day. |
+| `HERMES_ALGORITHM` | `HS256` | JWT signing algorithm. |
+| `HERMES_API_KEYS` | Empty list | Configured API keys. Flexible list syntax is described below. |
+
+Refresh tokens are single-use. Clients must serialize refresh requests and store
+both replacement tokens. Logout revokes the session's access and refresh tokens.
+Revocation is mandatory; `HERMES_ENABLE_TOKEN_BLACKLIST` is no longer supported.
 
 ### Signup and initial administrator
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HERMES_ALLOW_PUBLIC_SIGNUP` | `false` | Public signup policy for new installations; existing saved settings take precedence |
-| `HERMES_INITIAL_ADMIN_USERNAME` | unset | Create the initial administrator on startup when no users exist |
-| `HERMES_INITIAL_ADMIN_EMAIL` | unset | Valid email for the initial administrator |
-| `HERMES_INITIAL_ADMIN_PASSWORD` | unset | Password for the initial administrator; at least eight characters and at most 72 UTF-8 bytes |
+| `HERMES_ALLOW_PUBLIC_SIGNUP` | `false` | Initial signup policy; the saved administrator setting takes precedence afterward. |
+| `HERMES_INITIAL_ADMIN_USERNAME` | Unset | Seed an administrator when the database has no users. |
+| `HERMES_INITIAL_ADMIN_EMAIL` | Unset | Valid email for the seeded administrator. |
+| `HERMES_INITIAL_ADMIN_PASSWORD` | Unset | Seed password: at least eight characters and at most 72 UTF-8 bytes. |
 
-The first account can always be created during bootstrap and becomes an
-administrator. Later public signup requires an explicit administrator setting.
-Account creation and password changes use the same password policy.
+Set all three initial-admin variables to use seeding, then remove the password
+from `.env` after bootstrap. Without seeding, the first signup creates an
+administrator; subsequent signup follows the saved policy. Password changes use
+the same length limits.
 
-### File Storage
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `HERMES_DOWNLOAD_DIR` | `./downloads` | Directory for completed downloads |
-| `HERMES_TEMP_DIR` | `./temp` | Directory for temporary files during processing |
-| `HERMES_DOWNLOAD_RETENTION_DAYS` | unset | Opt-in hourly deletion of managed terminal downloads older than this many days; minimum 1. Failed file deletions retain their download records. |
-
-The API and worker must use the same `HERMES_DOWNLOAD_DIR` and share that directory.
-On API startup, Hermes repairs missing file records for completed downloads whose
-outputs still exist inside this directory. Missing files, directories, and paths
-or symlinks that escape the download root are skipped. The repair is idempotent
-and does not download media again.
-
-**Breaking configuration change:** The worker no longer reads
-`HERMES_DOWNLOADS_DIR`. Set `HERMES_DOWNLOAD_DIR` instead, using `/app/downloads`
-for the bundled Docker mounts, and restart the API and worker after updating.
-
-### API Keys & Authentication
+### Storage and maintenance
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HERMES_API_KEYS` | `[]` | Comma-separated list of valid API keys |
+| `HERMES_DOWNLOAD_DIR` | `./downloads` | Shared root for managed downloads. |
+| `HERMES_TEMP_DIR` | `./temp` | Shared temporary processing directory. |
+| `HERMES_DOWNLOAD_RETENTION_DAYS` | Unset | Opt-in hourly removal of terminal downloads older than this many days; minimum one. |
 
-### Rate Limiting
+The bundled stacks run one `celery_beat` scheduler. It enqueues temporary-file
+cleanup every 30 minutes (files older than 24 hours) and expired token-blacklist
+cleanup hourly. It schedules media retention only when
+`HERMES_DOWNLOAD_RETENTION_DAYS` is set. Preview retention with the administrative
+cleanup API's `dry_run` option before enabling it. Failed file deletions keep
+their download records. Never run multiple schedulers for the same deployment.
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `HERMES_RATE_LIMIT_PER_MINUTE` | `60` | Value exposed by the configuration API; authentication uses the budgets below |
-| `HERMES_ENABLE_RATE_LIMITING` | `true` | Enable shared Redis budgets for login, signup, and refresh; Redis failure returns 503 |
-| `HERMES_TRUSTED_PROXY_HOSTS` | `[]` | Exact IPs or resolvable DNS names of trusted proxies, comma-separated; Compose defaults to `app` |
+Scheduler state persists in `/app/data/celerybeat-schedule*`. API startup repairs
+missing file records for existing completed media inside the managed root; the
+repair skips missing files and paths or symlinks outside that root.
 
-### Security Settings
+`HERMES_DOWNLOADS_DIR` has been removed. Use `HERMES_DOWNLOAD_DIR` and restart the
+API, worker, and scheduler together. File/status responses expose paths relative
+to the managed root, including subdirectories.
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `HERMES_MAX_LOGIN_ATTEMPTS` | `5` | Maximum requests per client per authentication endpoint within the configured window |
-| `HERMES_LOGIN_ATTEMPT_WINDOW_MINUTES` | `15` | Redis budget window for login, signup, and refresh |
-
-### CORS Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `HERMES_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:5173,https://hermes.example.com,https://hermes-api.example.com` | Comma-separated list of allowed CORS origins. Includes example domains for separate domain deployments. |
-| `HERMES_ALLOW_CREDENTIALS` | `true` | Allow credentials in CORS requests |
-
-Wildcard origins (`*`) are rejected when `HERMES_ALLOW_CREDENTIALS=true`.
-Configure concrete frontend origins for credentialed requests.
-
-#### CORS Examples
-
-**Development:**
-```bash
-HERMES_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
-```
-
-**Single Domain Production:**
-```bash
-HERMES_ALLOWED_ORIGINS=https://hermes.example.com
-```
-
-**Separate Domains Production:**
-```bash
-HERMES_ALLOWED_ORIGINS=https://hermes.example.com,https://hermes-api.example.com
-```
-
-## Docker Configuration
-
-When using Docker, you can also configure these additional variables:
+### Authentication budgets and proxy trust
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HERMES_APP_PORT` | `3000` | Port for the frontend application (Docker production build) |
-| `HERMES_DOWNLOAD_DIR` | `./downloads` | Use `/app/downloads` for the bundled API and worker download mounts |
-| `HERMES_TEMP_DIR` | `/app/temp` | Temporary directory in container |
+| `HERMES_ENABLE_RATE_LIMITING` | `true` | Shared Redis budgets for login, signup, and refresh. A Redis outage returns 503 for these operations. |
+| `HERMES_MAX_LOGIN_ATTEMPTS` | `5` | Requests per client, per authentication endpoint, per window. |
+| `HERMES_LOGIN_ATTEMPT_WINDOW_MINUTES` | `15` | Budget window, minimum one minute. |
+| `HERMES_TRUSTED_PROXY_HOSTS` | Empty list | Exact trusted proxy IPs or resolvable hostnames; Compose defaults to `app`. |
+| `HERMES_RATE_LIMIT_PER_MINUTE` | `60` | Configuration API value; authentication uses the explicit budgets above. |
 
-**Note:** The frontend development server runs on port 5173 when using `pnpm dev`, but Docker builds use port 3000.
+Forwarded client addresses are trusted only from configured proxies.
 
-## Frontend Configuration
+### CORS
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `VITE_API_BASE_URL` | `/api/v1` | API base URL for frontend builds. Used during build time to configure API endpoints. |
+| `HERMES_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:5173,https://hermes.example.com,https://hermes-api.example.com` | Allowed browser origins. Replace the example domains for deployment. |
+| `HERMES_ALLOW_CREDENTIALS` | `true` | Allow credentials in cross-origin requests. |
 
-#### Frontend API URL Examples
+Wildcard origins are rejected when credentials are enabled. For one public
+origin, set `HERMES_ALLOWED_ORIGINS=https://hermes.example.com`. For a separate API
+host, include the actual frontend origin; the API URL is configured separately.
 
-**Development (same domain):**
-```bash
-VITE_API_BASE_URL=/api/v1
-```
+`HERMES_ALLOWED_ORIGINS`, `HERMES_API_KEYS`, and `HERMES_TRUSTED_PROXY_HOSTS` accept
+comma-separated strings, space-separated strings, or JSON arrays. An empty value
+is an empty list.
 
-**Production (same domain):**
-```bash
-VITE_API_BASE_URL=/api/v1
-```
+### Server-sent events
 
-**Separate API domain:**
-```bash
-VITE_API_BASE_URL=https://hermes-api.example.com/api/v1
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HERMES_SSE_HEARTBEAT_INTERVAL` | `30` | SSE heartbeat interval setting, seconds. |
+| `HERMES_SSE_MAX_CONNECTIONS` | `1000` | Concurrent connection limit setting. |
+| `HERMES_SSE_CONNECTION_TIMEOUT` | `300` | Reserved timeout value in seconds; stream lifetime is not currently enforced by it. |
 
-**Note:** This variable is used at build time by Vite. After setting it, rebuild the frontend:
-```bash
-cd packages/hermes-app
-pnpm run build
-```
+SSE is a core feature and has no enable/disable switch. Browser connections use
+short-lived scoped SSE tokens; JWTs are sent only in authenticated HTTP headers.
 
-## Configuration Examples
+## Compose and frontend settings
 
-### Development
+These settings belong to Compose or the frontend rather than the API settings
+model. `API_PORT` is a host-port mapping, not an API server environment setting.
 
-```bash
-HERMES_DEBUG=true
-HERMES_SECRET_KEY=your-development-secret-key
-HERMES_DATABASE_URL=sqlite+aiosqlite:///./data/hermes.db
-HERMES_REDIS_URL=redis://localhost:6379
-API_PORT=8000
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HERMES_PORT` | `3000` | Public nginx host port in production Compose. |
+| `HERMES_DEV_PORT` | `5173` | Vite host port in development Compose. |
+| `API_PORT` | `8000` | Direct API host port in development Compose; container port stays 8000. |
+| `USER_UID`, `USER_GID` | `1000` | Source-built API/worker/scheduler user IDs; match mounted-directory ownership. |
+| `HERMES_IMAGE_TAG` | Required for prebuilt stack | One exact release for app, API, worker, and scheduler. Source builds do not use it. |
+| `VITE_API_BASE_URL` | `/api/v1` | Browser-facing API URL. Production Docker reads it at container startup. |
+| `VITE_HERMES_BUILD_VERSION` | Package version | Frontend version metadata set during image builds. |
+| `HERMES_DEV_API_TARGET` | `http://localhost:8000` | Vite's upstream proxy target; development Compose sets `http://api:8000`. |
 
-### Production
+For production Docker, changing `VITE_API_BASE_URL` requires recreating the app
+container, not rebuilding the image. The entrypoint writes escaped JSON into
+`config.js` on every start. Native Vite builds capture this variable at build
+time and need a rebuild. Development Compose fixes the browser URL to `/api/v1`
+and proxies it to the API container.
 
-```bash
-HERMES_DEBUG=false
-HERMES_SECRET_KEY=your-production-secret-key-change-this
-HERMES_DATABASE_URL=sqlite+aiosqlite:///./data/hermes.db
-HERMES_REDIS_URL=redis://redis:6379/0
-API_PORT=8000
-HERMES_RATE_LIMIT_PER_MINUTE=30
-```
+Use `/api/v1` for a single origin or
+`https://hermes-api.example.com/api/v1` for a separate API origin. The nginx
+container listens on HTTP port 80; terminate HTTPS in your external proxy.
+`HERMES_APP_PORT` and `HERMES_HTTPS_PORT` were unused and have been removed.
 
-### Production with Docker
+## Release alignment
 
-```bash
-# In .env file
-HERMES_DEBUG=false
-HERMES_SECRET_KEY=your-secure-production-key
-HERMES_DATABASE_URL=sqlite+aiosqlite:///./data/hermes.db
-HERMES_REDIS_URL=redis://redis:6379
-API_PORT=8000
-HERMES_APP_PORT=3000
-HERMES_RATE_LIMIT_PER_MINUTE=60
-```
+Use Compose files from the same release as the images and set
+`HERMES_IMAGE_TAG` once for the entire prebuilt stack. Upgrade all four backend
+and frontend processes together. These files require a release containing the
+security and opt-in retention fixes; the old 0.6.0 images are unsuitable for the
+new scheduler setup. For unreleased `main`, build from source until that release
+is published.
 
-## Generating a Secure Secret Key
-
-For production, generate a secure secret key:
+## Secret generation and persistent volumes
 
 ```bash
-# Using Python
 python3 -c "import secrets; print(secrets.token_urlsafe(32))"
-
-# Using Node.js
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-
-# Using OpenSSL
-openssl rand -hex 32
 ```
 
-## Environment File Setup
-
-1. Copy the example environment file (all configuration is in the root .env file):
-   ```bash
-   cp .env.example .env
-   ```
-
-2. Edit the `.env` file with your specific configuration:
-   ```bash
-   nano .env
-   ```
-
-3. Ensure the `.env` file is in your `.gitignore` to prevent committing secrets.
-
-## Troubleshooting
-
-### Common Issues
-
-**"Invalid SECRET_KEY" error:**
-- Ensure `HERMES_SECRET_KEY` is set to a non-empty value
-- Use a long, random string for production
-
-**Database connection errors:**
-- Verify `HERMES_DATABASE_URL` format is correct
-- For SQLite: `sqlite+aiosqlite:///path/to/db.sqlite`
-- **Note:** Only SQLite is currently supported
-
-**Redis connection errors:**
-- Verify `HERMES_REDIS_URL` is accessible
-- Check if Redis is running and accepting connections
-
-**CORS errors:**
-- Add your frontend URL to `HERMES_ALLOWED_ORIGINS`
-- Ensure `HERMES_ALLOW_CREDENTIALS=true` for authenticated requests
-
-## Security Best Practices
-
-1. **Always use HTTPS in production**
-2. **Use strong, unique secret keys**
-3. **Rotate tokens regularly**
-4. **Enable rate limiting**
-5. **Monitor authentication attempts**
-6. **Keep dependencies updated**
-7. **Use proper database backups**
-8. **User enumeration protection** - Signup endpoints use generic error messages to prevent attackers from discovering registered usernames/emails
-
-See the [Docker setup guide](DOCKER_OPTIMIZATION_README.md) for production deployment recommendations.
+Set that result as `HERMES_SECRET_KEY` in your untracked `.env`. Back up
+`data/data`, `data/downloads`, and the deployment configuration. Keep `.env` out
+of version control and restrict its permissions. See the
+[deployment guide](DEPLOYMENT.md) for volume ownership, backup, and recovery.

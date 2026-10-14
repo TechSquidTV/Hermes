@@ -26,7 +26,7 @@ The following API changes apply:
   Caller-supplied cookie values remain supported.
 - Output directories must resolve inside `HERMES_DOWNLOAD_DIR`. The API and
   worker must share that root. UUIDs prefix default and custom output filenames;
-  download status reports return the basename instead of an absolute path.
+  download status reports return a path relative to the download root, including subdirectories.
 - Cleanup and file deletion require administrator users or administrator API
   keys.
 
@@ -46,6 +46,26 @@ Automatic retention is off by default. Set `HERMES_DOWNLOAD_RETENTION_DAYS` only
 when hourly deletion of old managed downloads is desired. Preview the cleanup
 with its `dry_run` option before enabling scheduled deletion. See the
 [configuration guide](CONFIGURATION.md) for the updated settings.
+
+## Compose scheduler and release upgrade
+
+The bundled source, prebuilt, and development stacks now include `celery_beat`.
+It schedules temporary-file cleanup every 30 minutes and expired-token blacklist
+cleanup hourly. Media deletion stays opt-in through
+`HERMES_DOWNLOAD_RETENTION_DAYS`. Run one scheduler per deployment; its schedule
+state persists in `/app/data/celerybeat-schedule*` on the database mount.
+
+**Breaking deployment change:** prebuilt deployments require one explicit
+`HERMES_IMAGE_TAG` for app, API, worker, and scheduler. Use images and Compose
+files from the same hardened release. The old 0.6.0 images scheduled media
+retention unconditionally when beat ran and must not be used with these new
+files. Build unreleased `main` from source until a matching release is published.
+
+API documentation and schema moved to `/api/v1/docs`, `/api/v1/redoc`, and
+`/api/v1/openapi.json`, which work through nginx. Update direct API bookmarks
+that used `/docs` or `/openapi.json`. The unused `HERMES_APP_PORT`,
+`HERMES_HTTPS_PORT`, and `HERMES_REDIS_DB` settings have been removed; use
+`HERMES_PORT` for the public host port and the Redis URL suffix for its database.
 
 ## Docker Volume Mounts
 
@@ -407,7 +427,7 @@ HERMES_DATABASE_ECHO=true
 
 1. Check the [Proxy & Deployment Guide](PROXY_DEPLOYMENT.md) for proxy and domain issues
 2. Review [Configuration Guide](CONFIGURATION.md) for environment variables
-3. Check the [Docker setup guide](DOCKER_OPTIMIZATION_README.md) for optimization tips
+3. Review [persistent volume setup](#docker-volume-mounts) and container ownership
 4. Search existing issues in the [GitHub repository](https://github.com/TechSquidTV/Hermes/issues)
 5. Create a new issue with:
    - Your deployment configuration (redact secrets)
@@ -498,7 +518,7 @@ celery_worker:
 - **Enable caching** for static assets
 - **Use CDN** for frontend assets if serving globally
 
-See the [Docker optimization guide](DOCKER_OPTIMIZATION_README.md) for detailed performance recommendations.
+See the [configuration guide](CONFIGURATION.md) for worker, storage, and scheduler settings.
 
 ---
 
@@ -506,5 +526,4 @@ See the [Docker optimization guide](DOCKER_OPTIMIZATION_README.md) for detailed 
 
 - [Proxy & Deployment Guide](PROXY_DEPLOYMENT.md) - Reverse proxy and domain configuration
 - [Configuration Guide](CONFIGURATION.md) - Environment variables reference
-- [Docker Optimization](DOCKER_OPTIMIZATION_README.md) - Docker performance tuning
 - [Main README](../README.md) - Getting started and overview

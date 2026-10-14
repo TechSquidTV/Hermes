@@ -23,9 +23,9 @@ Thank you for considering contributing to Hermes! We welcome contributions from 
    ```
 
 3. **Access the app**
-   - Web App: http://localhost:3000
+   - Web App: http://localhost:5173
    - API: http://localhost:8000
-   - API Docs: http://localhost:8000/docs
+   - API Docs: http://localhost:5173/api/v1/docs
 
 ## 🌳 Branch Strategy
 
@@ -106,7 +106,7 @@ pnpm clean:all
 ### Ports
 - **Web App**: http://localhost:3000 (Docker) or http://localhost:5173 (dev server)
 - **API**: http://localhost:8000
-- **API Docs**: http://localhost:8000/docs
+- **API Docs**: http://localhost:5173/api/v1/docs
 
 ### Alternative: Manual Setup
 For advanced users who need to work outside Docker:
