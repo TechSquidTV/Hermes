@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '@/services/api/client'
 import { toast } from 'sonner'
@@ -5,7 +6,7 @@ import type { components } from '@/types/api.generated'
 import { invalidateQueueQueries } from '@/lib/queryClient'
 
 type DownloadRequest = components["schemas"]["DownloadRequest"]
-import { TokenStorage } from '@/utils/tokenStorage'
+import { formatFileSize } from '@/lib/utils'
 
 export function useStartDownload() {
   const queryClient = useQueryClient()
@@ -29,7 +30,7 @@ export function useDeleteFiles() {
     mutationFn: (filePaths: string[]) => apiClient.deleteFiles(filePaths),
     onSuccess: (data) => {
       if (data.deletedFiles > 0) {
-        toast.success(`Files deleted! Freed ${(data.totalFreedSpace / 1024 / 1024).toFixed(2)} MB`)
+        toast.success(`Files deleted! Freed ${formatFileSize(data.totalFreedSpace)}`)
       } else if (data.failedDeletions && data.failedDeletions.length > 0) {
         toast.error(`Failed to delete file: ${data.failedDeletions[0]}`)
       } else {
@@ -50,25 +51,7 @@ export function useDownloadFile() {
         throw new Error('File path not available')
       }
 
-      const token = TokenStorage.getAccessToken()
-      if (!token) {
-        throw new Error('Authentication required. Please log in again.')
-      }
-
-      const url = apiClient.getDownloadFileUrl(filePath)
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
-
-      if (!response.ok) {
-        const errorBody = await response.text().catch(() => '')
-        const detail = errorBody.trim() || response.statusText
-        throw new Error(`Download failed: HTTP ${response.status}${detail ? `: ${detail}` : ''}`)
-      }
-
-      const blob = await response.blob()
+      const blob = await apiClient.downloadFile(filePath)
       const downloadUrl = window.URL.createObjectURL(blob)
 
       // Extract full filename from filePath if available
@@ -105,12 +88,37 @@ export function useCancelDownload() {
 
   return useMutation({
     mutationFn: (downloadId: string) => apiClient.cancelDownload(downloadId),
-    onSuccess: () => {
-      toast.success('Download cancelled')
+    onSuccess: data => {
+      if (data.cancelled) toast.success('Download cancelled')
+      else toast.info(data.message)
       invalidateQueueQueries(queryClient)
     },
     onError: (error) => {
       toast.error(`Failed to cancel download: ${error.message}`)
     },
   })
+}
+
+export function useDownloadById() {
+  const download = useDownloadFile()
+  const [resolving, setResolving] = useState(false)
+  const start = async (downloadId: string, filePath: string | null | undefined, title: string, onSuccess?: () => void) => {
+    setResolving(true)
+    let path: string
+    try {
+      const resolved = filePath || (await apiClient.getDownloadStatus(downloadId)).currentFilename
+      if (!resolved) throw new Error('File is not available for this download')
+      path = resolved
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Download failed')
+      setResolving(false)
+      return
+    }
+    try {
+      await download.mutateAsync({ filePath: path, title })
+      onSuccess?.()
+    } catch { /* The download mutation displays its error. */ }
+    finally { setResolving(false) }
+  }
+  return { start, isPending: resolving || download.isPending }
 }

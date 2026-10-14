@@ -1,7 +1,7 @@
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { Search, ArrowUpDown, ChevronDown } from 'lucide-react'
+import { ArrowUpDown, ChevronDown, Search } from 'lucide-react'
 
 interface QueueFiltersProps {
   statusFilter: string
@@ -12,7 +12,7 @@ interface QueueFiltersProps {
   // Sorting props
   sortBy: 'date' | 'size' | 'title' | 'status'
   sortOrder: 'asc' | 'desc'
-  onSortChange: (sortBy: string, sortOrder: string) => void
+  onSortChange: (sortBy: QueueFiltersProps['sortBy'], sortOrder: QueueFiltersProps['sortOrder']) => void
 }
 
 export function QueueFilters({
@@ -31,9 +31,10 @@ export function QueueFilters({
       return [
         { value: 'all', label: 'All' },
         { value: 'downloading', label: 'Downloading' },
-        { value: 'queued', label: 'Queued' },
+        { value: 'pending', label: 'Queued' },
         { value: 'processing', label: 'Processing' },
         { value: 'failed', label: 'Failed' },
+        { value: 'cancelled', label: 'Cancelled' },
       ]
     } else if (viewMode === 'history') {
       return [
@@ -44,10 +45,11 @@ export function QueueFilters({
       return [
         { value: 'all', label: 'All' },
         { value: 'downloading', label: 'Downloading' },
-        { value: 'queued', label: 'Queued' },
+        { value: 'pending', label: 'Queued' },
         { value: 'processing', label: 'Processing' },
         { value: 'completed', label: 'Completed' },
         { value: 'failed', label: 'Failed' },
+        { value: 'cancelled', label: 'Cancelled' },
       ]
     }
   }
@@ -60,7 +62,7 @@ export function QueueFilters({
     { value: 'size', label: 'Size' },
     { value: 'title', label: 'Title' },
     { value: 'status', label: 'Status' },
-  ]
+  ] as const
 
   // Get contextually appropriate sort order labels based on sort type
   const getSortOrderLabel = (sortType: string, order: 'asc' | 'desc'): string => {
@@ -88,6 +90,7 @@ export function QueueFilters({
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
+              aria-label="Search all downloads"
               placeholder="Search downloads..."
               value={searchQuery}
               onChange={(e) => onSearchQueryChange(e.target.value)}
@@ -127,14 +130,14 @@ export function QueueFilters({
 
       <div className="flex gap-2 flex-wrap">
         {statusFilters.map((filter) => (
+          <button type="button" key={filter.value} aria-pressed={statusFilter === filter.value} onClick={() => onStatusFilterChange(filter.value)}>
           <Badge
-            key={filter.value}
             variant={statusFilter === filter.value ? 'default' : 'outline'}
             className="cursor-pointer"
-            onClick={() => onStatusFilterChange(filter.value)}
           >
             {filter.label}
           </Badge>
+          </button>
         ))}
       </div>
     </div>

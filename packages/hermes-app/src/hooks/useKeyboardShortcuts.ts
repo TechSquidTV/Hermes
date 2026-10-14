@@ -1,3 +1,4 @@
+import { validateQueueSearch } from '@/lib/queueSearch'
 import { useEffect } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 
@@ -30,15 +31,15 @@ export function useKeyboardShortcuts(shortcuts: KeyboardShortcut[]) {
         switch (event.key) {
           case '1':
             event.preventDefault()
-            navigate({ to: '/' })
+            void navigate({ to: '/' })
             return
           case '2':
             event.preventDefault()
-            navigate({ to: '/queue' })
+            void navigate({ to: '/queue', search: validateQueueSearch({}) })
             return
           case '3':
             event.preventDefault()
-            navigate({ to: '/settings' })
+            void navigate({ to: '/settings' })
             return
         }
       }

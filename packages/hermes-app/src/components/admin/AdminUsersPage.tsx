@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -6,19 +6,21 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog'
 import {
-  Users,
+  Mail,
   Plus,
-  Trash2,
   Shield,
   ShieldOff,
+  Trash2,
   UserCheck,
+  User as UserIcon,
   UserX,
-  Mail,
-  User as UserIcon
+  Users
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { adminService, type CreateUserRequest } from '@/services/admin'
+import { type CreateUserRequest, adminService } from '@/services/admin'
 import type { User } from '@/types/auth'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ErrorDisplay } from '@/components/ui/error-display'
 import { useAuth } from '@/contexts/AuthContext'
 
 type ConfirmationState = {
@@ -27,8 +29,8 @@ type ConfirmationState = {
 }
 
 export function AdminUsersPage() {
-  const [users, setUsers] = useState<User[]>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
+  const { data: users = [], isLoading: loading, error, refetch } = useQuery({ queryKey: ['admin', 'users'], queryFn: () => adminService.listUsers() })
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [confirmation, setConfirmation] = useState<ConfirmationState>({
     type: null,
@@ -42,115 +44,35 @@ export function AdminUsersPage() {
   })
   const { user: currentUser } = useAuth()
 
-  const loadUsers = async () => {
-    try {
-      setLoading(true)
-      const data = await adminService.listUsers()
-      setUsers(data)
-    } catch (error) {
-      toast.error('Failed to load users', {
-        description: error instanceof Error ? error.message : 'Unknown error',
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    let isMounted = true
-
-    const loadInitialUsers = async () => {
-      try {
-        if (isMounted) {
-          setLoading(true)
-        }
-        const data = await adminService.listUsers()
-        if (isMounted) {
-          setUsers(data)
-        }
-      } catch (error) {
-        if (isMounted) {
-          toast.error('Failed to load users', {
-            description: error instanceof Error ? error.message : 'Unknown error',
-          })
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false)
-        }
-      }
-    }
-
-    void loadInitialUsers()
-
-    return () => {
-      isMounted = false
-    }
-  }, [])
-
-  const handleCreateUser = async () => {
-    if (!newUser.username.trim() || !newUser.email.trim() || !newUser.password.trim()) {
-      toast.error('Please fill in all fields')
-      return
-    }
-
-    try {
-      await adminService.createUser(newUser)
+  const createUser = useMutation({
+    mutationFn: (request: CreateUserRequest) => adminService.createUser(request),
+    onSuccess: () => {
       toast.success('User created successfully')
       setNewUser({ username: '', email: '', password: '', isAdmin: false })
       setShowCreateForm(false)
-      loadUsers()
-    } catch (error) {
-      toast.error('Failed to create user', {
-        description: error instanceof Error ? error.message : 'Unknown error',
-      })
-    }
+    },
+    onError: error => toast.error(error.message),
+    onSettled: () => { void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }) },
+  })
+  const action = useMutation({
+    mutationFn: async (request: ConfirmationState) => {
+      if (!request.user) return
+      if (request.type === 'toggle-admin') await adminService.updateAdminStatus(request.user.id, !request.user.isAdmin)
+      if (request.type === 'toggle-active') await adminService.updateActiveStatus(request.user.id, !request.user.isActive)
+      if (request.type === 'delete') await adminService.deleteUser(request.user.id)
+    },
+    onSuccess: () => toast.success('User updated successfully'),
+    onError: error => toast.error(error.message),
+    onSettled: () => { setConfirmation({ type: null, user: null }); void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }) },
+  })
+  const handleCreateUser = () => {
+    if (!newUser.username.trim() || !newUser.email.trim() || !newUser.password.trim()) { toast.error('Please fill in all fields'); return }
+    createUser.mutate(newUser)
   }
-
-  const handleToggleAdmin = async (user: User) => {
-    setConfirmation({ type: 'toggle-admin', user })
-  }
-
-  const handleToggleActive = async (user: User) => {
-    setConfirmation({ type: 'toggle-active', user })
-  }
-
-  const handleDeleteUser = async (user: User) => {
-    setConfirmation({ type: 'delete', user })
-  }
-
-  const confirmAction = async () => {
-    if (!confirmation.user) return
-
-    const user = confirmation.user
-    const action = confirmation.type
-
-    try {
-      if (action === 'toggle-admin') {
-        await adminService.updateAdminStatus(user.id, !user.isAdmin)
-        const actionText = user.isAdmin ? 'demoted' : 'promoted'
-        toast.success(`User ${actionText} successfully`)
-      } else if (action === 'toggle-active') {
-        await adminService.updateActiveStatus(user.id, !user.isActive)
-        const actionText = user.isActive ? 'deactivated' : 'activated'
-        toast.success(`User ${actionText} successfully`)
-      } else if (action === 'delete') {
-        await adminService.deleteUser(user.id)
-        toast.success('User deleted successfully')
-      }
-      loadUsers()
-    } catch (error) {
-      const actionText =
-        action === 'toggle-admin' ? (user.isAdmin ? 'demote' : 'promote') :
-        action === 'toggle-active' ? (user.isActive ? 'deactivate' : 'activate') :
-        'delete'
-      toast.error(`Failed to ${actionText} user`, {
-        description: error instanceof Error ? error.message : 'Unknown error',
-      })
-    } finally {
-      setConfirmation({ type: null, user: null })
-    }
-  }
+  const handleToggleAdmin = (user: User) => setConfirmation({ type: 'toggle-admin', user })
+  const handleToggleActive = (user: User) => setConfirmation({ type: 'toggle-active', user })
+  const handleDeleteUser = (user: User) => setConfirmation({ type: 'delete', user })
+  const confirmAction = () => { if (!action.isPending) action.mutate(confirmation) }
 
   const getConfirmationProps = () => {
     if (!confirmation.user) return null
@@ -262,7 +184,7 @@ export function AdminUsersPage() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button onClick={handleCreateUser}>
+                  <Button disabled={createUser.isPending} onClick={handleCreateUser}>
                     Create User
                   </Button>
                   <Button variant="outline" onClick={() => setShowCreateForm(false)}>
@@ -273,7 +195,7 @@ export function AdminUsersPage() {
             </Card>
           )}
 
-          {loading ? (
+          {error ? <ErrorDisplay message="Failed to load users" onRetry={() => { void refetch() }} /> : loading ? (
             <div className="text-center py-8 text-muted-foreground">
               Loading users...
             </div>
@@ -318,7 +240,7 @@ export function AdminUsersPage() {
                         size="sm"
                         variant="outline"
                         onClick={() => handleToggleAdmin(user)}
-                        disabled={currentUser?.id === user.id}
+                        disabled={action.isPending || currentUser?.id === user.id}
                         title={currentUser?.id === user.id ? "Cannot modify your own admin status" : undefined}
                       >
                         {user.isAdmin ? (
@@ -338,7 +260,7 @@ export function AdminUsersPage() {
                         size="sm"
                         variant="outline"
                         onClick={() => handleToggleActive(user)}
-                        disabled={currentUser?.id === user.id}
+                        disabled={action.isPending || currentUser?.id === user.id}
                         title={currentUser?.id === user.id ? "Cannot deactivate yourself" : undefined}
                       >
                         {user.isActive ? (
@@ -358,7 +280,7 @@ export function AdminUsersPage() {
                         size="sm"
                         variant="destructive"
                         onClick={() => handleDeleteUser(user)}
-                        disabled={currentUser?.id === user.id}
+                        disabled={action.isPending || currentUser?.id === user.id}
                         title={currentUser?.id === user.id ? "Cannot delete yourself" : undefined}
                       >
                         <Trash2 className="h-3 w-3 mr-1" />

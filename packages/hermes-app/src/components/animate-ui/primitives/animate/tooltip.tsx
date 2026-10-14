@@ -2,21 +2,21 @@
 
 import * as React from 'react';
 import {
-  motion,
   AnimatePresence,
+  type HTMLMotionProps,
   LayoutGroup,
   type Transition,
-  type HTMLMotionProps,
+  motion,
 } from 'framer-motion';
 import {
-  useFloating,
-  autoUpdate,
-  offset as floatingOffset,
-  flip,
-  shift,
-  FloatingPortal,
   FloatingArrow,
+  FloatingPortal,
   type UseFloatingReturn,
+  autoUpdate,
+  flip,
+  offset as floatingOffset,
+  shift,
+  useFloating,
 } from '@floating-ui/react';
 
 import { getStrictContext } from '@/lib/get-strict-context';
@@ -512,7 +512,7 @@ function TooltipTrigger({
       if (currentTooltip?.id === id) {
         suppressNextFocusRef.current = true;
         hideImmediate();
-        Promise.resolve().then(() => {
+        void Promise.resolve().then(() => {
           suppressNextFocusRef.current = false;
         });
       }

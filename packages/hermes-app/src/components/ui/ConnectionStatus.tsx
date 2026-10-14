@@ -1,4 +1,4 @@
-import { Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import { RefreshCw, Wifi, WifiOff } from 'lucide-react';
 
 export interface ConnectionStatusProps {
   isConnected: boolean;

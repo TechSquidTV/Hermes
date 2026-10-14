@@ -1,8 +1,9 @@
-import { createRootRoute, Outlet, useLocation } from '@tanstack/react-router'
+import { Outlet, createRootRoute, useLocation } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { useKeyboardShortcuts, globalShortcuts } from '@/hooks/useKeyboardShortcuts'
+import { globalShortcuts, useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
+import { DownloadEventsProvider } from '@/contexts/DownloadEventsContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/hooks/useTheme'
 
@@ -10,7 +11,7 @@ function RootLayout() {
   // Enable global keyboard shortcuts
   useKeyboardShortcuts(globalShortcuts)
 
-  const { isValidating } = useAuth()
+  const { isValidating, isAuthenticated } = useAuth()
   const location = useLocation()
   const isAuthRoute = location.pathname.startsWith('/auth')
   
@@ -32,6 +33,7 @@ function RootLayout() {
 
   return (
     <>
+      <DownloadEventsProvider enabled={isAuthenticated}>
       {isAuthRoute ? (
         <>
           <div className="grain-overlay"></div>
@@ -44,6 +46,7 @@ function RootLayout() {
           <Outlet />
         </AppLayout>
       )}
+      </DownloadEventsProvider>
       {import.meta.env.DEV && (
         <>
           <TanStackRouterDevtools />

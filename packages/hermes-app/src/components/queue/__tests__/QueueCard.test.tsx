@@ -24,8 +24,8 @@ vi.mock('sonner', () => ({
 }))
 
 vi.mock('@/hooks/useDownloadActions', () => ({
-  useDownloadFile: () => ({
-    mutate: vi.fn(),
+  useDownloadById: () => ({
+    start: vi.fn(),
     isPending: false,
   }),
   useCancelDownload: () => ({
@@ -175,7 +175,7 @@ describe('QueueCard', () => {
 
   const mockDownload: DownloadStatus = {
     downloadId: 'test-123',
-    status: 'queued',
+    status: 'pending',
     message: '',
     result: {
       title: 'Test Video',
@@ -207,7 +207,7 @@ describe('QueueCard', () => {
     it('renders with minimal download data', () => {
       const minimalDownload: DownloadStatus = {
         downloadId: 'test-123',
-        status: 'queued',
+        status: 'pending',
         message: '',
         createdAt: '2025-01-01T10:00:00Z',
       }
@@ -263,7 +263,7 @@ describe('QueueCard', () => {
       render(<QueueCard download={mockDownload} />, { wrapper: createWrapper() })
 
       expect(screen.getByTestId('status-badge')).toBeInTheDocument()
-      expect(screen.getByTestId('status-badge')).toHaveTextContent('queued')
+      expect(screen.getByTestId('status-badge')).toHaveTextContent('pending')
     })
   })
 
@@ -316,7 +316,7 @@ describe('QueueCard', () => {
 
   describe('Status-specific displays', () => {
     it('shows DownloadProgressTracker for queued status', () => {
-      const queuedDownload = { ...mockDownload, status: 'queued' as const }
+      const queuedDownload = { ...mockDownload, status: 'pending' as const }
 
       render(<QueueCard download={queuedDownload} />, { wrapper: createWrapper() })
 
@@ -513,7 +513,7 @@ describe('QueueCard', () => {
     })
 
     it('shows "Processing..." for queued status', () => {
-      const queuedDownload = { ...mockDownload, status: 'queued' as const }
+      const queuedDownload = { ...mockDownload, status: 'pending' as const }
 
       render(<QueueCard download={queuedDownload} />, { wrapper: createWrapper() })
 

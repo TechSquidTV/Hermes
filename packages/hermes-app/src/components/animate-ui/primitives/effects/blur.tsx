@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { motion, useInView, type HTMLMotionProps } from 'framer-motion'
+import { type HTMLMotionProps, motion, useInView } from 'framer-motion'
 
 export interface BlurProps extends Omit<HTMLMotionProps<'div'>, 'initial' | 'animate'> {
   /**
@@ -18,7 +18,7 @@ export interface BlurProps extends Omit<HTMLMotionProps<'div'>, 'initial' | 'ani
    * The margin of the element to be in view
    * @default "0px"
    */
-  inViewMargin?: string | number
+  inViewMargin?: NonNullable<Parameters<typeof useInView>[1]>['margin']
   /**
    * The delay of the animation
    * @default 0
@@ -48,8 +48,7 @@ export function Blur({
   ...props
 }: BlurProps) {
   const ref = React.useRef(null)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const isInView = useInView(ref, { once: inViewOnce, margin: inViewMargin as any })
+  const isInView = useInView(ref, { once: inViewOnce, margin: inViewMargin })
 
   const shouldAnimate = inView ? isInView : true
 

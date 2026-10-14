@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Slot } from 'radix-ui';
-import { cva, VariantProps } from 'class-variance-authority';
+import { VariantProps, cva } from 'class-variance-authority';
 import { PanelLeftIcon } from 'lucide-react';
 import { type Transition } from 'framer-motion';
 
@@ -20,9 +20,9 @@ import {
   SheetTitle,
 } from '@/components/animate-ui/components/radix/sheet';
 import {
-  TooltipProvider,
   Tooltip,
   TooltipContent,
+  TooltipProvider,
   TooltipTrigger,
 } from '@/components/animate-ui/components/animate/tooltip';
 import {

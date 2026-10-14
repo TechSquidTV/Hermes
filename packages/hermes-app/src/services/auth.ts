@@ -1,153 +1,65 @@
-// Authentication Service
-
-import type { User, LoginCredentials, SignupCredentials, AuthResponse } from '@/types/auth'
+import type { AuthResponse, LoginCredentials, SignupCredentials, User } from '@/types/auth'
 import { TokenStorage } from '@/utils/tokenStorage'
-import { getApiBaseUrl } from '@/lib/config'
+import { apiClient } from './api/client'
 import { refreshSession } from './session'
 
 class AuthService {
-  private baseURL: string
+  private action = 0
 
-  constructor() {
-    this.baseURL = getApiBaseUrl()
+  getBaseURL(): string {
+    return apiClient.getBaseURL()
   }
 
-  public getBaseURL(): string {
-    return this.baseURL
-  }
-
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const url = `${this.baseURL}${endpoint}`
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...options.headers as Record<string, string>,
-    }
-
-    // Add auth token if available using TokenStorage
-    const token = TokenStorage.getAccessToken()
-    if (token) {
-      headers.Authorization = `Bearer ${token}`
-    }
-
-    try {
-      const response = await fetch(url, {
-        ...options,
-        headers,
-      })
-
-      // Handle authentication errors
-      if (response.status === 401) {
-        const errorData = await response.json().catch(() => ({ detail: 'Unauthorized' }))
-        throw new Error(`401: ${errorData.detail || 'Unauthorized'}`)
-      }
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: 'Request failed' }))
-        throw new Error(`HTTP ${response.status}: ${errorData.detail || response.statusText}`)
-      }
-
-      return response.json()
-    } catch (error) {
-      console.error(`[AuthService] Request failed for ${endpoint}:`, error)
-      throw error
-    }
-  }
-
-  async login(credentials: LoginCredentials): Promise<AuthResponse> {
-    const response = await this.request<AuthResponse>('/auth/login', {
+  private async authenticate(
+    endpoint: string,
+    credentials: LoginCredentials | SignupCredentials
+  ): Promise<AuthResponse> {
+    const action = ++this.action
+    const response = await apiClient.request<AuthResponse>(endpoint, {
       method: 'POST',
+      skipAuth: true,
       body: JSON.stringify(credentials),
     })
-
-    // Store tokens securely
-    TokenStorage.setAccessToken(response.accessToken, 15) // 15 minutes expiry
-    TokenStorage.setRefreshToken(response.refreshToken)
-
+    if (action !== this.action) throw new DOMException('Authentication changed', 'AbortError')
+    TokenStorage.setTokens(response)
     return response
   }
 
-  async signup(credentials: SignupCredentials): Promise<AuthResponse> {
-    const response = await this.request<AuthResponse>('/auth/signup', {
-      method: 'POST',
-      body: JSON.stringify(credentials),
-    })
-
-    // Store tokens securely
-    TokenStorage.setAccessToken(response.accessToken, 15) // 15 minutes expiry
-    TokenStorage.setRefreshToken(response.refreshToken)
-
-    return response
+  login(credentials: LoginCredentials): Promise<AuthResponse> {
+    return this.authenticate('/auth/login', credentials)
+  }
+  signup(credentials: SignupCredentials): Promise<AuthResponse> {
+    return this.authenticate('/auth/signup', credentials)
   }
 
   async logout(): Promise<void> {
+    const action = ++this.action
+    const version = TokenStorage.getVersion()
     try {
-      if (!TokenStorage.getAccessToken() && TokenStorage.getRefreshToken()) {
-        await refreshSession()
-      }
-      await this.request<void>('/auth/logout', {
-        method: 'POST',
-      })
-    } catch (error) {
-      console.warn('[AuthService] Logout API call failed:', error)
-      // Continue with local cleanup even if API call fails
+      await apiClient.request('/auth/logout', { method: 'POST' })
+    } finally {
+      if (action === this.action && version === TokenStorage.getVersion())
+        TokenStorage.clearTokens()
     }
-
-    // Clear tokens from secure storage
-    TokenStorage.clearTokens()
   }
 
   refreshToken(): ReturnType<typeof refreshSession> {
     return refreshSession()
   }
 
-  async getCurrentUser(): Promise<User> {
-    try {
-      const headers = await this.getAuthHeaders()
-      
-      const response = await fetch(`${this.baseURL}/auth/me`, {
-        method: 'GET',
-        headers,
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: 'Failed to get user data' }))
-        console.error('[AuthService] getCurrentUser - error response:', errorData)
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
-
-      const userData = await response.json()
-      return userData
-    } catch (error) {
-      console.error('[AuthService] getCurrentUser failed:', error)
-      throw error
-    }
+  getCurrentUser(signal?: AbortSignal): Promise<User> {
+    return apiClient.request<User>('/auth/me', { signal })
   }
 
-  private async getAuthHeaders(): Promise<Record<string, string>> {
-    const token = TokenStorage.getAccessToken()
-    
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    }
-
-    if (token) {
-      headers.Authorization = `Bearer ${token}`
-    }
-
-    return headers
-  }
-
-
-  async updateProfile(updates: Partial<User>): Promise<User> {
-    return this.request<User>('/auth/profile', {
+  updateProfile(updates: Pick<Partial<User>, 'email' | 'avatar' | 'preferences'>): Promise<User> {
+    return apiClient.request<User>('/auth/profile', {
       method: 'PATCH',
       body: JSON.stringify(updates),
     })
   }
 
   async changePassword(currentPassword: string, newPassword: string): Promise<void> {
-    await this.request<void>('/auth/change-password', {
+    await apiClient.request('/auth/change-password', {
       method: 'POST',
       body: JSON.stringify({ currentPassword, newPassword }),
     })

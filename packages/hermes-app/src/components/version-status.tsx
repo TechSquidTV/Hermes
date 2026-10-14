@@ -1,5 +1,6 @@
+import { debug } from '@/lib/debug'
 import * as React from 'react'
-import { RefreshCw, AlertTriangle, CheckCircle, HelpCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle, HelpCircle, RefreshCw } from 'lucide-react'
 
 import { useSidebar } from '@/components/animate-ui/components/radix/sidebar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -52,7 +53,7 @@ export function VersionStatus({ className }: VersionStatusProps) {
         const healthResponse = await apiClient.getHealth()
         apiVersion = healthResponse.version || 'unknown'
       } catch (err) {
-        console.error('Failed to fetch API health:', err)
+        debug.error('Failed to fetch API health:', err)
         healthError = err instanceof Error ? err.message : 'Failed to check API health'
       }
 
@@ -78,7 +79,7 @@ export function VersionStatus({ className }: VersionStatusProps) {
         setError(healthError)
       }
     } catch (err) {
-      console.error('Failed to fetch version info:', err)
+      debug.error('Failed to fetch version info:', err)
       if (isLatestRequest()) {
         setError(err instanceof Error ? err.message : 'Failed to check for updates')
         if (!versionInfoRef.current) {

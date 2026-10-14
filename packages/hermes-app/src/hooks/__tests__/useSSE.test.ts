@@ -158,7 +158,7 @@ describe('useSSE', () => {
       })
 
       // Simulate incoming message
-      const eventSource = eventSourceInstances[0]
+      const eventSource = eventSourceInstances[0]!
       act(() => {
         eventSource._simulateMessage(JSON.stringify({ progress: 50 }))
       })
@@ -179,7 +179,7 @@ describe('useSSE', () => {
         expect(result.current.isConnected).toBe(true)
       })
 
-      const eventSource = eventSourceInstances[0]
+      const eventSource = eventSourceInstances[0]!
 
       // Simulate specific event type
       act(() => {
@@ -201,7 +201,7 @@ describe('useSSE', () => {
         expect(result.current.isConnected).toBe(true)
       })
 
-      const eventSource = eventSourceInstances[0]
+      const eventSource = eventSourceInstances[0]!
 
       // Simulate empty message (heartbeat)
       act(() => {
@@ -230,7 +230,7 @@ describe('useSSE', () => {
         expect(result.current.isConnected).toBe(true)
       })
 
-      const eventSource = eventSourceInstances[0]
+      const eventSource = eventSourceInstances[0]!
 
       // Simulate invalid JSON
       act(() => {
@@ -256,13 +256,13 @@ describe('useSSE', () => {
     })
 
     const fail = (index: number, permanent = false) => act(() => {
-      eventSourceInstances[index].readyState = permanent ? MockEventSource.CLOSED : MockEventSource.CONNECTING
-      eventSourceInstances[index]._simulateError()
+      eventSourceInstances[index]!.readyState = permanent ? MockEventSource.CLOSED : MockEventSource.CONNECTING
+      eventSourceInstances[index]!._simulateError()
     })
     const advance = (milliseconds: number) => act(() => vi.advanceTimersByTime(milliseconds))
     const open = (index: number) => act(() => {
-      eventSourceInstances[index].readyState = MockEventSource.OPEN
-      eventSourceInstances[index].onopen?.(new Event('open'))
+      eventSourceInstances[index]!.readyState = MockEventSource.OPEN
+      eventSourceInstances[index]!.onopen?.(new Event('open'))
     })
 
     it('backs off exponentially and caps the delay', () => {
@@ -270,7 +270,7 @@ describe('useSSE', () => {
         reconnectDelay: 100, maxReconnectDelay: 150,
       }))
       fail(0)
-      expect(eventSourceInstances[0].readyState).toBe(MockEventSource.CLOSED)
+      expect(eventSourceInstances[0]!.readyState).toBe(MockEventSource.CLOSED)
       expect(result.current.isReconnecting).toBe(true)
       advance(99)
       expect(eventSourceInstances).toHaveLength(1)
@@ -336,7 +336,7 @@ describe('useSSE', () => {
       fail(0)
       advance(10000)
       expect(eventSourceInstances).toHaveLength(1)
-      expect(eventSourceInstances[0].readyState).toBe(MockEventSource.CLOSED)
+      expect(eventSourceInstances[0]!.readyState).toBe(MockEventSource.CLOSED)
       expect(result.current.isReconnecting).toBe(false)
     })
 
@@ -365,7 +365,7 @@ describe('useSSE', () => {
       const { result } = renderHook(() => useSSE<{ value: number }>('/events', { reconnectDelay: 100 }))
       fail(0)
       fail(0)
-      act(() => eventSourceInstances[0]._simulateMessage('{"value":1}'))
+      act(() => eventSourceInstances[0]!._simulateMessage('{"value":1}'))
       advance(100)
       expect(eventSourceInstances).toHaveLength(2)
       expect(result.current.reconnectAttempts).toBe(1)
@@ -396,7 +396,7 @@ describe('useSSE', () => {
         expect(result.current.isConnected).toBe(false)
       })
 
-      const eventSource = eventSourceInstances[0]
+      const eventSource = eventSourceInstances[0]!
       expect(eventSource.readyState).toBe(MockEventSource.CLOSED)
     })
 
@@ -438,7 +438,7 @@ describe('useSSE', () => {
         expect(result.current.isConnected).toBe(true)
       })
 
-      const eventSource = eventSourceInstances[0]
+      const eventSource = eventSourceInstances[0]!
 
       // Unmount
       unmount()

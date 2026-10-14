@@ -52,7 +52,7 @@ export function getStatusVariant(status: string): 'default' | 'secondary' | 'des
     case 'downloading':
     case 'processing':
       return 'default'
-    case 'queued':
+    case 'pending':
       return 'secondary'
     default:
       return 'outline'

@@ -2,113 +2,34 @@ import { createFileRoute } from '@tanstack/react-router'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Keyboard, X, Download, AlertCircle } from 'lucide-react'
+import { AlertCircle, Download, Keyboard, X } from 'lucide-react'
 import { useDownloadProgressSSE } from '@/hooks/useDownloadProgressSSE'
-import { DownloadProgressTracker } from '@/components/download/DownloadProgressTracker'
-import { ConnectionStatus } from '@/components/ui/ConnectionStatus'
+import { DownloadProgressDisplay } from '@/components/download/DownloadProgressTracker'
 import { UrlInput } from '@/components/forms/UrlInput'
 import { KeyboardShortcutsHelp } from '@/components/ui/keyboard-shortcuts-help'
-import { useState, useEffect, useCallback } from 'react'
-import { useDownloadFile } from '@/hooks/useDownloadActions'
+import { useCallback, useEffect, useState } from 'react'
+import { useDownloadById } from '@/hooks/useDownloadActions'
 import { Blur } from '@/components/animate-ui/primitives/effects/blur'
 import { taskTracker } from '@/lib/taskTracking'
-import { apiClient } from '@/services/api/client'
-import { toast } from 'sonner'
-import type { DownloadResult } from '@/types'
-
-// Type guard to check if result has the expected download result properties
-const hasDownloadResult = (result: unknown): result is DownloadResult => {
-  return result !== null && typeof result === 'object' && ('title' in result || 'url' in result)
-}
+import { StatusBadge } from '@/components/ui/status-badge'
+import { isActiveDownloadStatus } from '@/lib/queueData'
+import { formatFileSize } from '@/lib/utils'
 
 // Component to track a single download task
 interface TrackedTaskProps {
   downloadId: string
   onRemove: (downloadId: string) => void
-  isDismissing: boolean
 }
 
-function TrackedTask({ downloadId, onRemove, isDismissing }: TrackedTaskProps) {
+function TrackedTask({ downloadId, onRemove }: TrackedTaskProps) {
   
-  const { data: downloadStatus, isConnected, isReconnecting, reconnectAttempts } = useDownloadProgressSSE(downloadId)
+  const progress = useDownloadProgressSSE(downloadId)
+  const downloadStatus = progress.data
 
-  const downloadFile = useDownloadFile()
+  const downloadFile = useDownloadById()
 
-  const handleDownloadFile = async (filePath: string | null | undefined, title: string, downloadId: string) => {
-    let resolvedFilePath = filePath
-
-    if (!resolvedFilePath) {
-      try {
-        const status = await apiClient.getDownloadStatus(downloadId)
-        resolvedFilePath = status.currentFilename
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error'
-        toast.error(`Failed to get download file: ${message}`)
-        return
-      }
-    }
-
-    if (!resolvedFilePath) {
-      toast.error('File path is not available for this download yet.')
-      return
-    }
-
-    downloadFile.mutate(
-      { filePath: resolvedFilePath, title },
-      {
-        onSuccess: () => {
-          // Auto-dismiss task after successful download
-          onRemove(downloadId)
-        }
-      }
-    )
-  }
-
-  const getStatusInfo = (status: string) => {
-    switch (status) {
-      case 'queued':
-        return {
-          color: 'bg-yellow-500',
-          icon: '⏳',
-          text: 'Queued',
-          textColor: 'text-yellow-600 dark:text-yellow-400'
-        }
-      case 'downloading':
-        return {
-          color: 'bg-blue-500',
-          icon: '⬇️',
-          text: 'Downloading',
-          textColor: 'text-blue-600 dark:text-blue-400'
-        }
-      case 'processing':
-        return {
-          color: 'bg-purple-500',
-          icon: '⚙️',
-          text: 'Processing',
-          textColor: 'text-purple-600 dark:text-purple-400'
-        }
-      case 'completed':
-        return {
-          color: 'bg-green-500',
-          icon: '✅',
-          text: 'Completed',
-          textColor: 'text-green-600 dark:text-green-400'
-        }
-      case 'failed':
-        return {
-          color: 'bg-red-500',
-          icon: '❌',
-          text: 'Failed',
-          textColor: 'text-red-600 dark:text-red-400'
-        }
-      default:
-        return {
-          color: 'bg-gray-500',
-          icon: '○',
-          text: status,
-          textColor: 'text-gray-600 dark:text-gray-400'
-        }
-    }
+  const handleDownloadFile = (filePath: string | null | undefined, title: string, downloadId: string) => {
+    void downloadFile.start(downloadId, filePath, title, () => onRemove(downloadId))
   }
 
   if (!downloadStatus) {
@@ -117,42 +38,28 @@ function TrackedTask({ downloadId, onRemove, isDismissing }: TrackedTaskProps) {
   }
 
   const task = downloadStatus
-  const statusInfo = getStatusInfo(task.status)
   const isCompleted = task.status === 'completed'
   const isFailed = task.status === 'failed'
-  const isActive = !isCompleted && !isFailed
+  const isActive = isActiveDownloadStatus(task.status)
 
   return (
     <Blur
       key={downloadId}
-      initialBlur={isDismissing ? 0 : 10}
-      blur={isDismissing ? 10 : 0}
+      initialBlur={10}
+      blur={0}
       className={`
         flex items-center justify-between p-3 rounded-md border
         ${isCompleted ? 'border-green-200 bg-green-50/50 dark:border-green-800 dark:bg-green-950/20' : ''}
         ${isFailed ? 'border-red-200 bg-red-50/50 dark:border-red-800 dark:bg-red-950/20' : ''}
         ${isActive ? 'bg-card' : ''}
-        ${isDismissing ? 'pointer-events-none' : ''}
       `}
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <div className={`h-2 w-2 rounded-full ${statusInfo.color} ${isActive ? 'animate-pulse' : ''}`} />
-          <span className={`text-xs font-medium ${statusInfo.textColor}`}>
-            {statusInfo.text}
-          </span>
-          {/* SSE Connection Indicator (compact) */}
-          {isActive && (
-            <ConnectionStatus
-              isConnected={isConnected}
-              isReconnecting={isReconnecting}
-              reconnectAttempts={reconnectAttempts}
-              className="ml-auto"
-            />
-          )}
+          <StatusBadge status={task.status} size="sm" />
           <p className="text-sm font-medium truncate flex-1">
             {(() => {
-              if (hasDownloadResult(task.result)) {
+              if (task.result) {
                 return task.result.title || task.result.url || 'Processing...'
               }
               return 'Processing...'
@@ -162,19 +69,20 @@ function TrackedTask({ downloadId, onRemove, isDismissing }: TrackedTaskProps) {
 
         {/* Real-time Progress Display using shared component */}
         {isActive && (
-          <DownloadProgressTracker
+          <DownloadProgressDisplay
+            progress={progress}
             downloadId={downloadId}
             isActive={true}
-            showConnectionStatus={false}
+            showConnectionStatus={true}
             size="default"
             showDetails={true}
             className="mt-2"
           />
         )}
 
-        {isCompleted && hasDownloadResult(task.result) && task.result.fileSize && (
+        {isCompleted && !!task.result && task.result.fileSize && (
           <div className="text-xs text-muted-foreground mt-1">
-            <span>{(Number(task.result.fileSize) / 1024 / 1024).toFixed(2)} MB</span>
+            <span>{formatFileSize(task.result.fileSize)}</span>
           </div>
         )}
 
@@ -192,7 +100,7 @@ function TrackedTask({ downloadId, onRemove, isDismissing }: TrackedTaskProps) {
             size="sm"
             onClick={() => handleDownloadFile(
               task.currentFilename,
-              hasDownloadResult(task.result) ? (task.result.title ?? 'download') : 'download',
+              task.result ? (task.result.title ?? 'download') : 'download',
               downloadId
             )}
             className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600"
@@ -205,6 +113,7 @@ function TrackedTask({ downloadId, onRemove, isDismissing }: TrackedTaskProps) {
           variant="ghost"
           size="icon"
           className="h-8 w-8"
+          aria-label="Dismiss download"
           onClick={() => onRemove(downloadId)}
         >
           <X className="h-4 w-4" />
@@ -217,7 +126,6 @@ function TrackedTask({ downloadId, onRemove, isDismissing }: TrackedTaskProps) {
 function DashboardPage() {
   // Initialize state with tracked task IDs from taskTracker
   const [trackedTaskIds, setTrackedTaskIds] = useState<string[]>(() => taskTracker.getTasks())
-  const [dismissingTasks, setDismissingTasks] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     const unsubscribe = taskTracker.subscribe((taskIds) => {
@@ -229,23 +137,8 @@ function DashboardPage() {
     }
   }, [])
 
-  const removeTask = useCallback((downloadId: string, withAnimation = true) => {
-    if (withAnimation) {
-      // Start the animation
-      setDismissingTasks(prev => new Set(prev).add(downloadId))
-
-      // After animation completes, actually remove the task
-      setTimeout(() => {
-        taskTracker.removeTask(downloadId)
-        setDismissingTasks(prev => {
-          const next = new Set(prev)
-          next.delete(downloadId)
-          return next
-        })
-      }, 600) // Match animation duration
-    } else {
-      taskTracker.removeTask(downloadId)
-    }
+  const removeTask = useCallback((downloadId: string) => {
+    taskTracker.removeTask(downloadId)
   }, [])
 
   return (
@@ -281,7 +174,6 @@ function DashboardPage() {
                   key={downloadId}
                   downloadId={downloadId}
                   onRemove={removeTask}
-                  isDismissing={dismissingTasks.has(downloadId)}
                 />
               ))}
             </div>

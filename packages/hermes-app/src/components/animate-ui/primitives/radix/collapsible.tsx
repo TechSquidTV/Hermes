@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Collapsible as CollapsiblePrimitive } from 'radix-ui';
-import { AnimatePresence, motion, type HTMLMotionProps } from 'framer-motion';
+import { AnimatePresence, type HTMLMotionProps, motion } from 'framer-motion';
 
 import { getStrictContext } from '@/lib/get-strict-context';
 import { useControlledState } from '@/hooks/use-controlled-state';

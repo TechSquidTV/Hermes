@@ -1,6 +1,6 @@
 import { Progress } from '@/components/ui/progress'
 import { Loader2 } from 'lucide-react'
-import { formatTimeRemaining, formatFileSize } from '@/lib/utils'
+import { formatFileSize, formatTimeRemaining } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 
 interface DownloadProgressProps {
@@ -26,7 +26,7 @@ export function DownloadProgress({
   showDetails = true,
   className
 }: DownloadProgressProps) {
-  const isIndeterminate = status === 'queued' || status === 'processing'
+  const isIndeterminate = status === 'pending' || status === 'processing'
   const isDownloading = status === 'downloading' && typeof progress === 'number'
 
   if (isIndeterminate) {
@@ -38,7 +38,7 @@ export function DownloadProgress({
           size === 'default' && 'h-4 w-4',
           size === 'lg' && 'h-5 w-5'
         )} />
-        <span className="capitalize">{status}...</span>
+        <span className="capitalize">{status === 'pending' ? 'Queued' : status}...</span>
       </div>
     )
   }

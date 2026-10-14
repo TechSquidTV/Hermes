@@ -22,7 +22,7 @@ export const queryClient = new QueryClient({
       },
     },
     mutations: {
-      retry: 1,
+      retry: false,
     },
   },
 })
@@ -31,9 +31,22 @@ export function invalidateQueueQueries(
   client: QueryClient,
   options: InvalidateQueueOptions = {}
 ) {
-  client.invalidateQueries({ queryKey: ['queue'], exact: false })
+  void client.invalidateQueries({ queryKey: ['queue'], exact: false })
 
   if (options.includeFiles) {
-    client.invalidateQueries({ queryKey: ['files'], exact: false })
+    void client.invalidateQueries({ queryKey: ['files'], exact: false })
   }
+}
+
+const scheduled = new WeakMap<QueryClient, ReturnType<typeof setTimeout>>()
+
+/** Coalesce queue/status/stats events into one invalidation per short burst. */
+export function scheduleLiveInvalidation(client: QueryClient): void {
+  if (scheduled.has(client)) return
+  scheduled.set(client, setTimeout(() => {
+    scheduled.delete(client)
+    invalidateQueueQueries(client)
+    void client.invalidateQueries({ queryKey: ['analytics'], exact: false })
+    void client.invalidateQueries({ queryKey: ['timeline'], exact: false })
+  }, 250))
 }

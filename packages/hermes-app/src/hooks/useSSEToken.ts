@@ -1,70 +1,63 @@
-import { useEffect, useState } from 'react';
-import { apiClient } from '@/services/api/client';
+import { useCallback, useEffect, useState } from 'react'
+import { apiClient } from '@/services/api/client'
+import type { components } from '@/types/api.generated'
 
-const TOKEN_RENEWAL_BUFFER_MS = 60_000;
-const MIN_RENEWAL_DELAY_MS = 1_000;
+type TokenResponse = components['schemas']['SSETokenResponse']
+const BUFFER = 60_000
 
-interface SSETokenState {
-  token: string | null;
-  error: Error | null;
+function renewalDelay(response: TokenResponse): number {
+  return Math.max(
+    1000,
+    Math.min(response.ttl * 1000, Date.parse(response.expiresAt) - Date.now()) - BUFFER
+  )
 }
 
-interface SSETokenResponse {
-  token: string;
-  expires_at?: string;
-  expiresAt?: string;
-  ttl?: number;
-}
-
-function getRenewalDelay(response: SSETokenResponse, requestedTtl: number): number {
-  const ttlDelay = (response.ttl ?? requestedTtl) * 1000 - TOKEN_RENEWAL_BUFFER_MS;
-  const expiry = response.expires_at ?? response.expiresAt;
-
-  if (expiry) {
-    const expiryDelay = Date.parse(expiry) - Date.now() - TOKEN_RENEWAL_BUFFER_MS;
-    if (Number.isFinite(expiryDelay) && expiryDelay > 0) {
-      return Math.max(Math.min(expiryDelay, ttlDelay), MIN_RENEWAL_DELAY_MS);
-    }
-  }
-
-  return Math.max(ttlDelay, MIN_RENEWAL_DELAY_MS);
-}
-
-export function useSSEToken(scope: string, ttl: number, errorMessage: string): SSETokenState {
-  const [token, setToken] = useState<string | null>(null);
-  const [error, setError] = useState<Error | null>(null);
-
+export function useSSEToken(scope: string, ttl: number, enabled = true) {
+  const [state, setState] = useState<{ scope: string; token: string | null; error: Error | null }>({
+    scope,
+    token: null,
+    error: null,
+  })
+  const [attempt, setAttempt] = useState(0)
+  const retry = useCallback(() => setAttempt((value) => value + 1), [])
   useEffect(() => {
-    let mounted = true;
-    let renewalTimeout: ReturnType<typeof setTimeout> | null = null;
-
-    async function fetchSSEToken() {
+    if (!enabled) return
+    const controller = new AbortController()
+    let timer: ReturnType<typeof setTimeout>
+    let failures = 0
+    async function fetchToken() {
       try {
-        const response = await apiClient.createSSEToken({ scope, ttl });
-
-        if (!mounted) return;
-
-        setToken(response.token);
-        setError(null);
-
-        renewalTimeout = setTimeout(fetchSSEToken, getRenewalDelay(response, ttl));
-      } catch (err) {
-        console.error(errorMessage, err);
-        if (mounted) {
-          setError(err instanceof Error ? err : new Error('Failed to fetch SSE token'));
-        }
+        const response = await apiClient.createSSEToken({ scope, ttl }, controller.signal)
+        if (controller.signal.aborted) return
+        failures = 0
+        setState({ scope, token: response.token, error: null })
+        timer = setTimeout(() => {
+          void fetchToken()
+        }, renewalDelay(response))
+      } catch (error) {
+        if (controller.signal.aborted) return
+        setState((previous) => ({
+          scope,
+          token: previous.scope === scope ? previous.token : null,
+          error: error instanceof Error ? error : new Error('Live updates unavailable'),
+        }))
+        timer = setTimeout(
+          () => {
+            void fetchToken()
+          },
+          Math.min(1000 * 2 ** failures++, 30_000)
+        )
       }
     }
-
-    fetchSSEToken();
-
+    void fetchToken()
     return () => {
-      mounted = false;
-      if (renewalTimeout) {
-        clearTimeout(renewalTimeout);
-      }
-    };
-  }, [scope, ttl, errorMessage]);
-
-  return { token, error };
+      controller.abort()
+      clearTimeout(timer)
+    }
+  }, [scope, ttl, attempt, enabled])
+  return {
+    token: enabled && state.scope === scope ? state.token : null,
+    error: state.scope === scope ? state.error : null,
+    retry,
+  }
 }

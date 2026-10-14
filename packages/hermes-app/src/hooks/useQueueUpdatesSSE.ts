@@ -1,15 +1,15 @@
+import { debug } from '@/lib/debug'
 import { useEffect, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSSE } from './useSSE';
 import { useSSEToken } from './useSSEToken';
 import { getApiBaseUrl } from '@/lib/config';
-import { invalidateQueueQueries } from '@/lib/queryClient';
+import { scheduleLiveInvalidation } from '@/lib/queryClient';
 
 export interface QueueUpdate {
   action: 'added' | 'removed' | 'status_changed';
   download_id: string;
   status?: string;
-  [key: string]: unknown;
 }
 
 /**
@@ -37,8 +37,7 @@ export function useQueueUpdatesSSE() {
   const queryClient = useQueryClient();
   const { token: sseToken, error: tokenError } = useSSEToken(
     'queue',
-    600,
-    'Failed to fetch SSE token for queue:'
+    600
   );
 
   // Build SSE URL with ephemeral token
@@ -56,7 +55,7 @@ export function useQueueUpdatesSSE() {
       reconnectDelay: 1000,
       maxReconnectDelay: 30000,
       onError: (err: Error) => {
-        console.error('Queue SSE connection error:', err);
+        debug.error('Queue SSE connection error:', err);
       },
     }),
     []
@@ -70,15 +69,9 @@ export function useQueueUpdatesSSE() {
   // Invalidate queue queries when updates arrive
   useEffect(() => {
     if (data) {
-      invalidateQueueQueries(queryClient);
+      scheduleLiveInvalidation(queryClient);
 
-      // Optionally, update specific download in cache
-      if (data.download_id) {
-        queryClient.invalidateQueries({
-          queryKey: ['download', 'progress', data.download_id],
-          exact: false,
-        });
-      }
+
     }
   }, [data, queryClient]);
 

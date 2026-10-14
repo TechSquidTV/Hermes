@@ -8,11 +8,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { userEvent } from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { QueueView } from '../QueueView'
+import { QueueView as ControlledQueueView } from '../QueueView'
+import { useState, type ComponentProps } from 'react'
+import { validateQueueSearch } from '@/lib/queueSearch'
+
+function QueueView() {
+  const [search, setSearch] = useState(validateQueueSearch({}))
+  return <ControlledQueueView search={search} onChange={patch => setSearch(previous => ({ ...previous, ...patch }))} />
+}
 
 // Mock child components
 vi.mock('../QueueFilters', () => ({
-  QueueFilters: ({ viewMode, onStatusFilterChange, onSearchQueryChange, onSortChange }: any) => (
+  QueueFilters: ({ viewMode, onStatusFilterChange, onSearchQueryChange, onSortChange }: ComponentProps<typeof import('../QueueFilters').QueueFilters>) => (
     <div data-testid={`queue-filters-${viewMode}`}>
       <button onClick={() => onStatusFilterChange('downloading')}>Change Status</button>
       <button onClick={() => onSearchQueryChange('test')}>Change Search</button>
@@ -26,46 +33,13 @@ vi.mock('../QueueCharts', () => ({
 }))
 
 vi.mock('../QueueTabContent', () => ({
-  QueueTabContent: ({ viewMode, showStats }: any) => (
+  QueueTabContent: ({ viewMode, showStats }: ComponentProps<typeof import('../QueueTabContent').QueueTabContent>) => (
     <div data-testid={`queue-tab-content-${viewMode}`}>
       Content for {viewMode}
       {showStats && <span data-testid="shows-stats">With Stats</span>}
     </div>
   ),
 }))
-
-vi.mock('@/hooks/useViewMode', () => {
-  const { useState } = require('react')
-
-  return {
-    useViewMode: () => {
-      const [mode, setMode] = useState('active')
-      return { mode, setMode }
-    },
-  }
-})
-
-vi.mock('@/hooks/useFilters', () => {
-  const { useState } = require('react')
-
-  return {
-    useFilters: () => {
-      const [filters, setFilters] = useState({
-        statusFilter: 'all',
-        searchQuery: '',
-        sortBy: 'created_at',
-        sortOrder: 'desc',
-        viewMode: 'active',
-      })
-
-      const updateFilter = (key: string, value: any) => {
-        setFilters((prev: any) => ({ ...prev, [key]: value }))
-      }
-
-      return { filters, updateFilter }
-    },
-  }
-})
 
 describe('QueueView', () => {
   let queryClient: QueryClient

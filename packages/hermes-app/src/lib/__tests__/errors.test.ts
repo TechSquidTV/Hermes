@@ -8,54 +8,23 @@ import { describe, it, expect } from 'vitest'
 import { ApiError, extractStatusCode, isNetworkError } from '../errors'
 
 describe('ApiError', () => {
-  it('creates ApiError with message only', () => {
-    const error = new ApiError('Test error')
-
+  it('retains an HTTP status and server detail', () => {
+    const error = new ApiError(422, 'Invalid URL')
     expect(error).toBeInstanceOf(Error)
-    expect(error).toBeInstanceOf(ApiError)
-    expect(error.name).toBe('ApiError')
-    expect(error.message).toBe('Test error')
-    expect(error.statusCode).toBeUndefined()
-    expect(error.response).toBeUndefined()
-  })
-
-  it('creates ApiError with status code', () => {
-    const error = new ApiError('Unauthorized', 401)
-
-    expect(error.message).toBe('Unauthorized')
-    expect(error.statusCode).toBe(401)
-    expect(error.response).toBeUndefined()
-  })
-
-  it('creates ApiError with status code and response', () => {
-    const mockResponse = new Response('{}', { status: 401 })
-    const error = new ApiError('Unauthorized', 401, mockResponse)
-
-    expect(error.message).toBe('Unauthorized')
-    expect(error.statusCode).toBe(401)
-    expect(error.response).toBe(mockResponse)
-  })
-
-  it('creates ApiError with all parameters', () => {
-    const mockResponse = new Response('{}', { status: 500 })
-    const error = new ApiError('Internal Server Error', 500, mockResponse)
-
-    expect(error.name).toBe('ApiError')
-    expect(error.message).toBe('Internal Server Error')
-    expect(error.statusCode).toBe(500)
-    expect(error.response).toBe(mockResponse)
+    expect(error.status).toBe(422)
+    expect(error.message).toBe('HTTP 422: Invalid URL')
   })
 })
 
 describe('extractStatusCode', () => {
   describe('ApiError instances', () => {
     it('extracts status code from ApiError', () => {
-      const error = new ApiError('Test', 404)
+      const error = new ApiError(404, 'Test')
       expect(extractStatusCode(error)).toBe(404)
     })
 
     it('returns undefined for ApiError without status code', () => {
-      const error = new ApiError('Test')
+      const error = new Error('Test')
       expect(extractStatusCode(error)).toBeUndefined()
     })
   })
@@ -195,7 +164,7 @@ describe('extractStatusCode', () => {
     })
 
     it('handles custom API errors', () => {
-      const error = new ApiError('Authentication failed', 401)
+      const error = new ApiError(401, 'Authentication failed')
       expect(extractStatusCode(error)).toBe(401)
     })
   })

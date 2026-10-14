@@ -1,61 +1,50 @@
 // API Client for Hermes Video Downloader
 
+import type { QueueRequestParams } from '@/types'
 import type { components } from '@/types/api.generated'
 
-type VideoInfo = components["schemas"]["VideoInfo"]
-type HealthResponse = components["schemas"]["HealthResponse"]
-type DailyStats = components["schemas"]["DailyStats"]
-type TimelineSummary = components["schemas"]["TimelineSummary"]
-type DownloadRequest = components["schemas"]["DownloadRequest"]
-type DownloadResponse = components["schemas"]["DownloadResponse"]
-type DownloadStatus = components["schemas"]["DownloadStatus"]
-type CancelResponse = components["schemas"]["CancelResponse"]
-type FormatInfo = components["schemas"]["FormatInfo"]
-type Configuration = components["schemas"]["Configuration"]
-type ConfigurationUpdate = components["schemas"]["ConfigurationUpdate"]
-type BatchDownloadRequest = components["schemas"]["BatchDownloadRequest"]
-type BatchDownloadResponse = components["schemas"]["BatchDownloadResponse"]
-type DownloadQueue = components["schemas"]["DownloadQueue"]
-type FileList = components["schemas"]["FileList"]
-type DeleteFilesResponse = components["schemas"]["DeleteFilesResponse"]
-type DownloadHistory = components["schemas"]["DownloadHistory"]
-type StorageInfo = components["schemas"]["StorageInfo"]
-type ApiStatistics = components["schemas"]["ApiStatistics"]
-type CleanupRequest = components["schemas"]["CleanupRequest"]
-type CleanupResponse = components["schemas"]["CleanupResponse"]
-type ApiKeyCreate = components["schemas"]["ApiKeyCreate"]
-type ApiKeyResponse = components["schemas"]["ApiKeyResponse"]
-type ApiKeyListResponse = components["schemas"]["ApiKeyListResponse"]
+type VideoInfo = components['schemas']['VideoInfo']
+type HealthResponse = components['schemas']['HealthResponse']
+type DailyStats = components['schemas']['DailyStats']
+type TimelineSummary = components['schemas']['TimelineSummary']
+type DownloadRequest = components['schemas']['DownloadRequest']
+type DownloadResponse = components['schemas']['DownloadResponse']
+type DownloadStatus = components['schemas']['DownloadStatus']
+type CancelResponse = components['schemas']['CancelResponse']
+type FormatInfo = components['schemas']['FormatInfo']
+type Configuration = components['schemas']['Configuration']
+type ConfigurationUpdate = components['schemas']['ConfigurationUpdate']
+type BatchDownloadRequest = components['schemas']['BatchDownloadRequest']
+type BatchDownloadResponse = components['schemas']['BatchDownloadResponse']
+type DownloadQueue = components['schemas']['DownloadQueue']
+type FileList = components['schemas']['FileList']
+type DeleteFilesResponse = components['schemas']['DeleteFilesResponse']
+type DownloadHistory = components['schemas']['DownloadHistory']
+type StorageInfo = components['schemas']['StorageInfo']
+type ApiStatistics = components['schemas']['ApiStatistics']
+type CleanupRequest = components['schemas']['CleanupRequest']
+type CleanupResponse = components['schemas']['CleanupResponse']
+type ApiKeyCreate = components['schemas']['ApiKeyCreate']
+type ApiKeyResponse = components['schemas']['ApiKeyResponse']
+type ApiKeyListResponse = components['schemas']['ApiKeyListResponse']
 
-// SSE Token types
-interface CreateSSETokenRequest {
-  scope: string
-  ttl?: number
-}
-
-interface SSETokenResponse {
-  token: string
-  expires_at: string
-  scope: string
-  permissions: string[]
-  ttl: number
-}
+type CreateSSETokenRequest = components['schemas']['CreateSSETokenRequest']
+type SSETokenResponse = components['schemas']['SSETokenResponse']
 
 import { TokenStorage } from '@/utils/tokenStorage'
 import { getApiBaseUrl } from '@/lib/config'
 import { refreshSession } from '../session'
+import { checkResponse, isAuthenticationError, waitForSignal, withRequestSignal } from '../http'
 
 interface ApiRequestInit extends RequestInit {
   skipAuth?: boolean
+  timeoutMs?: number
 }
 
 type SearchParamValue = string | number | boolean | null | undefined
 type SearchParams = Record<string, SearchParamValue>
 
-function buildSearchParams(
-  params?: SearchParams,
-  initialParams?: SearchParams
-): URLSearchParams {
+function buildSearchParams(params?: SearchParams, initialParams?: SearchParams): URLSearchParams {
   const searchParams = new URLSearchParams()
 
   const appendParams = (values?: SearchParams) => {
@@ -79,102 +68,66 @@ class ApiClient {
 
   constructor() {
     this.baseURL = getApiBaseUrl()
-    console.log(`[ApiClient] Using API base URL: ${this.baseURL}`)
   }
 
   public getBaseURL(): string {
     return this.baseURL
   }
 
-  private async getAuthHeaders(): Promise<Record<string, string>> {
-    const token = TokenStorage.getAccessToken()
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+  private async send(
+    endpoint: string,
+    options: ApiRequestInit,
+    signal: AbortSignal
+  ): Promise<Response> {
+    const { skipAuth = false, timeoutMs: _, ...init } = options
+    const headers = new Headers(init.headers)
+    if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+    const version = TokenStorage.getVersion()
+    const renew = async () => {
+      try {
+        await waitForSignal(refreshSession(), signal)
+      } catch (error) {
+        if (isAuthenticationError(error) && version === TokenStorage.getVersion())
+          TokenStorage.clearTokens()
+        throw error
+      }
     }
+    if (!skipAuth && !TokenStorage.getAccessToken() && TokenStorage.getRefreshToken()) await renew()
+    const token = skipAuth ? null : TokenStorage.getAccessToken()
+    if (!skipAuth && token) headers.set('Authorization', `Bearer ${token}`)
+    const url = `${this.baseURL}${endpoint}`
+    const response = await fetch(url, { ...init, headers, signal })
+    if (response.status !== 401 || skipAuth) return checkResponse(response)
 
-    if (token) {
-      headers.Authorization = `Bearer ${token}`
+    if (version !== TokenStorage.getVersion())
+      throw new DOMException('Session changed', 'AbortError')
+    const currentToken = TokenStorage.getAccessToken()
+    if (!currentToken || headers.get('Authorization') === `Bearer ${currentToken}`) {
+      await renew()
     }
-
-    return headers
-  }
-
-  // Enhanced method for handling auth errors with better error messages
-  private handleAuthError(error: unknown): Error {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-
-    if (errorMessage.includes('401')) {
-      return new Error('401: Authentication required')
-    }
-
-    if (errorMessage.includes('403')) {
-      return new Error('403: Access denied')
-    }
-
-    if (errorMessage.includes('429')) {
-      return new Error('429: Too many requests, please try again later')
-    }
-
-    return new Error(`Authentication error: ${errorMessage}`)
+    signal.throwIfAborted()
+    const replacement = TokenStorage.getAccessToken()
+    if (replacement) headers.set('Authorization', `Bearer ${replacement}`)
+    else headers.delete('Authorization')
+    const retried = await fetch(url, { ...init, headers, signal })
+    if (retried.status === 401 && version === TokenStorage.getVersion()) TokenStorage.clearTokens()
+    return checkResponse(retried)
   }
 
   async request<T>(endpoint: string, options: ApiRequestInit = {}): Promise<T> {
-    // Use endpoint as-is to match exact backend route definitions
-    // FastAPI routes without trailing slashes should not receive them from the client
-    const url = `${this.baseURL}${endpoint}`
+    return withRequestSignal(options.signal, options.timeoutMs ?? 30_000, async (signal) => {
+      const response = await this.send(endpoint, options, signal)
+      if (response.status === 204) return undefined as T
+      return response.json()
+    })
+  }
 
-    // Add auth headers unless skipAuth is true
-    const skipAuth = options.skipAuth ?? false
-    const { skipAuth: _, ...fetchOptions } = options
-
-    if (!skipAuth) {
-      const headers = await this.getAuthHeaders()
-      fetchOptions.headers = {
-        ...headers,
-        ...fetchOptions.headers,
-      }
-    } else {
-      fetchOptions.headers = {
-        'Content-Type': 'application/json',
-        ...fetchOptions.headers,
-      }
-    }
-
-    // Handle 401 errors by attempting token refresh
-    const response = await fetch(url, fetchOptions)
-
-    if (response.status === 401 && !skipAuth) {
-      const sentAuthorization = new Headers(fetchOptions.headers).get('Authorization')
-      const currentToken = TokenStorage.getAccessToken()
-      // A slower expired request may return after another request has already
-      // refreshed. Retry with that replacement instead of rotating again.
-      if (!currentToken || sentAuthorization === `Bearer ${currentToken}`) {
-        const refreshToken = TokenStorage.getRefreshToken()
-        try {
-          await refreshSession()
-        } catch (refreshError) {
-          if (TokenStorage.getRefreshToken() === refreshToken) {
-            TokenStorage.clearTokens()
-            window.location.href = '/auth/login'
-          }
-          throw this.handleAuthError(refreshError)
-        }
-      }
-
-      const newHeaders = await this.getAuthHeaders()
-      fetchOptions.headers = { ...fetchOptions.headers, ...newHeaders }
-      const retryResponse = await fetch(url, fetchOptions)
-      if (!retryResponse.ok) {
-        throw this.handleAuthError(new Error(`HTTP ${retryResponse.status}: ${retryResponse.statusText}`))
-      }
-      return retryResponse.json()
-    }
-
-    if (!response.ok) {
-      throw this.handleAuthError(new Error(`HTTP ${response.status}: ${response.statusText}`))
-    }
-
-    return response.json()
+  async downloadFile(filePath: string): Promise<Blob> {
+    return withRequestSignal(undefined, 300_000, async (signal) => {
+      const params = buildSearchParams({ path: filePath })
+      const response = await this.send(`/files/download?${params}`, {}, signal)
+      return response.blob()
+    })
   }
 
   // Health check - Use trailing slash to match API router
@@ -183,9 +136,9 @@ class ApiClient {
   }
 
   // Video information
-  async getVideoInfo(url: string, includeFormats = true): Promise<VideoInfo> {
-    const params = new URLSearchParams({ url, include_formats: includeFormats.toString() })
-    return this.request<VideoInfo>(`/info/?${params}`)
+  async getVideoInfo(url: string, includeFormats = true, signal?: AbortSignal): Promise<VideoInfo> {
+    const params = buildSearchParams({ url, include_formats: includeFormats })
+    return this.request<VideoInfo>(`/info/?${params}`, { signal })
   }
 
   // Download management
@@ -196,8 +149,8 @@ class ApiClient {
     })
   }
 
-  async getDownloadStatus(downloadId: string): Promise<DownloadStatus> {
-    return this.request<DownloadStatus>(`/download/${downloadId}`)
+  async getDownloadStatus(downloadId: string, signal?: AbortSignal): Promise<DownloadStatus> {
+    return this.request<DownloadStatus>(`/download/${downloadId}`, { signal })
   }
 
   async cancelDownload(downloadId: string): Promise<CancelResponse> {
@@ -214,15 +167,28 @@ class ApiClient {
     })
   }
 
-  async getDownloadQueue(status?: string, limit = 20, offset = 0): Promise<DownloadQueue> {
-    const params = new URLSearchParams({
-      limit: limit.toString(),
-      offset: offset.toString(),
+  async getDownloadQueue(
+    status?: string,
+    limit = 20,
+    offset = 0,
+    filters: {
+      viewMode?: QueueRequestParams['view_mode']
+      search?: string
+      sortBy?: QueueRequestParams['sort_by']
+      sortOrder?: QueueRequestParams['sort_order']
+    } = {},
+    signal?: AbortSignal
+  ): Promise<DownloadQueue> {
+    const params = buildSearchParams({
+      status: status === 'all' ? undefined : status,
+      limit,
+      offset,
+      view_mode: filters.viewMode,
+      search: filters.search,
+      sort_by: filters.sortBy,
+      sort_order: filters.sortOrder,
     })
-    if (status && status !== 'all') {
-      params.append('status', status)
-    }
-    return this.request<DownloadQueue>(`/queue/?${params}`)
+    return this.request<DownloadQueue>(`/queue/?${params}`, { signal })
   }
 
   // File management
@@ -318,15 +284,6 @@ class ApiClient {
     })
   }
 
-  // Legacy method - deprecated, use getAdminConfig() instead
-  async getConfiguration(): Promise<Configuration> {
-    return this.getAdminConfig()
-  }
-
-  async updateConfiguration(config: ConfigurationUpdate): Promise<Configuration> {
-    return this.updateAdminConfig(config)
-  }
-
   // Admin Settings
   async getAdminSettings(): Promise<{
     allowPublicSignup: boolean
@@ -367,11 +324,11 @@ class ApiClient {
 
   // Delete downloaded files
   async deleteFiles(filePaths: string[]): Promise<DeleteFilesResponse> {
-    return this.request<DeleteFilesResponse>('/files', {
+    return this.request<DeleteFilesResponse>('/files/', {
       method: 'DELETE',
       body: JSON.stringify({
         files: filePaths,
-        confirm: true
+        confirm: true,
       }),
     })
   }
@@ -399,17 +356,15 @@ class ApiClient {
    * );
    * ```
    */
-  async createSSEToken(request: CreateSSETokenRequest): Promise<SSETokenResponse> {
+  async createSSEToken(
+    request: CreateSSETokenRequest,
+    signal?: AbortSignal
+  ): Promise<SSETokenResponse> {
     return this.request<SSETokenResponse>('/events/token', {
+      signal,
       method: 'POST',
       body: JSON.stringify(request),
     })
-  }
-
-  // Get download file URL for direct download
-  getDownloadFileUrl(filePath: string): string {
-    // Construct the download URL with the file path as a query parameter
-    return `${this.baseURL}/files/download?path=${encodeURIComponent(filePath)}`
   }
 }
 

@@ -1,156 +1,122 @@
-// Secure token storage utilities
+import { debug } from '@/lib/debug'
+import type { components } from '@/types/api.generated'
 
+type Tokens = Pick<components['schemas']['TokenResponse'], 'accessToken' | 'refreshToken'>
+
+/** Credentials persist in localStorage. They are accessible to same-origin scripts. */
 export class TokenStorage {
   private static readonly ACCESS_TOKEN_KEY = 'hermes_access_token'
   private static readonly REFRESH_TOKEN_KEY = 'hermes_refresh_token'
-  private static readonly TOKEN_EXPIRY_KEY = 'hermes_token_expiry'
+  private static version = 0
 
-  /**
-   * Store access token with optional expiry
-   */
-  static setAccessToken(token: string, expiresInMinutes?: number): void {
+  private static listeners = new Set<() => void>()
+  static getVersion = (): number => TokenStorage.version
+  private static notify(): void {
+    this.listeners.forEach((listener) => listener())
+  }
+  private static onStorage = (event: StorageEvent): void => {
+    if (
+      event.key === null ||
+      event.key === TokenStorage.ACCESS_TOKEN_KEY ||
+      event.key === TokenStorage.REFRESH_TOKEN_KEY
+    ) {
+      TokenStorage.version += 1
+      TokenStorage.notify()
+    }
+  }
+  static subscribe = (listener: () => void): (() => void) => {
+    if (TokenStorage.listeners.size === 0)
+      window.addEventListener('storage', TokenStorage.onStorage)
+    TokenStorage.listeners.add(listener)
+    return () => {
+      TokenStorage.listeners.delete(listener)
+      if (TokenStorage.listeners.size === 0)
+        window.removeEventListener('storage', TokenStorage.onStorage)
+    }
+  }
+
+  static setTokens(tokens: Tokens, newSession = true): void {
+    if (newSession) this.version += 1
+    this.setAccessToken(tokens.accessToken)
+    this.setRefreshToken(tokens.refreshToken)
+    if (newSession) this.notify()
+  }
+
+  static setAccessToken(token: string): void {
     try {
-      // Store in sessionStorage for additional security
-      sessionStorage.setItem(this.ACCESS_TOKEN_KEY, token)
-
-      // Also store in localStorage for persistence across browser sessions
       localStorage.setItem(this.ACCESS_TOKEN_KEY, token)
-
-      // Store expiry time if provided
-      if (expiresInMinutes) {
-        const expiryTime = Date.now() + (expiresInMinutes * 60 * 1000)
-        localStorage.setItem(this.TOKEN_EXPIRY_KEY, expiryTime.toString())
-      }
-
     } catch (error) {
-      console.warn('[TokenStorage] SessionStorage failed, falling back to localStorage:', error)
-      try {
-        localStorage.setItem(this.ACCESS_TOKEN_KEY, token)
-      } catch (localStorageError) {
-        console.error('[TokenStorage] Failed to store token in localStorage:', localStorageError)
-      }
+      debug.error('Unable to store access token', error)
     }
   }
 
-  /**
-   * Get access token, checking expiry
-   */
-  static getAccessToken(): string | null {
+  static getTokenExpiry(): number | null {
+    const token = this.read(this.ACCESS_TOKEN_KEY)
+    const encoded = token?.split('.')[1]
+    if (!encoded) return null
     try {
-      // Try sessionStorage first
-      const token = sessionStorage.getItem(this.ACCESS_TOKEN_KEY) ||
-                   localStorage.getItem(this.ACCESS_TOKEN_KEY)
-
-      if (!token) {
-        return null
-      }
-
-      // Check if token has expired
-      const expiryTime = localStorage.getItem(this.TOKEN_EXPIRY_KEY)
-      if (expiryTime) {
-        const isExpired = Date.now() > parseInt(expiryTime)
-        if (isExpired) {
-          this.clearAccessToken()
-          return null
-        }
-      }
-
-      return token
-    } catch (error) {
-      console.warn('[TokenStorage] Error retrieving token:', error)
-      try {
-        return localStorage.getItem(this.ACCESS_TOKEN_KEY)
-      } catch {
-        return null
-      }
-    }
-  }
-
-  /**
-   * Store refresh token (longer term storage)
-   */
-  static setRefreshToken(token: string): void {
-    try {
-      // Use localStorage for refresh tokens (longer persistence)
-      localStorage.setItem(this.REFRESH_TOKEN_KEY, token)
-    } catch (error) {
-      console.warn('[TokenStorage] Failed to store refresh token:', error)
-    }
-  }
-
-  /**
-   * Get refresh token
-   */
-  static getRefreshToken(): string | null {
-    try {
-      return localStorage.getItem(this.REFRESH_TOKEN_KEY)
-    } catch (error) {
-      console.warn('[TokenStorage] Error retrieving refresh token:', error)
+      const payload: { exp?: number } = JSON.parse(
+        atob(encoded.replace(/-/g, '+').replace(/_/g, '/'))
+      )
+      return typeof payload.exp === 'number' && Number.isFinite(payload.exp)
+        ? payload.exp * 1000
+        : null
+    } catch {
       return null
     }
   }
 
-  /**
-   * Clear all tokens
-   */
-  static clearTokens(): void {
-    this.clearAccessToken()
+  static getAccessToken(): string | null {
+    const expiry = this.getTokenExpiry()
+    if (expiry !== null && Date.now() >= expiry) return null
+    return this.read(this.ACCESS_TOKEN_KEY)
+  }
 
+  static setRefreshToken(token: string): void {
+    try {
+      localStorage.setItem(this.REFRESH_TOKEN_KEY, token)
+    } catch (error) {
+      debug.error('Unable to store refresh token', error)
+    }
+  }
+
+  private static read(key: string): string | null {
+    try {
+      return localStorage.getItem(key)
+    } catch {
+      return null
+    }
+  }
+
+  static getRefreshToken(): string | null {
+    return this.read(this.REFRESH_TOKEN_KEY)
+  }
+
+  static clearTokens(): void {
+    this.version += 1
+    this.clearAccessToken()
     try {
       localStorage.removeItem(this.REFRESH_TOKEN_KEY)
     } catch (error) {
-      console.warn('[TokenStorage] Failed to clear refresh token:', error)
+      debug.error('Unable to clear refresh token', error)
     }
+    this.notify()
   }
 
-  /**
-   * Clear only the short-lived access token and its client expiry marker.
-   */
   static clearAccessToken(): void {
     try {
-      sessionStorage.removeItem(this.ACCESS_TOKEN_KEY)
-    } catch (error) {
-      console.warn('[TokenStorage] Failed to clear sessionStorage:', error)
-    }
-
-    try {
       localStorage.removeItem(this.ACCESS_TOKEN_KEY)
-      localStorage.removeItem(this.TOKEN_EXPIRY_KEY)
     } catch (error) {
-      console.warn('[TokenStorage] Failed to clear localStorage:', error)
+      debug.error('Unable to clear access token', error)
     }
   }
 
-  /**
-   * Check if user has valid tokens
-   */
   static hasValidTokens(): boolean {
-    const token = this.getAccessToken()
-    const refreshToken = this.getRefreshToken()
-    return !!(token && refreshToken)
+    return !!(this.getAccessToken() && this.getRefreshToken())
   }
 
-  /**
-   * Get token expiry time
-   */
-  static getTokenExpiry(): number | null {
-    try {
-      const expiryTime = localStorage.getItem(this.TOKEN_EXPIRY_KEY)
-      return expiryTime ? parseInt(expiryTime) : null
-    } catch (error) {
-      console.warn('[TokenStorage] Error retrieving token expiry:', error)
-      return null
-    }
-  }
-
-  /**
-   * Check if token is close to expiry (within 5 minutes)
-   */
   static isTokenNearExpiry(): boolean {
-    const expiryTime = this.getTokenExpiry()
-    if (!expiryTime) return false
-
-    const fiveMinutesFromNow = Date.now() + (5 * 60 * 1000)
-    return expiryTime <= fiveMinutesFromNow
+    const expiry = this.getTokenExpiry()
+    return expiry !== null && expiry <= Date.now() + 5 * 60_000
   }
 }

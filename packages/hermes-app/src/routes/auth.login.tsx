@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -10,29 +10,17 @@ import { Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 import { HermesLogoLight } from '@/components/hermes-logo'
-import { configService } from '@/services/config'
+import { usePublicConfig } from '@/hooks/usePublicConfig'
+import { ErrorDisplay } from '@/components/ui/error-display'
 
 function LoginPage() {
   const [identifier, setIdentifier] = useState('') // Can be username or email
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [allowPublicSignup, setAllowPublicSignup] = useState(true)
+  const publicConfig = usePublicConfig()
+  const allowPublicSignup = publicConfig.data?.allowPublicSignup ?? false
   const { login } = useAuth()
   const navigate = useNavigate()
-
-  useEffect(() => {
-    const checkSignupStatus = async () => {
-      try {
-        const config = await configService.getPublicConfig()
-        setAllowPublicSignup(config.allowPublicSignup)
-      } catch (error) {
-        console.error('[Login] Failed to fetch public config:', error)
-        setAllowPublicSignup(true)
-      }
-    }
-
-    checkSignupStatus()
-  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -41,9 +29,9 @@ function LoginPage() {
     try {
       await login({ username: identifier, password })
       toast.success('Login successful!')
-      navigate({ to: '/' })
-    } catch (_error) {
-      toast.error('Login failed. Please check your credentials.')
+      void navigate({ to: '/' })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Login failed. Please try again.')
     } finally {
       setIsLoading(false)
     }
@@ -119,6 +107,7 @@ function LoginPage() {
           </form>
         </CardContent>
         <CardFooter className="flex flex-col space-y-4">
+          {publicConfig.isError && <ErrorDisplay message="Unable to check signup availability" onRetry={() => { void publicConfig.refetch() }} />}
           {allowPublicSignup && (
             <>
               <div className="relative w-full">

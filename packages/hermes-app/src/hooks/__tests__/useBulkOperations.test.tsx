@@ -150,16 +150,16 @@ describe('useBulkOperations', () => {
   it('cancels only selected queued, downloading, or processing items', async () => {
     const onSuccess = vi.fn()
     const items: BulkItem[] = [
-      { id: 'queued', title: 'Queued', status: 'queued' },
+      { id: 'pending', title: 'Queued', status: 'pending' },
       { id: 'downloading', title: 'Downloading', status: 'downloading' },
       { id: 'processing', title: 'Processing', status: 'processing' },
       { id: 'completed', title: 'Completed', status: 'completed' },
-      { id: 'unselected', title: 'Unselected', status: 'queued' },
+      { id: 'unselected', title: 'Unselected', status: 'pending' },
     ]
     const { result, invalidateQueries } = renderBulkOperations({ onSuccess })
 
     act(() => {
-      result.current.selectItem('queued')
+      result.current.selectItem('pending')
       result.current.selectItem('downloading')
       result.current.selectItem('processing')
       result.current.selectItem('completed')
@@ -169,7 +169,7 @@ describe('useBulkOperations', () => {
     })
 
     expect(mockCancelDownload).toHaveBeenCalledTimes(3)
-    expect(mockCancelDownload).toHaveBeenCalledWith('queued')
+    expect(mockCancelDownload).toHaveBeenCalledWith('pending')
     expect(mockCancelDownload).toHaveBeenCalledWith('downloading')
     expect(mockCancelDownload).toHaveBeenCalledWith('processing')
     expect(mockCancelDownload).not.toHaveBeenCalledWith('completed')
@@ -184,26 +184,39 @@ describe('useBulkOperations', () => {
     expect(result.current.selectedCount).toBe(0)
   })
 
-  it('reports bulk cancel failures and preserves the selection', async () => {
+  it('reports bulk cancel failures and refreshes the affected selection', async () => {
     const onError = vi.fn()
     const items: BulkItem[] = [
-      { id: 'queued', title: 'Queued', status: 'queued' },
+      { id: 'pending', title: 'Queued', status: 'pending' },
     ]
     mockCancelDownload.mockRejectedValueOnce(new Error('Network failed'))
     const { result } = renderBulkOperations({ onError })
 
     act(() => {
-      result.current.selectItem('queued')
+      result.current.selectItem('pending')
     })
     await act(async () => {
       await result.current.bulkCancel(items)
     })
 
     expect(mockToast.error).toHaveBeenCalledWith(
-      'Failed to cancel downloads: Network failed'
+      'Cancelled 0 of 1 downloads (1 failed)'
     )
     expect(onError).toHaveBeenCalledWith(expect.any(Error))
-    expect(result.current.selectedCount).toBe(1)
+    expect(result.current.selectedCount).toBe(0)
     expect(result.current.isProcessing).toBe(false)
   })
+  it('counts partial cancellations and server refusals, then invalidates the queue', async () => {
+    mockCancelDownload.mockResolvedValueOnce({ downloadId: 'one', cancelled: true, message: 'Cancelled' })
+      .mockRejectedValueOnce(new Error('Offline'))
+      .mockResolvedValueOnce({ downloadId: 'three', cancelled: false, message: 'Already completed' })
+    const { result, invalidateQueries } = renderBulkOperations()
+    const items: BulkItem[] = ['one', 'two', 'three'].map(id => ({ id, title: id, status: 'pending' }))
+    act(() => items.forEach(item => result.current.selectItem(item.id)))
+    await act(async () => { await result.current.bulkCancel(items) })
+    expect(mockToast.error).toHaveBeenCalledWith('Cancelled 1 of 3 downloads (2 failed)')
+    expect(result.current.selectedCount).toBe(0)
+    expect(invalidateQueries).toHaveBeenCalledOnce()
+  })
+
 })

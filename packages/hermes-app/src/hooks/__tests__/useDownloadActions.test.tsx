@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { apiClient } from '@/services/api/client'
-import { TokenStorage } from '@/utils/tokenStorage'
+import { ApiError } from '@/lib/errors'
 import {
   useCancelDownload,
   useDeleteFiles,
@@ -17,7 +17,7 @@ vi.mock('@/services/api/client', () => ({
     startDownload: vi.fn(),
     deleteFiles: vi.fn(),
     cancelDownload: vi.fn(),
-    getDownloadFileUrl: vi.fn(() => '/api/v1/files/download?path=video.mp4'),
+    downloadFile: vi.fn(),
   },
 }))
 
@@ -110,39 +110,36 @@ describe('useDownloadActions', () => {
       status: 404,
       body: '{"detail":"File not found"}',
       statusText: '',
-      message: 'Download failed: HTTP 404: {"detail":"File not found"}',
+      message: 'HTTP 404: File not found',
     },
     {
       status: 500,
       body: '{"error":{"message":"Storage unavailable"}}',
       statusText: '',
-      message: 'Download failed: HTTP 500: {"error":{"message":"Storage unavailable"}}',
+      message: 'HTTP 500: Storage unavailable',
     },
     {
       status: 502,
       body: 'Bad gateway from storage',
       statusText: '',
-      message: 'Download failed: HTTP 502: Bad gateway from storage',
+      message: 'HTTP 502: Bad gateway from storage',
     },
     {
       status: 403,
       body: '',
       statusText: 'Forbidden',
-      message: 'Download failed: HTTP 403: Forbidden',
+      message: 'HTTP 403: Forbidden',
     },
     {
       status: 503,
       body: '',
       statusText: '',
-      message: 'Download failed: HTTP 503',
+      message: 'HTTP 503: Request failed',
     },
   ])(
     'shows HTTP $status and the API error body when file retrieval fails',
-    async ({ status, body, statusText, message }) => {
-      vi.spyOn(TokenStorage, 'getAccessToken').mockReturnValue('access-token')
-      const fetchMock = vi.fn<typeof fetch>()
-        .mockResolvedValue(new Response(body, { status, statusText }))
-      vi.stubGlobal('fetch', fetchMock)
+    async ({ status, message }) => {
+      vi.mocked(apiClient.downloadFile).mockRejectedValue(new ApiError(status, message.split(': ').slice(1).join(': ')))
       const { result } = renderWithQueryClient(useDownloadFile)
 
       await act(async () => {
@@ -153,9 +150,7 @@ describe('useDownloadActions', () => {
       })
 
       expect(mockToast.error).toHaveBeenCalledWith(`Failed to download file: ${message}`)
-      expect(fetchMock).toHaveBeenCalledWith('/api/v1/files/download?path=video.mp4', {
-        headers: { Authorization: 'Bearer access-token' },
-      })
+      expect(apiClient.downloadFile).toHaveBeenCalledWith('/downloads/video.mp4')
     }
   )
 

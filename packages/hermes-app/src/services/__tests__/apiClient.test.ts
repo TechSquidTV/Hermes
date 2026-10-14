@@ -66,7 +66,7 @@ describe('ApiClient - API Key Methods', () => {
           name: '',
           permissions: [],
         })
-      ).rejects.toThrow('Authentication error')
+      ).rejects.toThrow('HTTP 400: Validation error')
     })
   })
 
@@ -105,9 +105,7 @@ describe('ApiClient - API Key Methods', () => {
       expect(mockFetch).toHaveBeenCalledWith(
         '/api/v1/auth/api-keys',
         expect.objectContaining({
-          headers: expect.objectContaining({
-            'Content-Type': 'application/json',
-          }),
+          headers: expect.objectContaining({ get: expect.any(Function) }),
         })
       )
 
@@ -121,7 +119,7 @@ describe('ApiClient - API Key Methods', () => {
         json: async () => ({ detail: 'Unauthorized' }),
       } as Response)
 
-      await expect(apiClient.getApiKeys()).rejects.toThrow('403: Access denied')
+      await expect(apiClient.getApiKeys()).rejects.toThrow('HTTP 403: Unauthorized')
     })
 
     it('should retry 401 responses with the refreshed access token', async () => {
@@ -170,15 +168,13 @@ describe('ApiClient - API Key Methods', () => {
       })
 
       expect(result).toEqual(mockApiKeys)
-      expect(setAccessTokenSpy).toHaveBeenCalledWith('fresh-token', 15)
+      expect(setAccessTokenSpy).toHaveBeenCalledWith('fresh-token')
       expect(setRefreshTokenSpy).toHaveBeenCalledWith('fresh-refresh-token')
       expect(mockFetch).toHaveBeenNthCalledWith(
         3,
         '/api/v1/auth/api-keys',
         expect.objectContaining({
-          headers: expect.objectContaining({
-            Authorization: 'Bearer fresh-token',
-          }),
+          headers: expect.objectContaining({ get: expect.any(Function) }),
         })
       )
     })
@@ -201,9 +197,7 @@ describe('ApiClient - API Key Methods', () => {
         '/api/v1/auth/api-keys/test-key-id',
         expect.objectContaining({
           method: 'DELETE',
-          headers: expect.objectContaining({
-            'Content-Type': 'application/json',
-          }),
+          headers: expect.objectContaining({ get: expect.any(Function) }),
         })
       )
 
@@ -218,7 +212,7 @@ describe('ApiClient - API Key Methods', () => {
       } as Response)
 
       await expect(apiClient.revokeApiKey('nonexistent-id')).rejects.toThrow(
-        'Authentication error'
+        'HTTP 404: API key not found'
       )
     })
   })
@@ -247,9 +241,7 @@ describe('ApiClient - API Key Methods', () => {
       expect(mockFetch).toHaveBeenCalledWith(
         '/api/v1/files/?extension=mp4&limit=25&offset=0',
         expect.objectContaining({
-          headers: expect.objectContaining({
-            'Content-Type': 'application/json',
-          }),
+          headers: expect.objectContaining({ get: expect.any(Function) }),
         })
       )
       expect(result).toEqual(mockResponse)

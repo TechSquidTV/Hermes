@@ -47,7 +47,7 @@ describe('useStatsSSE', () => {
     it('fetches SSE token with stats scope on mount', async () => {
       const mockCreateSSEToken = vi.fn().mockResolvedValue({
         token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
         scope: 'stats',
         permissions: ['read'],
         ttl: 600,
@@ -73,14 +73,14 @@ describe('useStatsSSE', () => {
         expect(mockCreateSSEToken).toHaveBeenCalledWith({
           scope: 'stats',
           ttl: 600,
-        })
+        }, expect.any(AbortSignal))
       })
     })
 
     it('only fetches token once on mount', async () => {
       const mockCreateSSEToken = vi.fn().mockResolvedValue({
         token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
         scope: 'stats',
         permissions: ['read'],
         ttl: 600,
@@ -136,10 +136,7 @@ describe('useStatsSSE', () => {
       const { result } = renderHook(() => useStatsSSE(), { wrapper: createWrapper() })
 
       await waitFor(() => {
-        expect(consoleErrorSpy).toHaveBeenCalledWith(
-          'Failed to fetch SSE token for stats:',
-          mockError
-        )
+        expect(result.current.error).toBe(mockError)
         expect(result.current.error).toEqual(mockError)
       })
 
@@ -151,7 +148,7 @@ describe('useStatsSSE', () => {
     it('fetches token and prepares SSE connection', async () => {
       const mockCreateSSEToken = vi.fn().mockResolvedValue({
         token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
         scope: 'stats',
         permissions: ['read'],
         ttl: 600,
@@ -178,7 +175,7 @@ describe('useStatsSSE', () => {
         expect(mockCreateSSEToken).toHaveBeenCalledWith({
           scope: 'stats',
           ttl: 600,
-        })
+        }, expect.any(AbortSignal))
       })
 
       // Verify useSSE is being called
@@ -188,7 +185,7 @@ describe('useStatsSSE', () => {
     it('returns connection state from useSSE', async () => {
       const mockCreateSSEToken = vi.fn().mockResolvedValue({
         token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
         scope: 'stats',
         permissions: ['read'],
         ttl: 600,
@@ -225,7 +222,7 @@ describe('useStatsSSE', () => {
     it('invalidates stats queries when updates arrive', async () => {
       const mockCreateSSEToken = vi.fn().mockResolvedValue({
         token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
         scope: 'stats',
         permissions: ['read'],
         ttl: 600,
@@ -260,7 +257,7 @@ describe('useStatsSSE', () => {
       await waitFor(() => {
         // Should invalidate queue stats queries
         expect(invalidateQueriesSpy).toHaveBeenCalledWith({
-          queryKey: ['queue', 'stats'],
+          queryKey: ['queue'],
           exact: false,
         })
       })
@@ -308,7 +305,7 @@ describe('useStatsSSE', () => {
     it('returns SSE error if connection fails', async () => {
       const mockCreateSSEToken = vi.fn().mockResolvedValue({
         token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
         scope: 'stats',
         permissions: ['read'],
         ttl: 600,

@@ -15,7 +15,7 @@ export type { components, paths, operations } from './api.generated'
 
 // Convenience aliases for commonly used API types
 // These save you from writing `components["schemas"]["TypeName"]` everywhere
-import type { components } from './api.generated'
+import type { components, operations } from './api.generated'
 
 export type DownloadStatus = components["schemas"]["DownloadStatus"]
 export type DownloadResult = components["schemas"]["DownloadResult"]
@@ -29,3 +29,5 @@ export type DownloadResponse = components["schemas"]["DownloadResponse"]
 
 // Add more type aliases here as needed
 // Pattern: export type TypeName = components["schemas"]["TypeName"]
+
+export type QueueRequestParams = NonNullable<operations['get_download_queue_api_v1_queue__get']['parameters']['query']>

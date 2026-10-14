@@ -1,575 +1,173 @@
-/**
- * Tests for useDownloadProgressSSE hook
- *
- * This hook manages ephemeral SSE tokens and real-time download progress updates.
- * It's critical for both home page (TrackedTask) and queue page (QueueCard).
- */
-
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { useDownloadProgressSSE } from './useDownloadProgressSSE'
-import * as apiClientModule from '@/services/api/client'
-import * as useSSEModule from './useSSE'
 import type { ReactNode } from 'react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { DownloadEventsProvider } from '@/contexts/DownloadEventsContext'
+import { apiClient } from '@/services/api/client'
+import type { components } from '@/types/api.generated'
+import { useDownloadProgressSSE } from './useDownloadProgressSSE'
 
-// Mock dependencies
-vi.mock('@/services/api/client')
-vi.mock('./useSSE')
-
-describe('useDownloadProgressSSE', () => {
-  const mockDownloadId = 'test-download-123'
-  const mockSSEToken = 'sse_test_token_abc123'
-  let queryClient: QueryClient
-
-  const createWrapper = () => {
-    queryClient = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
-      },
-    })
-
-    return ({ children }: { children: ReactNode }) => (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    )
+vi.mock('@/services/api/client', () => ({
+  apiClient: { createSSEToken: vi.fn(), getDownloadStatus: vi.fn() },
+}))
+class Source extends EventTarget {
+  static CLOSED = 2
+  static instances: Source[] = []
+  readyState = 0
+  onopen: (() => void) | null = null
+  onerror: (() => void) | null = null
+  onmessage: ((event: MessageEvent<string>) => void) | null = null
+  close = vi.fn(() => {
+    this.readyState = Source.CLOSED
+  })
+  constructor(public url: string) {
+    super()
+    Source.instances.push(this)
   }
+  emit(data: object) {
+    this.dispatchEvent(new MessageEvent('download_progress', { data: JSON.stringify(data) }))
+  }
+}
+const snapshot = (id: string): components['schemas']['DownloadStatus'] => ({
+  downloadId: id,
+  status: 'downloading',
+  message: 'Downloading',
+  createdAt: '2026-10-13T12:00:00Z',
+  progress: { percentage: 10 },
+  result: { title: `Video ${id}` },
+})
+function setup() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>
+      <DownloadEventsProvider enabled>{children}</DownloadEventsProvider>
+    </QueryClientProvider>
+  )
+  return { client, wrapper }
+}
+beforeEach(() => {
+  vi.resetAllMocks()
+  Source.instances = []
+  vi.stubGlobal('EventSource', Source)
+  vi.mocked(apiClient.createSSEToken).mockResolvedValue({
+    token: 'ephemeral',
+    expiresAt: new Date(Date.now() + 600_000).toISOString(),
+    scope: 'downloads',
+    permissions: ['read'],
+    ttl: 600,
+  })
+  vi.mocked(apiClient.getDownloadStatus).mockImplementation(async (id) => snapshot(id))
+})
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.useRealTimers()
+})
 
-  beforeEach(() => {
-    vi.clearAllMocks()
-
-    // Mock environment variable
-    vi.stubEnv('VITE_API_BASE_URL', 'http://localhost:8000')
+describe('shared download progress', () => {
+  it('opens one scoped connection for many cards and deduplicates HTTP observers', async () => {
+    const { wrapper } = setup()
+    const { result, unmount } = renderHook(
+      () =>
+        [
+          useDownloadProgressSSE('a'),
+          useDownloadProgressSSE('b'),
+          useDownloadProgressSSE('a'),
+        ] as const,
+      { wrapper }
+    )
+    await waitFor(() => expect(result.current[0].data?.status).toBe('downloading'))
+    expect(Source.instances).toHaveLength(1)
+    expect(apiClient.createSSEToken).toHaveBeenCalledWith(
+      { scope: 'downloads', ttl: 600 },
+      expect.any(AbortSignal)
+    )
+    expect(apiClient.getDownloadStatus).toHaveBeenCalledTimes(2)
+    const source = Source.instances[0]!
+    act(() => source.onopen?.())
+    expect(result.current[0].isConnected).toBe(true)
+    unmount()
+    expect(source.close).toHaveBeenCalled()
   })
 
-  afterEach(() => {
-    vi.unstubAllEnvs()
-  })
-
-  describe('Token Fetching', () => {
-    it('fetches SSE token on mount', async () => {
-      const mockCreateSSEToken = vi.fn().mockResolvedValue({
-        token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
-        scope: `download:${mockDownloadId}`,
-        permissions: ['read'],
-        ttl: 600,
-      })
-
-      vi.spyOn(apiClientModule, 'apiClient', 'get').mockReturnValue({
-        createSSEToken: mockCreateSSEToken,
-      } as any)
-
-      vi.spyOn(useSSEModule, 'useSSE').mockReturnValue({
-        data: null,
-        isConnected: false,
-        error: null,
-        isReconnecting: false,
-        reconnectAttempts: 0,
-        close: vi.fn(),
-        reconnect: vi.fn(),
-      })
-
-      renderHook(() => useDownloadProgressSSE(mockDownloadId), { wrapper: createWrapper() })
-
-      await waitFor(() => {
-        expect(mockCreateSSEToken).toHaveBeenCalledWith({
-          scope: `download:${mockDownloadId}`,
-          ttl: 600,
-        })
-      })
-    })
-
-    it('sets correct scope for the download ID', async () => {
-      const customDownloadId = 'custom-id-456'
-      const mockCreateSSEToken = vi.fn().mockResolvedValue({
-        token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
-        scope: `download:${customDownloadId}`,
-        permissions: ['read'],
-        ttl: 600,
-      })
-
-      vi.spyOn(apiClientModule, 'apiClient', 'get').mockReturnValue({
-        createSSEToken: mockCreateSSEToken,
-      } as any)
-
-      vi.spyOn(useSSEModule, 'useSSE').mockReturnValue({
-        data: null,
-        isConnected: false,
-        error: null,
-        isReconnecting: false,
-        reconnectAttempts: 0,
-        close: vi.fn(),
-        reconnect: vi.fn(),
-      })
-
-      renderHook(() => useDownloadProgressSSE(customDownloadId), { wrapper: createWrapper() })
-
-      await waitFor(() => {
-        expect(mockCreateSSEToken).toHaveBeenCalledWith({
-          scope: `download:${customDownloadId}`,
-          ttl: 600,
-        })
-      })
-    })
-
-    it('uses 10-minute TTL for tokens', async () => {
-      const mockCreateSSEToken = vi.fn().mockResolvedValue({
-        token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
-        scope: `download:${mockDownloadId}`,
-        permissions: ['read'],
-        ttl: 600,
-      })
-
-      vi.spyOn(apiClientModule, 'apiClient', 'get').mockReturnValue({
-        createSSEToken: mockCreateSSEToken,
-      } as any)
-
-      vi.spyOn(useSSEModule, 'useSSE').mockReturnValue({
-        data: null,
-        isConnected: false,
-        error: null,
-        isReconnecting: false,
-        reconnectAttempts: 0,
-        close: vi.fn(),
-        reconnect: vi.fn(),
-      })
-
-      renderHook(() => useDownloadProgressSSE(mockDownloadId), { wrapper: createWrapper() })
-
-      await waitFor(() => {
-        expect(mockCreateSSEToken).toHaveBeenCalledWith(
-          expect.objectContaining({ ttl: 600 })
-        )
-      })
-    })
-
-    it('handles token fetch errors gracefully', async () => {
-      const mockError = new Error('Failed to fetch SSE token')
-      const mockCreateSSEToken = vi.fn().mockRejectedValue(mockError)
-
-      vi.spyOn(apiClientModule, 'apiClient', 'get').mockReturnValue({
-        createSSEToken: mockCreateSSEToken,
-      } as any)
-
-      vi.spyOn(useSSEModule, 'useSSE').mockReturnValue({
-        data: null,
-        isConnected: false,
-        error: null,
-        isReconnecting: false,
-        reconnectAttempts: 0,
-        close: vi.fn(),
-        reconnect: vi.fn(),
-      })
-
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-      const { result } = renderHook(() => useDownloadProgressSSE(mockDownloadId), { wrapper: createWrapper() })
-
-      await waitFor(() => {
-        // The hook logs: console.error('Failed to fetch SSE token:', err)
-        expect(consoleErrorSpy).toHaveBeenCalledWith(
-          'Failed to fetch SSE token:',
-          mockError
-        )
-        expect(result.current.error).toBeTruthy()
-      })
-
-      consoleErrorSpy.mockRestore()
-    })
-  })
-
-  describe('SSE Connection', () => {
-    it('fetches token and prepares SSE connection', async () => {
-      const mockCreateSSEToken = vi.fn().mockResolvedValue({
-        token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
-        scope: `download:${mockDownloadId}`,
-        permissions: ['read'],
-        ttl: 600,
-      })
-
-      vi.spyOn(apiClientModule, 'apiClient', 'get').mockReturnValue({
-        createSSEToken: mockCreateSSEToken,
-      } as any)
-
-      const mockUseSSE = vi.spyOn(useSSEModule, 'useSSE').mockReturnValue({
-        data: null,
-        isConnected: false,
-        error: null,
-        isReconnecting: false,
-        reconnectAttempts: 0,
-        close: vi.fn(),
-        reconnect: vi.fn(),
-      })
-
-      renderHook(() => useDownloadProgressSSE(mockDownloadId), { wrapper: createWrapper() })
-
-      // Verify token is fetched with correct parameters
-      await waitFor(() => {
-        expect(mockCreateSSEToken).toHaveBeenCalledWith({
-          scope: `download:${mockDownloadId}`,
-          ttl: 600,
-        })
-      })
-
-      // Verify useSSE is being called (URL construction is tested in "configures SSE with correct options")
-      expect(mockUseSSE).toHaveBeenCalled()
-    })
-
-    it('does not connect until token is fetched', () => {
-      const mockCreateSSEToken = vi.fn().mockImplementation(
-        () => new Promise(() => {}) // Never resolves
-      )
-
-      vi.spyOn(apiClientModule, 'apiClient', 'get').mockReturnValue({
-        createSSEToken: mockCreateSSEToken,
-      } as any)
-
-      const mockUseSSE = vi.spyOn(useSSEModule, 'useSSE').mockReturnValue({
-        data: null,
-        isConnected: false,
-        error: null,
-        isReconnecting: false,
-        reconnectAttempts: 0,
-        close: vi.fn(),
-        reconnect: vi.fn(),
-      })
-
-      renderHook(() => useDownloadProgressSSE(mockDownloadId), { wrapper: createWrapper() })
-
-      // Should be called with null URL initially
-      expect(mockUseSSE).toHaveBeenCalledWith(null, expect.any(Object))
-    })
-
-    it('configures SSE with correct options', async () => {
-      const mockCreateSSEToken = vi.fn().mockResolvedValue({
-        token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
-        scope: `download:${mockDownloadId}`,
-        permissions: ['read'],
-        ttl: 600,
-      })
-
-      vi.spyOn(apiClientModule, 'apiClient', 'get').mockReturnValue({
-        createSSEToken: mockCreateSSEToken,
-      } as any)
-
-      const mockUseSSE = vi.spyOn(useSSEModule, 'useSSE').mockReturnValue({
-        data: null,
-        isConnected: false,
-        error: null,
-        isReconnecting: false,
-        reconnectAttempts: 0,
-        close: vi.fn(),
-        reconnect: vi.fn(),
-      })
-
-      renderHook(() => useDownloadProgressSSE(mockDownloadId), { wrapper: createWrapper() })
-
-      await waitFor(() => {
-        expect(mockUseSSE).toHaveBeenCalledWith(
-          expect.any(String),
-          expect.objectContaining({
-            events: ['download_progress'],
-            reconnect: true,
-            maxReconnectAttempts: 10,
-            reconnectDelay: 1000,
-            maxReconnectDelay: 30000,
-            onError: expect.any(Function),
-          })
-        )
-      })
-    })
-  })
-
-  describe('Download Progress Data', () => {
-    it('returns download status from SSE', async () => {
-      const mockCreateSSEToken = vi.fn().mockResolvedValue({
-        token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
-        scope: `download:${mockDownloadId}`,
-        permissions: ['read'],
-        ttl: 600,
-      })
-
-      vi.spyOn(apiClientModule, 'apiClient', 'get').mockReturnValue({
-        createSSEToken: mockCreateSSEToken,
-      } as any)
-
-      const mockDownloadStatus = {
-        download_id: mockDownloadId,
+  it('normalizes worker fields and updates only the matching cache entry', async () => {
+    const { wrapper } = setup()
+    const { result } = renderHook(
+      () => [useDownloadProgressSSE('a'), useDownloadProgressSSE('b')] as const,
+      { wrapper }
+    )
+    await waitFor(() => expect(result.current[1].data).not.toBeNull())
+    act(() =>
+      Source.instances[0]!.emit({
+        download_id: 'a',
         status: 'downloading',
-        progress: {
-          percentage: 45,
-          downloaded_bytes: 450000000,
-          total_bytes: 1000000000,
-          speed: 5000000,
-          eta: 110,
-        },
-        result: null,
-        current_filename: null,
-        message: '',
-        error: null,
-      }
-
-      vi.spyOn(useSSEModule, 'useSSE').mockReturnValue({
-        data: mockDownloadStatus,
-        isConnected: true,
-        error: null,
-        isReconnecting: false,
-        reconnectAttempts: 0,
-        close: vi.fn(),
-        reconnect: vi.fn(),
+        progress: { percentage: 45, downloaded_bytes: 512, total_bytes: 1024, speed: 50, eta: 10 },
       })
+    )
+    await waitFor(() => expect(result.current[0].data?.progress?.downloadedBytes).toBe(512))
+    expect(result.current[0].data?.result?.title).toBe('Video a')
+    expect(result.current[1].data?.progress?.percentage).toBe(10)
+    act(() =>
+      Source.instances[0]!.emit({
+        download_id: 'a',
+        status: 'completed',
+        output_path: 'nested/a.mp4',
+        result: { file_size: 1024 },
+      })
+    )
+    await waitFor(() => expect(result.current[0].data?.currentFilename).toBe('nested/a.mp4'))
+    expect(result.current[0].data?.result?.fileSize).toBe(1024)
+  })
 
-      const { result } = renderHook(() => useDownloadProgressSSE(mockDownloadId), { wrapper: createWrapper() })
-
-      await waitFor(() => {
-        expect(result.current.data).toEqual({
-          downloadId: mockDownloadId,
-          status: 'downloading',
-          progress: mockDownloadStatus.progress,
-          result: null,
-          currentFilename: null,
-          message: '',
-          error: null,
-          createdAt: expect.any(String),
+  it('does not let an older HTTP snapshot overwrite a newer live event', async () => {
+    let finish!: (value: components['schemas']['DownloadStatus']) => void
+    vi.mocked(apiClient.getDownloadStatus).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
         })
-      })
-    })
-
-    it('maps completed SSE output path to current filename', async () => {
-      const mockCreateSSEToken = vi.fn().mockResolvedValue({
-        token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
-        scope: `download:${mockDownloadId}`,
-        permissions: ['read'],
-        ttl: 600,
-      })
-
-      vi.spyOn(apiClientModule, 'apiClient', 'get').mockReturnValue({
-        createSSEToken: mockCreateSSEToken,
-      } as any)
-
-      vi.spyOn(useSSEModule, 'useSSE').mockReturnValue({
-        data: {
-          download_id: mockDownloadId,
-          status: 'completed',
-          output_path: './downloads/example.mp4',
-          result: {
-            title: 'Example',
-            file_size: 1024,
-            thumbnail_url: 'https://example.com/thumb.jpg',
-          },
-        },
-        isConnected: true,
-        error: null,
-        isReconnecting: false,
-        reconnectAttempts: 0,
-        close: vi.fn(),
-        reconnect: vi.fn(),
-      })
-
-      const { result } = renderHook(() => useDownloadProgressSSE(mockDownloadId), { wrapper: createWrapper() })
-
-      await waitFor(() => {
-        expect(result.current.data?.currentFilename).toBe('./downloads/example.mp4')
-        expect(result.current.data?.result?.fileSize).toBe(1024)
-        expect(result.current.data?.result?.thumbnailUrl).toBe('https://example.com/thumb.jpg')
-      })
-    })
-
-    it('tracks connection state correctly', async () => {
-      const mockCreateSSEToken = vi.fn().mockResolvedValue({
-        token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
-        scope: `download:${mockDownloadId}`,
-        permissions: ['read'],
-        ttl: 600,
-      })
-
-      vi.spyOn(apiClientModule, 'apiClient', 'get').mockReturnValue({
-        createSSEToken: mockCreateSSEToken,
-      } as any)
-
-      vi.spyOn(useSSEModule, 'useSSE').mockReturnValue({
-        data: null,
-        isConnected: true,
-        error: null,
-        isReconnecting: false,
-        reconnectAttempts: 0,
-        close: vi.fn(),
-        reconnect: vi.fn(),
-      })
-
-      const { result } = renderHook(() => useDownloadProgressSSE(mockDownloadId), { wrapper: createWrapper() })
-
-      await waitFor(() => {
-        expect(result.current.isConnected).toBe(true)
-      })
-    })
-
-    it('tracks reconnection attempts', async () => {
-      const mockCreateSSEToken = vi.fn().mockResolvedValue({
-        token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
-        scope: `download:${mockDownloadId}`,
-        permissions: ['read'],
-        ttl: 600,
-      })
-
-      vi.spyOn(apiClientModule, 'apiClient', 'get').mockReturnValue({
-        createSSEToken: mockCreateSSEToken,
-      } as any)
-
-      vi.spyOn(useSSEModule, 'useSSE').mockReturnValue({
-        data: null,
-        isConnected: false,
-        error: null,
-        isReconnecting: true,
-        reconnectAttempts: 3,
-        close: vi.fn(),
-        reconnect: vi.fn(),
-      })
-
-      const { result } = renderHook(() => useDownloadProgressSSE(mockDownloadId), { wrapper: createWrapper() })
-
-      await waitFor(() => {
-        expect(result.current.isReconnecting).toBe(true)
-        expect(result.current.reconnectAttempts).toBe(3)
-      })
-    })
+    )
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useDownloadProgressSSE('a'), { wrapper })
+    await waitFor(() => expect(Source.instances).toHaveLength(1))
+    act(() =>
+      Source.instances[0]!.emit({ download_id: 'a', status: 'completed', output_path: 'a.mp4' })
+    )
+    await waitFor(() => expect(result.current.data?.status).toBe('completed'))
+    await act(async () => finish(snapshot('a')))
+    expect(result.current.data?.status).toBe('completed')
   })
 
-  describe('Error Handling', () => {
-    it('returns token error when token fetch fails', async () => {
-      const tokenError = new Error('Token fetch failed')
-      const mockCreateSSEToken = vi.fn().mockRejectedValue(tokenError)
-
-      vi.spyOn(apiClientModule, 'apiClient', 'get').mockReturnValue({
-        createSSEToken: mockCreateSSEToken,
-      } as any)
-
-      vi.spyOn(useSSEModule, 'useSSE').mockReturnValue({
-        data: null,
-        isConnected: false,
-        error: null,
-        isReconnecting: false,
-        reconnectAttempts: 0,
-        close: vi.fn(),
-        reconnect: vi.fn(),
-      })
-
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-      const { result } = renderHook(() => useDownloadProgressSSE(mockDownloadId), { wrapper: createWrapper() })
-
-      await waitFor(() => {
-        expect(result.current.error).toBeInstanceOf(Error)
-        expect(result.current.error?.message).toContain('Token fetch failed')
-      })
-
-      consoleErrorSpy.mockRestore()
+  it('polls while disconnected and stops polling after connecting', async () => {
+    vi.useFakeTimers()
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useDownloadProgressSSE('a'), { wrapper })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10)
     })
-
-    it('returns SSE error when connection fails', async () => {
-      const mockCreateSSEToken = vi.fn().mockResolvedValue({
-        token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
-        scope: `download:${mockDownloadId}`,
-        permissions: ['read'],
-        ttl: 600,
-      })
-
-      vi.spyOn(apiClientModule, 'apiClient', 'get').mockReturnValue({
-        createSSEToken: mockCreateSSEToken,
-      } as any)
-
-      const sseError = new Error('SSE connection failed')
-      vi.spyOn(useSSEModule, 'useSSE').mockReturnValue({
-        data: null,
-        isConnected: false,
-        error: sseError,
-        isReconnecting: false,
-        reconnectAttempts: 0,
-        close: vi.fn(),
-        reconnect: vi.fn(),
-      })
-
-      const { result } = renderHook(() => useDownloadProgressSSE(mockDownloadId), { wrapper: createWrapper() })
-
-      await waitFor(() => {
-        expect(result.current.error).toBe(sseError)
-      })
+    expect(apiClient.getDownloadStatus).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000)
     })
-
-    it('prioritizes token error over SSE error', async () => {
-      const tokenError = new Error('Token fetch failed')
-      const mockCreateSSEToken = vi.fn().mockRejectedValue(tokenError)
-
-      vi.spyOn(apiClientModule, 'apiClient', 'get').mockReturnValue({
-        createSSEToken: mockCreateSSEToken,
-      } as any)
-
-      const sseError = new Error('SSE connection failed')
-      vi.spyOn(useSSEModule, 'useSSE').mockReturnValue({
-        data: null,
-        isConnected: false,
-        error: sseError,
-        isReconnecting: false,
-        reconnectAttempts: 0,
-        close: vi.fn(),
-        reconnect: vi.fn(),
-      })
-
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-      const { result } = renderHook(() => useDownloadProgressSSE(mockDownloadId), { wrapper: createWrapper() })
-
-      await waitFor(() => {
-        // Token error should take precedence
-        expect(result.current.error?.message).toContain('Token fetch failed')
-      })
-
-      consoleErrorSpy.mockRestore()
+    expect(apiClient.getDownloadStatus).toHaveBeenCalledTimes(2)
+    act(() => Source.instances[0]!.onopen?.())
+    expect(result.current.isConnected).toBe(true)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000)
     })
+    expect(apiClient.getDownloadStatus).toHaveBeenCalledTimes(2)
   })
 
-  describe('Cleanup', () => {
-    it('cleans up on unmount', async () => {
-      const mockCreateSSEToken = vi.fn().mockResolvedValue({
-        token: mockSSEToken,
-        expires_at: '2025-12-31T23:59:59Z',
-        scope: `download:${mockDownloadId}`,
-        permissions: ['read'],
-        ttl: 600,
-      })
-
-      vi.spyOn(apiClientModule, 'apiClient', 'get').mockReturnValue({
-        createSSEToken: mockCreateSSEToken,
-      } as any)
-
-      vi.spyOn(useSSEModule, 'useSSE').mockReturnValue({
-        data: null,
-        isConnected: true,
-        error: null,
-        isReconnecting: false,
-        reconnectAttempts: 0,
-        close: vi.fn(),
-        reconnect: vi.fn(),
-      })
-
-      const { unmount } = renderHook(() => useDownloadProgressSSE(mockDownloadId), { wrapper: createWrapper() })
-
-      await waitFor(() => {
-        expect(mockCreateSSEToken).toHaveBeenCalled()
-      })
-
-      // Should not throw on unmount
-      expect(() => unmount()).not.toThrow()
+  it('keeps completed downloads from polling after a disconnected snapshot', async () => {
+    vi.useFakeTimers()
+    vi.mocked(apiClient.getDownloadStatus).mockResolvedValue({
+      ...snapshot('a'),
+      status: 'completed',
     })
+    const { wrapper } = setup()
+    renderHook(() => useDownloadProgressSSE('a'), { wrapper })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000)
+    })
+    expect(apiClient.getDownloadStatus).toHaveBeenCalledOnce()
   })
 })

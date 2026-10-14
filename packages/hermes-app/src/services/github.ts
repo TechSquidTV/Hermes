@@ -1,3 +1,4 @@
+import { debug } from '@/lib/debug'
 // GitHub API Service for version checking
 
 import type { VersionInfo } from '@/types/github'
@@ -39,7 +40,7 @@ class GitHubService {
 
       return response.json()
     } catch (error) {
-      console.error('[GitHubService] Request failed:', error)
+      debug.error('[GitHubService] Request failed:', error)
       throw error
     }
   }
@@ -71,7 +72,7 @@ class GitHubService {
   extractVersionFromTag(tagRef: string): string | null {
     // Handle tags like 'refs/tags/hermes-app-v1.0.0' -> '1.0.0'
     const match = tagRef.match(/hermes-(?:app|api)-v(.+)/)
-    return match ? match[1] : null
+    return match?.[1] ?? null
   }
 
   getLatestVersion(tags: GitHubTagRef[]): string | null {
@@ -100,7 +101,7 @@ class GitHubService {
     })
 
     const latestTag = sortedTags[0]
-    return this.extractVersionFromTag(latestTag.ref)
+    return latestTag ? this.extractVersionFromTag(latestTag.ref) : null
   }
 
   compareVersions(currentVersion: string, latestVersion: string | null): 'up-to-date' | 'outdated' | 'unknown' {
@@ -159,7 +160,7 @@ class GitHubService {
         }
       }
     } catch (error) {
-      console.error('[GitHubService] Failed to fetch version info:', error)
+      debug.error('[GitHubService] Failed to fetch version info:', error)
       return {
         current: {
           app: currentAppVersion,

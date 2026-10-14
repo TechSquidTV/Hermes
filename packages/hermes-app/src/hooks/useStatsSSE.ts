@@ -1,14 +1,15 @@
+import { debug } from '@/lib/debug'
 import { useEffect, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSSE } from './useSSE';
 import { useSSEToken } from './useSSEToken';
+import { scheduleLiveInvalidation } from '@/lib/queryClient';
 import { getApiBaseUrl } from '@/lib/config';
 
 export interface StatsUpdate {
   event: 'download_completed' | 'stats_refresh';
   download_id?: string;
   timestamp: string;
-  [key: string]: unknown;
 }
 
 /**
@@ -36,8 +37,7 @@ export function useStatsSSE() {
   const queryClient = useQueryClient();
   const { token: sseToken, error: tokenError } = useSSEToken(
     'stats',
-    600,
-    'Failed to fetch SSE token for stats:'
+    600
   );
 
   // Build SSE URL with ephemeral token
@@ -55,7 +55,7 @@ export function useStatsSSE() {
       reconnectDelay: 1000,
       maxReconnectDelay: 30000,
       onError: (err: Error) => {
-        console.error('Stats SSE connection error:', err);
+        debug.error('Stats SSE connection error:', err);
       },
     }),
     []
@@ -69,10 +69,7 @@ export function useStatsSSE() {
   // Invalidate stats queries when updates arrive
   useEffect(() => {
     if (data) {
-      // Invalidate all stats-related queries
-      queryClient.invalidateQueries({ queryKey: ['queue', 'stats'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['analytics'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['timeline'], exact: false });
+      scheduleLiveInvalidation(queryClient);
     }
   }, [data, queryClient]);
 

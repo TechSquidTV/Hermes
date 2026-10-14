@@ -1,19 +1,23 @@
+import { ErrorDisplay } from '@/components/ui/error-display'
 import { useStatsSSE } from '@/hooks/useStatsSSE'
 import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '@/services/api/client'
 import { StatsCard } from '@/components/ui/stats-card'
 import { formatFileSize } from '@/lib/utils'
-import { Download, CheckCircle, TrendingUp, HardDrive } from 'lucide-react'
+import { CheckCircle, Download, HardDrive, TrendingUp } from 'lucide-react'
 
 export function QueueStats() {
   // Connect to stats SSE for real-time updates
   useStatsSSE()
 
   // Query stats data (will be invalidated by SSE updates)
-  const { data: stats, isLoading } = useQuery({
+  const { data: stats, isLoading, error, refetch } = useQuery({
     queryKey: ['queue', 'stats'],
     queryFn: () => apiClient.getApiStats(),
+    refetchInterval: 30_000,
   })
+
+  if (error) return <ErrorDisplay message="Failed to load statistics" onRetry={() => { void refetch() }} />
 
   if (isLoading) {
     return (

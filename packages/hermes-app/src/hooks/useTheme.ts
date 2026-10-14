@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import { debug } from '@/lib/debug'
+import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { themes, isValidTheme } from '@/themes'
+import { isValidTheme, themes } from '@/themes'
 import type { UserPreferences } from '@/types/auth'
 
 export type Theme = string  // Theme ID (e.g., 'hermes', 'nord', 'dracula')
@@ -19,7 +20,7 @@ export function useTheme(options: UseThemeOptions = {}) {
   } = options
 
   const { user, updatePreferences } = useAuth()
-  const queryClient = useQueryClient()
+  const [pendingChanges, setPendingChanges] = useState(0)
 
   // Get theme and mode from user preferences, or use defaults
   const userTheme = user?.preferences?.theme
@@ -72,7 +73,7 @@ export function useTheme(options: UseThemeOptions = {}) {
     root.classList.add(`theme-${activeTheme}`)
     root.classList.add(effectiveMode)
 
-    console.log(`[useTheme] Applied theme: theme-${activeTheme} ${effectiveMode}`, {
+    debug.log(`[useTheme] Applied theme: theme-${activeTheme} ${effectiveMode}`, {
       activeTheme,
       activeMode,
       effectiveMode,
@@ -81,45 +82,36 @@ export function useTheme(options: UseThemeOptions = {}) {
     })
   }, [activeTheme, effectiveMode, activeMode, systemTheme, userMode])
 
-  // Mutation to update theme preferences
-  const updateThemeMutation = useMutation({
-    mutationFn: async (preferences: Partial<UserPreferences>) => {
-      // Optimistically update preferences
-      await updatePreferences(preferences)
-    },
-    onSuccess: () => {
-      // Invalidate user queries to ensure fresh data
-      queryClient.invalidateQueries({ queryKey: ['user'] })
-    },
-    onError: (error) => {
-      console.error('[useTheme] Failed to update theme:', error)
-    },
-  })
+  const savePreferences = useCallback((preferences: Partial<UserPreferences>) => {
+    setPendingChanges(count => count + 1)
+    void updatePreferences(preferences).catch(error => { debug.error('Failed to update theme', error); toast.error('Failed to save appearance settings') })
+      .finally(() => setPendingChanges(count => count - 1))
+  }, [updatePreferences])
 
   // Set theme (theme ID only)
   const setTheme = useCallback((newTheme: Theme) => {
     if (!isValidTheme(newTheme)) {
-      console.warn(`[useTheme] Invalid theme: ${newTheme}`)
+      debug.warn(`[useTheme] Invalid theme: ${newTheme}`)
       return
     }
 
-    updateThemeMutation.mutate({ theme: newTheme })
-  }, [updateThemeMutation])
+    savePreferences({ theme: newTheme })
+  }, [savePreferences])
 
   // Set mode (light/dark/system)
   const setMode = useCallback((newMode: Mode) => {
-    updateThemeMutation.mutate({ mode: newMode })
-  }, [updateThemeMutation])
+    savePreferences({ mode: newMode })
+  }, [savePreferences])
 
   // Set both theme and mode at once
   const setThemeAndMode = useCallback((newTheme: Theme, newMode: Mode) => {
     if (!isValidTheme(newTheme)) {
-      console.warn(`[useTheme] Invalid theme: ${newTheme}`)
+      debug.warn(`[useTheme] Invalid theme: ${newTheme}`)
       return
     }
 
-    updateThemeMutation.mutate({ theme: newTheme, mode: newMode })
-  }, [updateThemeMutation])
+    savePreferences({ theme: newTheme, mode: newMode })
+  }, [savePreferences])
 
   // Toggle mode (light → dark → system → light)
   const toggleMode = useCallback(() => {
@@ -145,7 +137,7 @@ export function useTheme(options: UseThemeOptions = {}) {
     toggleMode,
 
     // Status
-    isLoading: updateThemeMutation.isPending,
+    isLoading: pendingChanges > 0,
     isLight: effectiveMode === 'light',
     isDark: effectiveMode === 'dark',
     isSystem: activeMode === 'system',

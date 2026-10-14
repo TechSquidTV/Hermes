@@ -151,7 +151,7 @@ describe('queryClient', () => {
   describe('Mutation Options', () => {
     it('has retry set to 1', () => {
       const defaultOptions = queryClient.getDefaultOptions()
-      expect(defaultOptions.mutations?.retry).toBe(1)
+      expect(defaultOptions.mutations?.retry).toBe(false)
     })
   })
 

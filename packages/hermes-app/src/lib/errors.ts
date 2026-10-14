@@ -2,14 +2,9 @@
  * Custom error class for API errors with status code
  */
 export class ApiError extends Error {
-  public statusCode?: number
-  public response?: Response
-
-  constructor(message: string, statusCode?: number, response?: Response) {
-    super(message)
+  constructor(public readonly status: number, detail: string) {
+    super(`HTTP ${status}: ${detail}`)
     this.name = 'ApiError'
-    this.statusCode = statusCode
-    this.response = response
   }
 }
 
@@ -19,8 +14,8 @@ export class ApiError extends Error {
  */
 export function extractStatusCode(error: unknown): number | undefined {
   // Check if it's our custom ApiError
-  if (error instanceof ApiError && error.statusCode) {
-    return error.statusCode
+  if (error instanceof ApiError) {
+    return error.status
   }
 
   // Check if it's a regular Error with a message
@@ -39,14 +34,14 @@ export function extractStatusCode(error: unknown): number | undefined {
 
     // Pattern 2: "HTTP 500: Internal Server Error"
     const httpMatch = message.match(/HTTP\s+(\d{3})/i)
-    if (httpMatch) {
+    if (httpMatch?.[1]) {
       const code = parseInt(httpMatch[1], 10)
       if (!isNaN(code)) return code
     }
 
     // Pattern 3: Status code at start of message
     const startMatch = message.match(/^(\d{3})[:\s-]/i)
-    if (startMatch) {
+    if (startMatch?.[1]) {
       const code = parseInt(startMatch[1], 10)
       if (!isNaN(code)) return code
     }

@@ -31,7 +31,7 @@ export default defineConfig(() => {
     },
     build: {
       outDir: 'dist',
-      sourcemap: true,
+      sourcemap: false,
       rolldownOptions: {
         output: {
           manualChunks(id) {
@@ -66,8 +66,7 @@ export default defineConfig(() => {
             if (
               id.includes('lucide-react') ||
               id.includes('date-fns') ||
-              id.includes('sonner') ||
-              id.includes('zod')
+              id.includes('sonner')
             ) {
               return 'vendor-utils'
             }

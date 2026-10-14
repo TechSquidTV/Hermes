@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from 'react';
-import { AnimatePresence, motion, type Transition } from 'framer-motion';
+import { AnimatePresence, type Transition, motion } from 'framer-motion';
 
 import { cn } from '@/lib/utils';
 
@@ -465,7 +465,7 @@ function HighlightItem<T extends React.ElementType>({
       setActiveClassName(stableActiveClassName ?? '');
     } else if (!activeValue) clearBounds();
 
-    if (shouldUpdateBounds) return () => cancelAnimationFrame(rafId);
+    return shouldUpdateBounds ? () => cancelAnimationFrame(rafId) : undefined;
   },
   [
     mode,
