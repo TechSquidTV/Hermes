@@ -21,95 +21,80 @@ https://github.com/user-attachments/assets/7d9c6b96-d966-4989-a8b3-d5d49af463ae
 
 ## Quick Start
 
-### Pre-built Images (Recommended)
+### Build the current checkout
+
+For unreleased `main`, build from source so the app, API, worker, and scheduler
+include the same fixes.
 
 ```bash
-# Clone the repository
 git clone https://github.com/techsquidtv/hermes.git
 cd hermes
-
-# Copy environment template (all environment variables are configured in the root .env file)
 cp .env.example .env
 
-# Edit .env and set a secure HERMES_SECRET_KEY
+# Set a random HERMES_SECRET_KEY in .env before starting.
+python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 nano .env
 
-# Start all services using pre-built images
-docker compose -f docker-compose.example.yml up -d
+# Prepare the bind mounts for the default container user (UID/GID 1000).
+mkdir -p ./data/downloads ./data/temp ./data/data
+sudo chown -R 1000:1000 ./data
+
+docker compose up -d --build --wait
 ```
 
-**That's it!** 🎉 Your Hermes instance will be available at:
-- **Web App**: http://localhost:3000
-- **API Docs**: http://localhost:3000/api/v1/docs
+The web app is at http://localhost:3000 and the interactive API documentation is
+at http://localhost:3000/api/v1/docs. Redis and the API stay on the internal
+Docker network.
 
-**For development with hot reload:**
-```bash
-docker compose -f docker-compose.dev.yml up
-```
-- **Dev Server**: http://localhost:5173 (Vite with hot reload)
-- **API**: http://localhost:8000 (direct access)
+### Prebuilt release images
 
-### Building from Source
+Use `docker-compose.example.yml` and `.env.example` from the release you deploy.
+Set `HERMES_IMAGE_TAG` in `.env` to that exact published version, without a `v`
+prefix. The same tag selects the frontend, API, worker, and scheduler images.
+There is no independent `latest` selection.
 
-If you prefer to build the images from source or want to modify the code:
+**Release requirement:** the new scheduler requires a release containing the
+security and opt-in retention fixes. Published 0.6.0 images predate them. Until a
+hardened release is published, use the source-build instructions above for these
+changes.
 
-```bash
-# Use the standard docker-compose.yml (builds from source)
-docker compose up -d
-```
-
-### Deployment Options
-
-Hermes offers two deployment approaches:
-
-#### **Pre-built Images (Recommended)**
-- **Faster startup** - No build time required
-- **Stable releases** - Uses tested, published versions
-- **Smaller downloads** - Only pulls necessary images
-- **Version-accurate UI** - The frontend image serves its own built assets, so the running image tag controls the displayed app version
-- **File**: `docker-compose.example.yml`
-- **Public packages** - No authentication required
+After selecting a compatible release and preparing the same data directories:
 
 ```bash
-# Uses ghcr.io/techsquidtv/hermes-app:latest and ghcr.io/techsquidtv/hermes-api:latest
-docker compose -f docker-compose.example.yml up -d
+docker compose -f docker-compose.example.yml pull
+docker compose -f docker-compose.example.yml up -d --wait
 ```
 
-#### **Build from Source**
-- **Full customization** - Modify code and rebuild
-- **Latest changes** - Access to unreleased features
-- **Development** - Perfect for contributors
-- **File**: `docker-compose.yml`
+For upgrades, update the single `HERMES_IMAGE_TAG`, pull, and recreate the entire
+stack together. See the [deployment guide](docs/DEPLOYMENT.md) before upgrading
+an existing installation.
+
+### Development with hot reload
+
+Use the same `.env` and persistent directories:
 
 ```bash
-# Builds images from local Dockerfiles
-docker compose up -d
+docker compose -f docker-compose.dev.yml up --build --wait
 ```
 
-### Preparing Directories for Docker Volumes
+The Vite app is at http://localhost:5173, with API requests and documentation
+proxied under `/api/v1`. Direct debugging access is http://localhost:8000; Redis
+is exposed only by the development stack. For native processes, change the Redis
+hostname and storage paths as described in the
+[configuration guide](docs/CONFIGURATION.md#docker-defaults-and-native-development).
 
-Before starting Docker containers, create the required directories with proper permissions. The API container runs as a non-root user (UID 1000), so mounted volumes must be writable:
+### Persistent directories and maintenance
 
-```bash
-# Create directories (paths should match your docker-compose volumes)
-mkdir -p ./data ./downloads ./temp
+The bundled stacks mount `data/downloads` at `/app/downloads`, `data/temp` at
+`/app/temp`, and `data/data` at `/app/data`. These directories must be writable
+by the backend container user. Source builds accept `USER_UID` and `USER_GID` to
+match a different host owner; set those build arguments and rebuild all backend
+services together.
 
-# Set ownership for container user (default UID 1000)
-sudo chown -R 1000:1000 ./data ./downloads ./temp
-
-# Or match your current host user (useful for development)
-sudo chown -R $(id -u):$(id -g) ./data ./downloads ./temp
-
-# Or use permissive permissions (less secure)
-chmod -R 777 ./data ./downloads ./temp
-```
-
-**Required directories:**
-- `data/` - SQLite database and persistent data
-- `downloads/` - Downloaded video files
-- `temp/` - Temporary files during download
-
-> **Note:** Directory paths depend on your docker-compose configuration. Check the `volumes` section in your compose file to see where these are mounted from. For example, `docker-compose.example.yml` might use `./services/hermes/data` instead of `./data`.
+One `celery_beat` process schedules temporary-file and expired-token cleanup.
+Media retention is off unless `HERMES_DOWNLOAD_RETENTION_DAYS` is set. Scheduler
+state is kept beside the database in `data/data`; run only one scheduler per
+deployment.
 
 ### Using a Reverse Proxy
 
@@ -200,9 +185,9 @@ Access admin features via: **API endpoints at `/api/v1/users`** (see [API docs](
 
 If you run into problems, please use our [issue templates](https://github.com/techsquidtv/hermes/issues/new/choose) instead of generic issues:
 - **[🐛 Bug Report](https://github.com/techsquidtv/hermes/issues/new?template=bug_report.yml)** - For unexpected behavior
-- **[🔧 API Issues](https://github.com/techsquidtv/hermes/issues/new?template=hermes-api-issue.yml)** - Backend problems
-- **[🎨 Frontend Issues](https://github.com/techsquidtv/hermes/issues/new?template=hermes-app-issue.yml)** - UI/UX problems
-- **[🐳 DevOps Issues](https://github.com/techsquidtv/hermes/issues/new?template=devops-issue.yml)** - Docker/deployment issues
+- **[🔧 API Issues](https://github.com/techsquidtv/hermes/issues/new?template=bug_report.yml)** - Backend problems
+- **[🎨 Frontend Issues](https://github.com/techsquidtv/hermes/issues/new?template=bug_report.yml)** - UI/UX problems
+- **[🐳 DevOps Issues](https://github.com/techsquidtv/hermes/issues/new?template=bug_report.yml)** - Docker/deployment issues
 
 These templates help us help you faster!
 

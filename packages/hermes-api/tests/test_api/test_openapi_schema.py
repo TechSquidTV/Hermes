@@ -7,6 +7,7 @@ Ensures that all API models follow the camelCase convention for JSON fields.
 from __future__ import annotations
 
 import pytest
+from httpx import AsyncClient
 
 
 class TestOpenAPISchema:
@@ -129,3 +130,17 @@ class TestOpenAPISchema:
         assert info_responses["422"]["content"]["application/json"]["schema"] == {
             "$ref": "#/components/schemas/HTTPValidationError"
         }
+
+
+@pytest.mark.asyncio
+async def test_interactive_documentation_and_schema_share_the_proxy_prefix(
+    client: "AsyncClient",
+) -> None:
+    for endpoint in ("docs", "redoc"):
+        response = await client.get(f"/api/v1/{endpoint}")
+        assert response.status_code == 200
+        assert "/api/v1/openapi.json" in response.text
+    schema = await client.get("/api/v1/openapi.json")
+    assert schema.status_code == 200
+    assert "/api/v1/health/" in schema.json()["paths"]
+    assert (await client.get("/docs")).status_code == 404

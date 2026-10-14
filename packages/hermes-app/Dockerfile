@@ -26,6 +26,9 @@ RUN pnpm --filter hermes-app build
 # Production image - nginx serving static files with runtime config
 FROM nginx:1.31-alpine AS runner
 
+# Serialize deployer-provided runtime values as JSON, including quotes/newlines.
+RUN apk add --no-cache jq
+
 # Copy built static files from builder
 COPY --from=builder /app/packages/hermes-app/dist /usr/share/nginx/html
 

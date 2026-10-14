@@ -20,7 +20,7 @@ services:
     ports: !override
       - "8001:8000"
     environment:
-      - HERMES_SECRET_KEY=${HERMES_SECRET_KEY:-test-secret-key-for-development-only}
+      - HERMES_SECRET_KEY=${HERMES_SECRET_KEY:?Set HERMES_SECRET_KEY for this test stack}
       - HERMES_REDIS_URL=redis://redis:6379
       - HERMES_DEBUG=true
       - HERMES_ALLOWED_ORIGINS=http://localhost:3001,http://127.0.0.1:3001
@@ -32,7 +32,18 @@ services:
     container_name: hermes-worker-test
     env_file: !override []
     environment:
-      - HERMES_SECRET_KEY=${HERMES_SECRET_KEY:-test-secret-key-for-development-only}
+      - HERMES_SECRET_KEY=${HERMES_SECRET_KEY:?Set HERMES_SECRET_KEY for this test stack}
+      - HERMES_REDIS_URL=redis://redis:6379
+      - HERMES_DEBUG=true
+
+  celery_beat:
+    extends:
+      file: docker-compose.yml
+      service: celery_beat
+    container_name: hermes-beat-test
+    env_file: !override []
+    environment:
+      - HERMES_SECRET_KEY=${HERMES_SECRET_KEY:?Set HERMES_SECRET_KEY for this test stack}
       - HERMES_REDIS_URL=redis://redis:6379
       - HERMES_DEBUG=true
 
@@ -41,7 +52,7 @@ services:
       file: docker-compose.yml
       service: app
     container_name: hermes-app-test
-    ports:
+    ports: !override
       - "3001:80"
     environment:
       - VITE_API_BASE_URL=http://localhost:8001/api/v1

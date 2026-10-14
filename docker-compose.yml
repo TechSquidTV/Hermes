@@ -1,13 +1,28 @@
-# Hermes Production Stack
-# This is the default deployment configuration for Hermes
-#
-# Quick Start:
-#   1. Copy .env.example to .env and configure your settings
-#   2. Run: docker compose up -d
-#   3. Access at http://localhost:3000
+# Hermes source-build production stack. Run one scheduler per deployment.
+# Copy .env.example to .env and set HERMES_SECRET_KEY before starting.
+
+x-backend: &backend
+  build:
+    context: ./packages/hermes-api
+    dockerfile: Dockerfile
+    args:
+      USER_UID: ${USER_UID:-1000}
+      USER_GID: ${USER_GID:-1000}
+  restart: unless-stopped
+  env_file:
+    - .env
+  environment:
+    HERMES_SECRET_KEY: ${HERMES_SECRET_KEY:?Set HERMES_SECRET_KEY in .env}
+    HERMES_REDIS_URL: ${HERMES_REDIS_URL:-redis://redis:6379/0}
+    HERMES_TRUSTED_PROXY_HOSTS: ${HERMES_TRUSTED_PROXY_HOSTS:-app}
+  volumes:
+    - ./data/downloads:/app/downloads
+    - ./data/temp:/app/temp
+    - ./data/data:/app/data
+  networks:
+    - hermes-network
 
 services:
-  # Frontend - nginx serving static files and proxying /api to the backend
   app:
     build:
       context: .
@@ -35,31 +50,9 @@ services:
       retries: 3
       start_period: 10s
 
-  # Backend API
   api:
-    build:
-      context: ./packages/hermes-api
-      dockerfile: Dockerfile
-      # Optional: Customize user UID/GID to match host user (defaults to 1000:1000)
-      # Uncomment to use your host user's UID/GID:
-      # args:
-      #   USER_UID: ${USER_UID:-1000}
-      #   USER_GID: ${USER_GID:-1000}
+    <<: *backend
     container_name: hermes-api
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      # Trust only the frontend proxy container when reading forwarded client IPs.
-      - HERMES_TRUSTED_PROXY_HOSTS=${HERMES_TRUSTED_PROXY_HOSTS:-app}
-      - HERMES_SECRET_KEY=${HERMES_SECRET_KEY}
-      - HERMES_REDIS_URL=${HERMES_REDIS_URL:-redis://redis:6379}
-    volumes:
-      - ./data/downloads:/app/downloads
-      - ./data/temp:/app/temp
-      - ./data/data:/app/data
-    networks:
-      - hermes-network
     depends_on:
       redis:
         condition: service_healthy
@@ -69,47 +62,41 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-    # Run uvicorn directly from venv to avoid uv run re-installing dev dependencies
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --loop asyncio --access-log --log-level info
 
-  # Celery worker for background tasks
   celery_worker:
-    build:
-      context: ./packages/hermes-api
-      dockerfile: Dockerfile
-      # Optional: Customize user UID/GID to match host user (defaults to 1000:1000)
-      # Should match api service if using shared volumes
-      # args:
-      #   USER_UID: ${USER_UID:-1000}
-      #   USER_GID: ${USER_GID:-1000}
+    <<: *backend
     container_name: hermes-worker
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      - HERMES_SECRET_KEY=${HERMES_SECRET_KEY}
-      - HERMES_REDIS_URL=${HERMES_REDIS_URL:-redis://redis:6379}
-    volumes:
-      - ./data/downloads:/app/downloads
-      - ./data/temp:/app/temp
-      - ./data/data:/app/data
-    networks:
-      - hermes-network
+    hostname: hermes-worker
     depends_on:
       redis:
         condition: service_healthy
       api:
         condition: service_healthy
-    # Run celery directly from venv to avoid uv run re-installing dev dependencies
     command: celery -A app.worker worker --loglevel=info --concurrency=1 --hostname=hermes-worker@%h --queues=hermes.downloads,hermes.cleanup,hermes.default
     healthcheck:
-      test: ["CMD", "celery", "-A", "app.worker", "inspect", "ping"]
+      test: ["CMD", "celery", "-A", "app.worker", "inspect", "ping", "--destination=hermes-worker@hermes-worker"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
 
-  # Redis for caching and task queue
+  celery_beat:
+    <<: *backend
+    container_name: hermes-beat
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    command: celery -A app.worker beat --loglevel=info --schedule=/app/data/celerybeat-schedule --pidfile=/tmp/hermes-beat.pid
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os; from pathlib import Path; os.kill(int(Path('/tmp/hermes-beat.pid').read_text()), 0)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   redis:
     image: redis:8-alpine
     container_name: hermes-redis

@@ -175,6 +175,10 @@ def create_application() -> FastAPI:
         title=settings.api_title,
         description=settings.api_description,
         version=settings.api_version,
+        docs_url="/api/v1/docs",
+        swagger_ui_oauth2_redirect_url="/api/v1/docs/oauth2-redirect",
+        redoc_url="/api/v1/redoc",
+        openapi_url="/api/v1/openapi.json",
         debug=False,  # Never expose tracebacks through HTTP, including in debug mode.
         lifespan=lifespan,
         responses=STANDARD_ERROR_RESPONSES,
