@@ -116,4 +116,23 @@ describe('session state', () => {
       expect(result.current.user?.preferences).toEqual({ theme: 'hermes', mode: 'dark' })
     )
   })
+  it('keeps a new session established in another tab while logout finishes', async () => {
+    const logout = deferred<void>()
+    vi.mocked(authService.logout).mockReturnValue(logout.promise)
+    const { result } = setup()
+    await waitFor(() => expect(result.current.user?.id).toBe('one'))
+    let pending!: Promise<void>
+    await act(async () => {
+      pending = result.current.logout()
+    })
+    vi.mocked(authService.getCurrentUser).mockResolvedValue({ ...user, id: 'two', username: 'two' })
+    act(() => TokenStorage.setTokens({ accessToken: 'new-access', refreshToken: 'new-refresh' }))
+    await waitFor(() => expect(result.current.user?.id).toBe('two'))
+    await act(async () => {
+      logout.resolve()
+      await pending
+    })
+    expect(result.current.user?.id).toBe('two')
+    expect(TokenStorage.getRefreshToken()).toBe('new-refresh')
+  })
 })

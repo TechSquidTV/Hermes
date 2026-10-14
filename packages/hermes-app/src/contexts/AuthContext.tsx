@@ -70,7 +70,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return id
     },
     onSettled: (_data, _error, _variables, id) => {
-      if (id === operation.current) {
+      // Another tab can establish a new session while logout is in flight.
+      if (
+        id === operation.current &&
+        !TokenStorage.getAccessToken() &&
+        !TokenStorage.getRefreshToken()
+      ) {
         setSuspendedVersion(TokenStorage.getVersion())
         queryClient.clear()
       }
