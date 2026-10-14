@@ -1,6 +1,9 @@
-name: PR Checks
+name: CI Checks
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
@@ -8,7 +11,7 @@ on:
 
 # Cancel in-progress runs when a new push is made to the same PR
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -20,13 +23,14 @@ jobs:
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
-      frontend: ${{ steps.filter.outputs.frontend }}
-      backend: ${{ steps.filter.outputs.backend }}
-      dependency-config: ${{ steps.filter.outputs.dependency-config }}
+      frontend: ${{ github.event_name == 'push' || steps.filter.outputs.frontend == 'true' }}
+      backend: ${{ github.event_name == 'push' || steps.filter.outputs.backend == 'true' }}
+      dependency-config: ${{ github.event_name == 'push' || steps.filter.outputs.dependency-config == 'true' }}
     steps:
       - uses: actions/checkout@v7
       
       - uses: dorny/paths-filter@v4
+        if: github.event_name == 'pull_request'
         id: filter
         with:
           filters: |
@@ -37,6 +41,8 @@ jobs:
               - 'pnpm-workspace.yaml'
               - '.github/renovate.json'
               - 'docker-compose*.yml'
+              - '.env.example'
+              - 'tests/infra/**'
               - '.github/workflows/**'
             backend:
               - 'packages/hermes-api/**'
@@ -46,6 +52,8 @@ jobs:
               - 'package.json'
               - '.github/renovate.json'
               - 'docker-compose*.yml'
+              - '.env.example'
+              - 'tests/infra/**'
               - '.github/workflows/**'
             dependency-config:
               - '.github/renovate.json'
@@ -100,10 +108,8 @@ jobs:
       - name: Test with coverage
         run: pnpm --filter hermes-app test:coverage
 
-      - name: Build frontend Docker images
-        run: |
-          docker build --pull -f packages/hermes-app/Dockerfile .
-          docker build --pull -f packages/hermes-app/Dockerfile.dev .
+      - name: Build development frontend Docker image
+        run: docker build --pull -f packages/hermes-app/Dockerfile.dev .
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
@@ -164,26 +170,25 @@ jobs:
 
       - name: Run black (format check)
         working-directory: packages/hermes-api
-        run: uv run --locked black --check app/ tests/ typings/
+        run: uv run --locked black --check app/ tests/ typings/ ../../tests/infra/
 
       - name: Run isort (import sorting check)
         working-directory: packages/hermes-api
-        run: uv run --locked isort --check-only app/ tests/ typings/
+        run: uv run --locked isort --check-only app/ tests/ typings/ ../../tests/infra/
 
       - name: Run ruff (linting)
         working-directory: packages/hermes-api
-        run: uv run --locked ruff check app/ tests/ typings/
+        run: uv run --locked ruff check app/ tests/ typings/ ../../tests/infra/
 
       - name: Run mypy (type checking)
         working-directory: packages/hermes-api
-        run: uv run --locked python -m mypy --explicit-package-bases app/ tests/
+        run: |
+          uv run --locked python -m mypy --explicit-package-bases app/ tests/
+          uv run --locked python -m mypy --config-file pyproject.toml ../../tests/infra/
 
       - name: Run tests with coverage
         working-directory: packages/hermes-api
         run: uv run --locked pytest --cov=app --cov-report=term-missing --cov-report=xml:coverage.xml --junitxml=junit.xml
-
-      - name: Build API Docker image
-        run: docker build --pull -f packages/hermes-api/Dockerfile packages/hermes-api
 
       - name: List coverage files (debug)
         working-directory: packages/hermes-api
@@ -205,10 +210,22 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./packages/hermes-api/junit.xml
 
+  compose-smoke:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true' || needs.detect-changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate all Compose configurations
+        run: python3 -m unittest discover -s tests/infra -v
+      - name: Build production images and verify both deployment topologies
+        run: python3 tests/infra/compose_smoke.py
+
   # Summary job that gates merging
   pr-checks-complete:
     runs-on: ubuntu-latest
-    needs: [detect-changes, dependency-config-checks, frontend-checks, backend-checks]
+    needs: [detect-changes, dependency-config-checks, frontend-checks, backend-checks, compose-smoke]
     if: always()
     steps:
       - name: Check all jobs succeeded
@@ -230,6 +247,11 @@ jobs:
 
           if [[ "${{ needs.detect-changes.outputs.backend }}" == "true" && "${{ needs.backend-checks.result }}" != "success" ]]; then
             echo "Required backend checks did not succeed"
+            exit 1
+          fi
+
+          if [[ ( "${{ needs.detect-changes.outputs.frontend }}" == "true" || "${{ needs.detect-changes.outputs.backend }}" == "true" ) && "${{ needs.compose-smoke.result }}" != "success" ]]; then
+            echo "Required Compose smoke checks did not succeed"
             exit 1
           fi
 

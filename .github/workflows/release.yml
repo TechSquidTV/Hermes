@@ -323,4 +323,4 @@ jobs:
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🎯 Production Release" >> $GITHUB_STEP_SUMMARY
-          echo "These images are tagged as \`latest\` and are now the default for all users." >> $GITHUB_STEP_SUMMARY
+          echo "Select this exact version with \`HERMES_IMAGE_TAG\` to upgrade the app, API, worker, and scheduler together." >> $GITHUB_STEP_SUMMARY
