@@ -78,6 +78,10 @@ normal release process. There is no scheduled external video download check.
 
 ## Checking automation
 
+For the 2026-10-17 maintenance snapshot, see the
+[dashboard dispositions](./DEPENDENCY_AUDIT_2026-10-17.md), including deferred
+major upgrades and the selected test/CI toolchain update.
+
 Use the repository's **Dependency Dashboard** issue for pending updates,
 major-update approvals, and configuration warnings. Renovate PRs link to hosted
 run logs in the Mend Developer Portal. After activation, confirm the first run
