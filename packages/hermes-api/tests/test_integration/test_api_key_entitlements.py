@@ -143,7 +143,11 @@ async def test_disable_and_reenable_owner(
 
 @pytest.mark.parametrize("state", ["expired", "revoked", "missing_owner"])
 async def test_invalid_key_states(
-    real_client: AsyncClient, test_user: User, db_session: AsyncSession, state: str
+    real_client: AsyncClient,
+    test_user: User,
+    test_admin_user: User,
+    db_session: AsyncSession,
+    state: str,
 ) -> None:
     key = await ApiKeyRepository(db_session).create(
         user_id=test_user.id,
@@ -166,6 +170,21 @@ async def test_invalid_key_states(
             "/api/v1/history/", headers={"Authorization": "Bearer invalid-key"}
         )
     ).status_code == 401
+
+    if state != "missing_owner":
+        admin = await login(real_client, test_admin_user.username, "adminpass123")
+        for enabled in (False, True):
+            response = await real_client.patch(
+                f"/api/v1/users/{test_user.id}/active",
+                headers=admin,
+                json={"isActive": enabled},
+            )
+            assert response.status_code == 200
+            assert (
+                await real_client.get(
+                    "/api/v1/history/", headers={"Authorization": "Bearer invalid-key"}
+                )
+            ).status_code == 401
 
 
 async def test_configured_service_key_is_owner_independent(
