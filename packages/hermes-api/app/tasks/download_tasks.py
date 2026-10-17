@@ -19,7 +19,7 @@ from app.db.repositories import (
 )
 from app.services.download_files import register_download_file
 from app.services.redis_progress import redis_progress_service
-from app.services.yt_dlp_service import YTDLPService
+from app.services.yt_dlp_service import DownloadOutputs, YTDLPService
 from app.tasks.types import task
 from app.utils.download_progress import (
     build_download_progress_payload,
@@ -171,6 +171,7 @@ async def _update_download_status(
     publish_sse: bool = True,
     result: dict[str, Any] | None = None,
     message: str | None = None,
+    outputs: DownloadOutputs | None = None,
     **kwargs: object,
 ) -> bool:
     """
@@ -184,12 +185,13 @@ async def _update_download_status(
         if status == "completed":
             # The status repository commits both writes below; registration must
             # never become visible independently of the completed status.
-            completed_path = kwargs.get("output_path")
-            if not isinstance(completed_path, str):
-                raise ValueError("Completed download must have an output path")
+            if outputs is None:
+                raise ValueError("Completed download must have final outputs")
             file_record = await register_download_file(
-                session, download_id, completed_path
+                session, download_id, outputs.media_path
             )
+            for sidecar in outputs.sidecar_paths:
+                await register_download_file(session, download_id, sidecar)
             kwargs["output_path"] = file_record.filepath
             kwargs["file_size"] = file_record.file_size
 
@@ -332,7 +334,7 @@ async def _download_video_task(
         await _trigger_webhooks("download_started", download_id, {"url": url})
 
         # First, extract info to get the video title and metadata
-        video_info = await yt_service.extract_info(url, download=False)
+        video_info = await yt_service.extract_info(url, download=False, **kwargs)
 
         if not video_info:
             raise Exception("Failed to extract video information")
@@ -526,7 +528,7 @@ async def _download_video_task(
                 )
 
         # Download the video with progress callback
-        result_path = await yt_service.download_video(
+        outputs = await yt_service.download_video(
             url=url,
             output_path=output_path,
             format_spec=format_spec,
@@ -534,7 +536,8 @@ async def _download_video_task(
             **kwargs,
         )
 
-        if not result_path or not os.path.isfile(result_path):
+        result_path = outputs.media_path
+        if not os.path.isfile(result_path):
             raise FileNotFoundError("Downloaded file is missing")
 
         # Get file size
@@ -558,7 +561,7 @@ async def _download_video_task(
             progress=100.0,
             completed_at=completed_at,
             file_size=file_size,
-            output_path=result_path,
+            outputs=outputs,
             title=video_title,
             duration=duration,
             thumbnail_url=thumbnail_url,
@@ -570,7 +573,8 @@ async def _download_video_task(
         if not completed:
             # A cancellation won the atomic status transition. Do not announce
             # completion or leave an unregistered final file behind.
-            resolve_download_path(result_path).unlink(missing_ok=True)
+            for path in outputs.paths:
+                resolve_download_path(path).unlink(missing_ok=True)
             return {
                 "success": False,
                 "download_id": download_id,

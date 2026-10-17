@@ -27,7 +27,12 @@ async def register_download_file(
         raise ValueError("Downloaded path is not a file")
 
     mime_type, _ = mimetypes.guess_type(file_path.name)
-    file_type = "audio" if mime_type and mime_type.startswith("audio/") else "video"
+    if file_path.suffix.lower() in {".vtt", ".srt", ".ass", ".ssa", ".lrc", ".ttml"}:
+        file_type = "subtitle"
+    elif mime_type and mime_type.startswith("image/"):
+        file_type = "thumbnail"
+    else:
+        file_type = "audio" if mime_type and mime_type.startswith("audio/") else "video"
 
     # A stable primary key makes simultaneous completion/repair retries safe
     # without requiring a schema migration on existing SQLite installations.

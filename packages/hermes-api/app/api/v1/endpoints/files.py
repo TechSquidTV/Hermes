@@ -43,25 +43,10 @@ async def _get_managed_file(
     file_path: Path, download_file_repo: DownloadFileRepository
 ) -> DownloadFile:
     """Return the download-file record for a resolved path or raise 404."""
-    for file_record in await download_file_repo.get_all():
-        try:
-            if Path(file_record.filepath).resolve(strict=False) == file_path:
-                return file_record
-        except OSError:
-            continue
-
-    raise HTTPException(status_code=404, detail="File not found")
-
-
-def _paths_match(left: str | None, right: Path) -> bool:
-    """Compare a stored optional path to a resolved path."""
-    if not left:
-        return False
-
-    try:
-        return Path(left).resolve(strict=False) == right
-    except OSError:
-        return False
+    file_record = await download_file_repo.get_by_filepath(str(file_path))
+    if file_record is None:
+        raise HTTPException(status_code=404, detail="File not found")
+    return file_record
 
 
 @router.get("/download")
@@ -203,14 +188,13 @@ async def delete_downloaded_files(
 
             await repos["download_files"].delete(managed_file.id)
 
-            # Also delete the database record for this download
-            # Find downloads with this output_path and delete them
-            downloads = await repos["downloads"].get_all()
-            for download in downloads:
-                if _paths_match(download.output_path, resolved_path):
-                    await repos["downloads"].delete(download.id)
-                    logger.info(f"Deleted download record for: {download.id}")
-                    break  # Only delete first match to avoid deleting multiple
+            # Keep the parent while siblings remain so sidecars stay listable
+            # and retention can still remove every remaining deliverable.
+            remaining = await repos["download_files"].get_by_download_id(
+                managed_file.download_id
+            )
+            if not remaining:
+                await repos["downloads"].delete(managed_file.download_id)
 
         except Exception as e:
             logger.error(f"Failed to delete file {file_path}", error=str(e))
