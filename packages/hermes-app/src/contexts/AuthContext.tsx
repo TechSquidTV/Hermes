@@ -23,6 +23,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // and cancel pending responses so they cannot restore previous-session data.
     void queryClient.cancelQueries()
     queryClient.removeQueries()
+    queryClient.getMutationCache().clear()
     notify()
   }), [queryClient])
   const version = useSyncExternalStore(subscribe, TokenStorage.getVersion)

@@ -1,16 +1,17 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { apiClient } from '@/services/api/client'
 import type { components } from '@/types/api.generated'
 import { useAuth } from '@/contexts/AuthContext'
+import { useAccountMutation } from './useAccountMutation'
 
-type ApiKeyCreate = components["schemas"]["ApiKeyCreate"]
-
+type ApiKeyCreate = components['schemas']['ApiKeyCreate']
+const apiKeysKey = (userId: string | undefined) => ['settings', 'api-keys', userId] as const
 
 export function useApiKeys() {
   const queryClient = useQueryClient()
   const { user } = useAuth()
-  const queryKey = ['settings', 'api-keys', user?.id] as const
+  const queryKey = apiKeysKey(user?.id)
 
   const keys = useQuery({
     queryKey,
@@ -18,13 +19,10 @@ export function useApiKeys() {
     enabled: !!user,
   })
 
-  const createKey = useMutation({
-    mutationFn: async (request: ApiKeyCreate) => {
-      return await apiClient.createApiKey(request)
-    },
-    onSuccess: (data) => {
+  const createKey = useAccountMutation(user?.id, (request: ApiKeyCreate) => apiClient.createApiKey(request), {
+    onSuccess: (data, userId) => {
       toast.success(`API key "${data.name}" created successfully!`)
-      void queryClient.invalidateQueries({ queryKey, exact: true })
+      void queryClient.invalidateQueries({ queryKey: apiKeysKey(userId), exact: true })
     },
     onError: (error) => {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
@@ -32,13 +30,10 @@ export function useApiKeys() {
     },
   })
 
-  const revokeKey = useMutation({
-    mutationFn: async (keyId: string) => {
-      return await apiClient.revokeApiKey(keyId)
-    },
-    onSuccess: () => {
+  const revokeKey = useAccountMutation(user?.id, (keyId: string) => apiClient.revokeApiKey(keyId), {
+    onSuccess: (_data, userId) => {
       toast.success('API key revoked successfully!')
-      void queryClient.invalidateQueries({ queryKey, exact: true })
+      void queryClient.invalidateQueries({ queryKey: apiKeysKey(userId), exact: true })
     },
     onError: (error) => {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
