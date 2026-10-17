@@ -317,6 +317,17 @@ async def _principal_from_api_key(
         logger.warning(f"Expired API key used: {db_api_key.id}")
         return None
 
+    owner = await UserRepository(db_session).get_by_id(db_api_key.user_id)
+    if not owner or not owner.is_active:
+        return None
+
+    # Grants are bounded by the owner's current role, including legacy keys.
+    permissions = [
+        permission
+        for permission in (db_api_key.permissions or [])
+        if permission != ApiKeyPermission.ADMIN or owner.is_admin
+    ]
+
     await api_key_repo.update_last_used(db_api_key.id)
 
     return AuthPrincipal(
@@ -325,7 +336,7 @@ async def _principal_from_api_key(
         user_id=db_api_key.user_id,
         api_key_id=db_api_key.id,
         api_key_name=db_api_key.name,
-        permissions=db_api_key.permissions or [],
+        permissions=permissions,
     )
 
 

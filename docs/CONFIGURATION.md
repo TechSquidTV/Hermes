@@ -186,3 +186,18 @@ Set that result as `HERMES_SECRET_KEY` in your untracked `.env`. Back up
 `data/data`, `data/downloads`, and the deployment configuration. Keep `.env` out
 of version control and restrict its permissions. See the
 [deployment guide](DEPLOYMENT.md) for volume ownership, backup, and recovery.
+
+### API-key owner authorization
+
+**Breaking security change:** ordinary users cannot mint keys with `admin`
+permissions. Database-backed keys require an existing, active owner on every
+request. Disabling an account suspends its keys; re-enabling it restores only
+keys that are still active and unexpired. Demoting an administrator removes
+`admin` from its keys' effective grants, including keys issued before this fix;
+explicit `read`, `write`, and `download` grants remain usable. The stored grants
+are unchanged, so promotion restores the admin grant.
+
+`HERMES_API_KEYS` are operator-managed service credentials with administrator
+permissions and no user owner. User disable/demotion does not affect them;
+remove them from configuration and restart the API to revoke them. They cannot
+use endpoints that require a user session, including key creation.
