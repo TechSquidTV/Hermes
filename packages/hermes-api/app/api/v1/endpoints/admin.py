@@ -5,7 +5,7 @@ Admin-only endpoints for system management.
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import Field
 
 from app.api.dependencies import get_current_admin_user
@@ -15,7 +15,6 @@ from app.models.auth import AuthenticatedUser
 from app.models.base import CamelCaseModel
 from app.models.pydantic.config import Configuration, ConfigurationUpdate
 from app.services.system_settings_service import system_settings_service
-from app.utils.media import DEFAULT_FORMAT_SPEC
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 logger = get_logger(__name__)
@@ -96,78 +95,37 @@ async def update_signup_setting(
 async def get_admin_configuration(
     current_user: AuthenticatedUser = Depends(get_current_admin_user),
 ) -> Configuration:
-    """
-    Get current API configuration.
+    """Read this API process's startup settings.
 
-    Admin-only endpoint for viewing system configuration including:
-    - Download defaults (format, subtitles, thumbnails)
-    - Performance settings (concurrency, retries, timeout)
-    - Storage settings (directories, cleanup)
-    - API settings (rate limits, debug mode)
-
-    **Note**: Sensitive settings like secret keys are not exposed.
-
-    **Requires**: Admin authentication
+    Does not report worker concurrency, download defaults, or scheduler state.
+    Environment changes require restarting the affected API, Celery workers and
+    beat processes. Sensitive settings are excluded. Requires admin login.
     """
     return Configuration(
-        # Download settings
-        output_template="%(title)s.%(ext)s",
-        default_format=DEFAULT_FORMAT_SPEC,
-        download_subtitles=False,
-        download_thumbnail=False,
         output_directory=settings.download_dir,
-        # Performance settings
-        max_concurrent_downloads=3,
-        retry_attempts=3,
-        timeout=30,
-        # Storage settings
         temp_directory=settings.temp_dir,
-        cleanup_enabled=True,
-        cleanup_older_than_days=30,
-        # API settings
-        rate_limit_per_minute=settings.rate_limit_per_minute,
+        download_retention_days=settings.download_retention_days,
+        max_login_attempts=settings.max_login_attempts,
+        login_attempt_window_minutes=settings.login_attempt_window_minutes,
+        rate_limiting_enabled=settings.enable_rate_limiting,
         debug_mode=settings.debug,
     )
 
 
-@router.put("/config", response_model=Configuration)
+@router.put("/config", status_code=501, response_model=None)
 async def update_admin_configuration(
     config_update: ConfigurationUpdate,
     current_user: AuthenticatedUser = Depends(get_current_admin_user),
-) -> Configuration:
+) -> None:
+    """Reject unsupported runtime configuration updates.
+
+    No fields are applied, including empty requests. Change supported deployment
+    environment settings and restart all affected API, Celery worker and beat
+    processes. There is no runtime propagation between these processes.
+    Download options belong on individual download requests; worker concurrency
+    belongs in the worker launch configuration. Requires admin login.
     """
-    Update API configuration.
-
-    Admin-only endpoint for updating runtime configuration settings.
-    Only provided fields will be updated.
-
-    **Note**: Configuration changes are runtime-only and will be reset on restart.
-    For persistent changes, update environment variables or configuration files.
-
-    **Supported Updates**:
-    - Download defaults
-    - Performance settings
-    - Cleanup settings
-    - Rate limits
-
-    **Not Supported** (require restart):
-    - Database URLs
-    - Secret keys
-    - Core directories (requires file system changes)
-
-    **Requires**: Admin authentication
-
-    Returns the updated configuration.
-    """
-    logger.info(
-        "Configuration update requested by admin",
-        admin_id=current_user.get("id"),
-        admin_username=current_user.get("username"),
-        updates=config_update.model_dump(exclude_none=True),
+    raise HTTPException(
+        status_code=501,
+        detail="Runtime configuration updates are not supported. Update deployment settings and restart affected API, Celery worker and beat processes.",
     )
-
-    # Warn that these are runtime changes only
-    logger.warning("Configuration changes are runtime-only and will reset on restart")
-
-    # Return current config (in real impl, would return updated values)
-    return await get_admin_configuration(current_user=current_user)
