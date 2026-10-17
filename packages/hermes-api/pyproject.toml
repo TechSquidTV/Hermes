@@ -19,6 +19,7 @@ dependencies = [
     "pydantic-settings>=2.0.0",
     "sse-starlette>=1.6.5",
     "structlog>=23.0.0",
+    "asyncpg>=0.30.0",
 ]
 
 [dependency-groups]

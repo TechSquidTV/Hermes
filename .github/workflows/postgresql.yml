@@ -1,0 +1,46 @@
+name: PostgreSQL integration
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'packages/hermes-api/**'
+      - '.github/workflows/postgresql.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  postgresql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: hermes
+          POSTGRES_PASSWORD: hermes-test
+          POSTGRES_DB: hermes_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd 'pg_isready -U hermes -d hermes_test'
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: packages/hermes-api
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+      - run: uv sync --locked --all-groups
+      - name: Validate migrations against PostgreSQL
+        env:
+          HERMES_TEST_POSTGRES_URL: postgresql+asyncpg://hermes:hermes-test@localhost:5432/hermes_test
+        run: uv run --locked pytest tests/test_db --no-cov
+      - name: Validate API, repositories, media and task behavior against PostgreSQL
+        env:
+          HERMES_TEST_DATABASE_URL: postgresql+asyncpg://hermes:hermes-test@localhost:5432/hermes_test
+        run: uv run --locked pytest tests/test_api tests/test_integration tests/test_services tests/test_tasks --no-cov
