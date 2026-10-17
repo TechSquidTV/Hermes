@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useRef, useState, useSyncExternalStore } from 'react'
+import React, { createContext, useCallback, useContext, useRef, useState, useSyncExternalStore } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { authService } from '@/services/auth'
 import { isAuthenticationError } from '@/services/http'
@@ -18,7 +18,14 @@ const userKey = (version = TokenStorage.getVersion()) => [...USER_KEY, version] 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient()
   const operation = useRef(0)
-  const version = useSyncExternalStore(TokenStorage.subscribe, TokenStorage.getVersion)
+  const subscribe = useCallback((notify: () => void) => TokenStorage.subscribe(() => {
+    // Run before publishing the new session to consumers. Include inactive queries
+    // and cancel pending responses so they cannot restore previous-session data.
+    void queryClient.cancelQueries()
+    queryClient.removeQueries()
+    notify()
+  }), [queryClient])
+  const version = useSyncExternalStore(subscribe, TokenStorage.getVersion)
   const hasCredentials = !!(TokenStorage.getAccessToken() || TokenStorage.getRefreshToken())
   const [suspendedVersion, setSuspendedVersion] = useState<number | null>(null)
   const enabled = suspendedVersion !== version

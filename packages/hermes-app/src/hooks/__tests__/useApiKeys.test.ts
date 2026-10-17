@@ -10,6 +10,7 @@ import { useApiKeys } from '../useApiKeys'
 import { apiClient } from '@/services/api/client'
 
 // Mock the API client
+vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'one' } }) }))
 vi.mock('@/services/api/client')
 
 const mockApiClient = vi.mocked(apiClient)

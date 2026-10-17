@@ -2,18 +2,20 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { apiClient } from '@/services/api/client'
 import type { components } from '@/types/api.generated'
+import { useAuth } from '@/contexts/AuthContext'
 
 type ApiKeyCreate = components["schemas"]["ApiKeyCreate"]
 
 
 export function useApiKeys() {
   const queryClient = useQueryClient()
+  const { user } = useAuth()
+  const queryKey = ['settings', 'api-keys', user?.id] as const
 
   const keys = useQuery({
-    queryKey: ['settings', 'api-keys'],
-    queryFn: async () => {
-      return await apiClient.getApiKeys()
-    },
+    queryKey,
+    queryFn: ({ signal }) => apiClient.getApiKeys(signal),
+    enabled: !!user,
   })
 
   const createKey = useMutation({
@@ -22,9 +24,9 @@ export function useApiKeys() {
     },
     onSuccess: (data) => {
       toast.success(`API key "${data.name}" created successfully!`)
-      void queryClient.invalidateQueries({ queryKey: ['settings', 'api-keys'] })
+      void queryClient.invalidateQueries({ queryKey, exact: true })
     },
-    onError: (error: unknown) => {
+    onError: (error) => {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       toast.error(`Failed to create API key: ${errorMessage}`)
     },
@@ -36,9 +38,9 @@ export function useApiKeys() {
     },
     onSuccess: () => {
       toast.success('API key revoked successfully!')
-      void queryClient.invalidateQueries({ queryKey: ['settings', 'api-keys'] })
+      void queryClient.invalidateQueries({ queryKey, exact: true })
     },
-    onError: (error: unknown) => {
+    onError: (error) => {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       toast.error(`Failed to revoke API key: ${errorMessage}`)
     },

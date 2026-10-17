@@ -7,6 +7,7 @@ import { apiClient } from '@/services/api/client'
 import { TokenStorage } from '@/utils/tokenStorage'
 import { toast } from 'sonner'
 
+vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'one' } }) }))
 vi.mock('@/services/api/client')
 vi.mock('@/utils/tokenStorage')
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
