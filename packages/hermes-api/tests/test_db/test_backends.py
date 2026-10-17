@@ -12,10 +12,12 @@ from pydantic import ValidationError
 from sqlalchemy import inspect, select
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.engine import Dialect
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
-from app.db.base import create_database_engine
+from app.db.base import Base, create_database_engine
 from app.db.models import Download, SystemSettings, User
+from app.db.repositories import SystemSettingsRepository
 from app.db.types import UTCDateTime
 
 API_ROOT = Path(__file__).resolve().parents[2]
@@ -58,6 +60,16 @@ def test_postgres_offline_migrations_support_encoded_password() -> None:
     assert "INSERT INTO system_settings" in result.stdout
 
 
+async def validate_policy_roundtrip(session: AsyncSession) -> None:
+    repository = SystemSettingsRepository(session)
+    for enabled in (True, False):
+        policy = await repository.update_allow_public_signup(enabled)
+        await session.refresh(policy)
+        assert policy.allow_public_signup is enabled
+        assert isinstance(policy.updated_at, datetime)
+        assert policy.updated_at.tzinfo is None
+
+
 async def validate_migrations(url: str) -> None:
     engine = create_database_engine(url)
     try:
@@ -67,7 +79,6 @@ async def validate_migrations(url: str) -> None:
             tables == []
         ), "Integration migration target must be an empty disposable database"
         migrate(url, "upgrade", "head")
-        from sqlalchemy.ext.asyncio import async_sessionmaker
 
         async with async_sessionmaker(engine, expire_on_commit=False)() as session:
             user = User(
@@ -95,6 +106,7 @@ async def validate_migrations(url: str) -> None:
             policy = await session.get(SystemSettings, 1)
             assert policy is not None
             assert isinstance(policy.allow_public_signup, bool)
+            await validate_policy_roundtrip(session)
             assert download.created_at.tzinfo is None
             await session.delete(download)
             await session.delete(user)
@@ -102,6 +114,14 @@ async def validate_migrations(url: str) -> None:
         migrate(url, "downgrade", "base")
         migrate(url, "upgrade", "head")
         migrate(url, "downgrade", "base")
+        # Startup may create a fresh schema directly. Exercise the same policy
+        # writes there to catch model/migration type disagreements.
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        async with async_sessionmaker(engine)() as session:
+            await validate_policy_roundtrip(session)
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
     finally:
         await engine.dispose()
 
