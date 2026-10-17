@@ -236,3 +236,9 @@ def downgrade() -> None:
     op.drop_table('downloads')
     op.drop_table('download_batches')
     op.drop_table('users')
+
+    # PostgreSQL native enum types outlive tables and must be removed for a
+    # subsequent clean upgrade. SQLite stores these as strings.
+    if op.get_bind().dialect.name == "postgresql":
+        for name in ("batch_type", "batch_status", "download_status", "batch_video_status", "history_status"):
+            sa.Enum(name=name).drop(op.get_bind(), checkfirst=True)
