@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from app.services.yt_dlp_service import DownloadOutputs
+
 if TYPE_CHECKING:
     from pathlib import Path
 
     from httpx import AsyncClient
     from sqlalchemy.ext.asyncio import AsyncSession
-
 
 import asyncio
 from unittest.mock import AsyncMock
@@ -61,13 +62,13 @@ async def test_worker_completion_registers_retrievable_file(
     final_path = tmp_path / f"Completed_video.{extension}"
     content = b"postprocessed media bytes"
 
-    async def write_output(**kwargs: object) -> str:
+    async def write_output(**kwargs: object) -> DownloadOutputs:
         # The worker must use the same configured directory as the file API.
         assert kwargs["output_path"] == str(
             tmp_path / f"{download_id}_Completed_video.%(ext)s"
         )
         final_path.write_bytes(content)
-        return str(final_path)
+        return DownloadOutputs(str(final_path))
 
     yt_service.download_video.side_effect = write_output
 
@@ -110,7 +111,7 @@ async def test_worker_completion_registers_retrievable_file(
     await download_tasks._update_download_status(
         download_id,
         "completed",
-        output_path=str(tmp_path / "subdir" / ".." / final_path.name),
+        outputs=DownloadOutputs(str(tmp_path / "subdir" / ".." / final_path.name)),
     )
     async with async_session_maker() as session:
         files = await DownloadFileRepository(session).get_by_download_id(download_id)
@@ -141,7 +142,7 @@ async def test_completion_rolls_back_file_registration_when_status_write_fails(
     # after the registration SQL has run, so both writes must roll back.
     with pytest.raises(IntegrityError):
         await download_tasks._update_download_status(
-            download.id, "completed", output_path=str(final_path), url=None
+            download.id, "completed", outputs=DownloadOutputs(str(final_path)), url=None
         )
 
     async with async_session_maker() as session:
@@ -168,7 +169,7 @@ async def test_simultaneous_completion_retries_create_one_file_record(
     await asyncio.gather(
         *(
             download_tasks._update_download_status(
-                download.id, "completed", output_path=str(final_path)
+                download.id, "completed", outputs=DownloadOutputs(str(final_path))
             )
             for _ in range(4)
         )
@@ -192,7 +193,9 @@ async def test_completion_does_not_commit_when_registration_fails(
     )
     with pytest.raises(FileNotFoundError):
         await download_tasks._update_download_status(
-            download.id, "completed", output_path=str(tmp_path / "missing.mp4")
+            download.id,
+            "completed",
+            outputs=DownloadOutputs(str(tmp_path / "missing.mp4")),
         )
     async with async_session_maker() as session:
         unchanged = await DownloadRepository(session).get_by_id(download.id)
@@ -300,7 +303,7 @@ async def test_managed_file_symlink_escape_is_rejected_after_registration(
         url="https://example.test/watch"
     )
     await download_tasks._update_download_status(
-        download.id, "completed", output_path=str(final_path)
+        download.id, "completed", outputs=DownloadOutputs(str(final_path))
     )
     outside = tmp_path / "secret.mp4"
     outside.write_bytes(b"private")
@@ -342,6 +345,9 @@ async def test_repair_covers_all_batches_and_preserves_existing_records(
         file_size=5,
         file_type="video",
     )
+    # Simulate a legacy noncanonical database row, bypassing canonical writes.
+    existing.filepath = str(tmp_path / "000" / ".." / "0.mp4")
+    await db_session.commit()
     assert await backfill_download_files(db_session) == 105
     assert await backfill_download_files(db_session) == 0
     files = list(await db_session.scalars(select(DownloadFile)))
@@ -349,3 +355,122 @@ async def test_repair_covers_all_batches_and_preserves_existing_records(
     assert [file.id for file in files if file.download_id == "download-000"] == [
         existing.id
     ]
+
+
+async def test_authenticated_worker_registers_all_deliverables_and_cleans_them(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    tmp_path: Path,
+    worker_boundaries: tuple[AsyncMock, AsyncMock],
+) -> None:
+    from app.tasks.cleanup_tasks import _cleanup_download_files
+
+    service, _ = worker_boundaries
+    headers = {"Cookie": "session=provided", "Authorization": "Bearer test"}
+
+    async def authenticated_metadata(
+        url: str, download: bool, **options: object
+    ) -> dict[str, object]:
+        assert options["http_headers"] == headers
+        assert download is False
+        return {"title": "Authenticated media"}
+
+    files = tuple(tmp_path / f"output{ext}" for ext in (".mp4", ".en.vtt", ".jpg"))
+
+    async def authenticated_download(**options: object) -> DownloadOutputs:
+        assert options["http_headers"] == headers
+        for path in files:
+            path.write_bytes(b"deliverable")
+        return DownloadOutputs(str(files[0]), tuple(str(path) for path in files[1:]))
+
+    service.extract_info.side_effect = authenticated_metadata
+    service.download_video.side_effect = authenticated_download
+    download = await DownloadRepository(db_session).create(
+        url="https://example.test/private"
+    )
+    result = await download_tasks._download_video_task(
+        download.id, download.url, http_headers=headers
+    )
+    assert result["success"] is True
+    async with async_session_maker() as session:
+        records = await DownloadFileRepository(session).get_by_download_id(download.id)
+        assert {record.file_type for record in records} == {
+            "video",
+            "subtitle",
+            "thumbnail",
+        }
+        assert {record.filepath for record in records} == {str(path) for path in files}
+    listing = await client.get("/api/v1/files/")
+    assert listing.json()["totalFiles"] == 3
+    for path in files:
+        response = await client.get(
+            "/api/v1/files/download", params={"path": path.name}
+        )
+        assert response.status_code == 200
+        assert response.content == b"deliverable"
+
+    # Removing the main file must preserve the parent's registered sidecars.
+    deleted = await client.request(
+        "DELETE", "/api/v1/files/", json={"files": [str(files[0])], "confirm": True}
+    )
+    assert deleted.json()["deletedFiles"] == 1
+    listing = await client.get("/api/v1/files/")
+    assert listing.json()["totalFiles"] == 2
+    cleaned = await _cleanup_download_files([download.id])
+    assert cleaned["deleted_files"] == 2
+    assert cleaned["failed_files"] == 0
+    assert not any(path.exists() for path in files)
+
+
+async def test_sidecar_registration_failure_rolls_back_completion(
+    db_session: AsyncSession,
+    tmp_path: Path,
+) -> None:
+    media = tmp_path / "media.mp4"
+    media.write_bytes(b"media")
+    download = await DownloadRepository(db_session).create(
+        url="https://example.test/watch"
+    )
+    outputs = DownloadOutputs(str(media), (str(tmp_path / "missing.vtt"),))
+    with pytest.raises(FileNotFoundError):
+        await download_tasks._update_download_status(
+            download.id,
+            "completed",
+            outputs=outputs,
+            publish_sse=False,
+        )
+    async with async_session_maker() as session:
+        current = await DownloadRepository(session).get_by_id(download.id)
+        assert current is not None
+        assert current.status == "pending"
+        assert current.files == []
+
+
+async def test_cancellation_removes_all_unregistered_outputs(
+    db_session: AsyncSession,
+    tmp_path: Path,
+    worker_boundaries: tuple[AsyncMock, AsyncMock],
+) -> None:
+    service, _ = worker_boundaries
+    download = await DownloadRepository(db_session).create(
+        url="https://example.test/watch"
+    )
+    download_id = download.id
+    paths = tuple(tmp_path / f"cancelled{ext}" for ext in (".mp4", ".en.vtt", ".jpg"))
+
+    async def cancel_while_downloading(**options: object) -> DownloadOutputs:
+        for path in paths:
+            path.write_bytes(b"output")
+        async with async_session_maker() as session:
+            await DownloadRepository(session).update_status(download_id, "cancelled")
+        return DownloadOutputs(str(paths[0]), tuple(str(path) for path in paths[1:]))
+
+    service.download_video.side_effect = cancel_while_downloading
+    result = await download_tasks._download_video_task(download_id, download.url)
+    assert result["success"] is False
+    assert not any(path.exists() for path in paths)
+    async with async_session_maker() as session:
+        current = await DownloadRepository(session).get_by_id(download_id)
+        assert current is not None
+        assert current.status == "cancelled"
+        assert current.files == []

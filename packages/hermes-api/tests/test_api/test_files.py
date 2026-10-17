@@ -170,3 +170,76 @@ async def test_download_file_accepts_nested_root_relative_path(
         "/api/v1/files/download", params={"path": "../outside.mp4"}
     )
     assert response.status_code == 404
+
+
+async def test_oldest_managed_file_remains_addressable_beyond_listing_cap(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    tmp_path: Path,
+) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import insert, text
+
+    from app.db.models import Download, DownloadFile
+
+    media = tmp_path / "oldest.mp4"
+    download = await _create_managed_file(db_session, media, b"oldest")
+    now = datetime.now(timezone.utc)
+    # Both former scans must exclude the target: files cap at 10,000 and
+    # downloads at 1,000. Bulk inserts keep this regression inexpensive.
+    await db_session.execute(
+        insert(Download),
+        [
+            dict(
+                id=f"new-{i}",
+                url="https://example.test/watch",
+                status="completed",
+                created_at=now + timedelta(seconds=i + 1),
+            )
+            for i in range(10001)
+        ],
+    )
+    await db_session.execute(
+        insert(DownloadFile),
+        [
+            dict(
+                id=f"file-{i}",
+                download_id=f"new-{i}",
+                filename=f"{i}.mp4",
+                filepath=str(tmp_path / f"{i}.mp4"),
+                file_size=1,
+                file_type="video",
+                created_at=now + timedelta(seconds=i + 1),
+            )
+            for i in range(10001)
+        ],
+    )
+    await db_session.commit()
+    listing = await DownloadFileRepository(db_session).get_all()
+    assert len(listing) == 10000
+    assert all(file.filepath != str(media) for file in listing)
+    plan = await db_session.execute(
+        text("EXPLAIN QUERY PLAN SELECT * FROM download_files WHERE filepath = :path"),
+        {"path": str(media)},
+    )
+    assert "ix_download_files_filepath" in str(plan.all())
+
+    response = await client.get("/api/v1/files/download", params={"path": "oldest.mp4"})
+    assert response.status_code == 200
+    assert response.content == b"oldest"
+    response = await client.request(
+        "DELETE",
+        "/api/v1/files/",
+        json={
+            "files": [str(media)],
+            "confirm": True,
+        },
+    )
+    assert response.json()["deletedFiles"] == 1
+    assert not media.exists()
+    # Check committed deletion through a fresh session.
+    from app.db.base import async_session_maker
+
+    async with async_session_maker() as session:
+        assert await DownloadRepository(session).get_by_id(download.id) is None

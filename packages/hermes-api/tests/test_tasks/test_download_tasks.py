@@ -16,7 +16,6 @@ if TYPE_CHECKING:
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
-
 import asyncio
 import os
 from unittest.mock import AsyncMock, Mock, call, patch
@@ -24,6 +23,7 @@ from unittest.mock import AsyncMock, Mock, call, patch
 import pytest
 from yt_dlp.utils import DownloadError
 
+from app.services.yt_dlp_service import DownloadOutputs
 from app.tasks import download_tasks
 
 
@@ -166,7 +166,7 @@ async def test_download_video_task_success_updates_metadata_and_cleans_up(
         format_spec: str,
         progress_callback: Callable[[dict[str, object]], None] | None = None,
         **kwargs: object,
-    ) -> str:
+    ) -> DownloadOutputs:
         assert url == "https://example.test/watch"
         assert output_path == os.path.join(
             str(tmp_path), "download-123_Dangerous_Title.%(ext)s"
@@ -174,7 +174,7 @@ async def test_download_video_task_success_updates_metadata_and_cleans_up(
         assert format_spec == "bestvideo+bestaudio"
         assert kwargs == {"merge_output_format": "mp4"}
         download_file.write_bytes(b"video")
-        return str(download_file)
+        return DownloadOutputs(str(download_file))
 
     yt_service.download_video.side_effect = fake_download_video
 
@@ -206,7 +206,7 @@ async def test_download_video_task_success_updates_metadata_and_cleans_up(
         "file_size": 5,
     }
     yt_service.extract_info.assert_awaited_once_with(
-        "https://example.test/watch", download=False
+        "https://example.test/watch", download=False, merge_output_format="mp4"
     )
     yt_service.download_video.assert_awaited_once()
 
@@ -234,7 +234,7 @@ async def test_download_video_task_success_updates_metadata_and_cleans_up(
     assert completed_call.args == ("download-123", "completed")
     assert completed_call.kwargs["progress"] == 100.0
     assert completed_call.kwargs["file_size"] == 5
-    assert completed_call.kwargs["output_path"] == str(download_file)
+    assert completed_call.kwargs["outputs"] == DownloadOutputs(str(download_file))
     assert completed_call.kwargs["result"] == {
         "url": "https://example.test/watch",
         "title": 'Dangerous: "Title"?',
@@ -345,7 +345,7 @@ async def test_download_video_task_uses_output_template_and_forwarded_options(
         format_spec: str,
         progress_callback: Callable[[dict[str, object]], None] | None = None,
         **kwargs: object,
-    ) -> str:
+    ) -> DownloadOutputs:
         assert output_path == os.path.join(
             str(tmp_path), "download-123_custom-name.%(ext)s"
         )
@@ -355,7 +355,7 @@ async def test_download_video_task_uses_output_template_and_forwarded_options(
             "subtitleslangs": ["en"],
         }
         download_file.write_bytes(b"video")
-        return str(download_file)
+        return DownloadOutputs(str(download_file))
 
     yt_service.download_video.side_effect = fake_download_video
 
@@ -398,7 +398,9 @@ async def test_download_video_task_failure_preserves_error_and_cleans_up(
         error_message = "Requested format is not available"
         yt_service.download_video.side_effect = DownloadError(error_message)
     else:
-        yt_service.download_video.return_value = str(tmp_path / "missing-file.mp4")
+        yt_service.download_video.return_value = DownloadOutputs(
+            str(tmp_path / "missing-file.mp4")
+        )
 
     update_status = AsyncMock()
     create_history = AsyncMock()
@@ -467,7 +469,7 @@ async def test_download_progress_hook_normalizes_progress_and_keeps_metadata(
         format_spec: str,
         progress_callback: Callable[[dict[str, object]], None] | None = None,
         **kwargs: object,
-    ) -> str:
+    ) -> DownloadOutputs:
         assert progress_callback is not None
         progress_callback(
             {
@@ -488,7 +490,7 @@ async def test_download_progress_hook_normalizes_progress_and_keeps_metadata(
             }
         )
         download_file.write_bytes(b"video")
-        return str(download_file)
+        return DownloadOutputs(str(download_file))
 
     def fake_run_coroutine_threadsafe(
         coro: Coroutine[object, object, object], loop: asyncio.AbstractEventLoop
