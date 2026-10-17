@@ -162,8 +162,8 @@ class TestAdminConfig:
         assert response.status_code == 200
         data = response.json()
         # Check for expected config fields
-        assert "outputTemplate" in data or "output_template" in data
-        assert "maxConcurrentDownloads" in data or "max_concurrent_downloads" in data
+        assert "outputDirectory" in data
+        assert "rateLimitingEnabled" in data
 
     @pytest.mark.asyncio
     async def test_update_config_requires_admin(
@@ -186,18 +186,18 @@ class TestAdminConfig:
         assert response.status_code == 403
 
     @pytest.mark.asyncio
-    async def test_update_config_success_for_admin(
+    async def test_update_config_rejected_for_admin(
         self, client: AsyncClient, admin_auth_token: str
     ) -> None:
-        """Test that admin users can update config."""
+        """Unsupported runtime changes fail explicitly."""
         response = await client.put(
             "/api/v1/admin/config",
             json={"maxConcurrentDownloads": 5},
             headers={"Authorization": f"Bearer {admin_auth_token}"},
         )
 
-        # Should return 200 even if not fully implemented
-        assert response.status_code == 200
+        # No success response for unsupported changes.
+        assert response.status_code == 501
 
 
 class TestPublicConfig:
@@ -221,3 +221,60 @@ class TestPublicConfig:
             assert response.status_code == 200
             data = response.json()
             assert "allowPublicSignup" in data
+
+
+@pytest.mark.parametrize(
+    "updates",
+    [
+        {},
+        {"maxConcurrentDownloads": 1, "cleanupEnabled": False, "rateLimitPerMinute": 1},
+        {"defaultFormat": "best"},
+    ],
+)
+async def test_runtime_updates_fail_without_changing_settings(
+    test_admin_user: User,
+    admin_auth_token: str,
+    updates: dict[str, str | int | bool],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from httpx import ASGITransport
+
+    from app.core.config import settings
+    from app.main import app
+    from app.tasks.celery_app import celery_app
+
+    assert not app.dependency_overrides
+    monkeypatch.setattr(settings, "max_login_attempts", 7)
+    monkeypatch.setattr(settings, "login_attempt_window_minutes", 23)
+    monkeypatch.setattr(settings, "download_retention_days", 19)
+    schedule = dict(celery_app.conf.beat_schedule)
+    headers = {"Authorization": f"Bearer {admin_auth_token}"}
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as real_client:
+        before = await real_client.get("/api/v1/admin/config", headers=headers)
+        assert before.status_code == 200
+        data = before.json()
+        assert data == {
+            "outputDirectory": settings.download_dir,
+            "tempDirectory": settings.temp_dir,
+            "downloadRetentionDays": 19,
+            "maxLoginAttempts": 7,
+            "loginAttemptWindowMinutes": 23,
+            "rateLimitingEnabled": settings.enable_rate_limiting,
+            "debugMode": settings.debug,
+        }
+        result = await real_client.put(
+            "/api/v1/admin/config", headers=headers, json=updates
+        )
+        assert result.status_code == 501
+        assert "not supported" in result.text
+        assert (
+            await real_client.get("/api/v1/admin/config", headers=headers)
+        ).json() == data
+        assert settings.max_login_attempts == 7
+        assert settings.download_retention_days == 19
+        assert dict(celery_app.conf.beat_schedule) == schedule
+    operation = app.openapi()["paths"]["/api/v1/admin/config"]["put"]
+    assert "200" not in operation["responses"]
+    assert "501" in operation["responses"]

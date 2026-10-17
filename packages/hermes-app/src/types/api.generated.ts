@@ -593,43 +593,22 @@ export interface paths {
         };
         /**
          * Get Admin Configuration
-         * @description Get current API configuration.
+         * @description Read this API process's startup settings.
          *
-         *     Admin-only endpoint for viewing system configuration including:
-         *     - Download defaults (format, subtitles, thumbnails)
-         *     - Performance settings (concurrency, retries, timeout)
-         *     - Storage settings (directories, cleanup)
-         *     - API settings (rate limits, debug mode)
-         *
-         *     **Note**: Sensitive settings like secret keys are not exposed.
-         *
-         *     **Requires**: Admin authentication
+         *     Does not report worker concurrency, download defaults, or scheduler state.
+         *     Environment changes require restarting the affected API, Celery workers and
+         *     beat processes. Sensitive settings are excluded. Requires admin login.
          */
         get: operations["get_admin_configuration_api_v1_admin_config_get"];
         /**
          * Update Admin Configuration
-         * @description Update API configuration.
+         * @description Reject unsupported runtime configuration updates.
          *
-         *     Admin-only endpoint for updating runtime configuration settings.
-         *     Only provided fields will be updated.
-         *
-         *     **Note**: Configuration changes are runtime-only and will be reset on restart.
-         *     For persistent changes, update environment variables or configuration files.
-         *
-         *     **Supported Updates**:
-         *     - Download defaults
-         *     - Performance settings
-         *     - Cleanup settings
-         *     - Rate limits
-         *
-         *     **Not Supported** (require restart):
-         *     - Database URLs
-         *     - Secret keys
-         *     - Core directories (requires file system changes)
-         *
-         *     **Requires**: Admin authentication
-         *
-         *     Returns the updated configuration.
+         *     No fields are applied, including empty requests. Change supported deployment
+         *     environment settings and restart all affected API, Celery worker and beat
+         *     processes. There is no runtime propagation between these processes.
+         *     Download options belong on individual download requests; worker concurrency
+         *     belongs in the worker launch configuration. Requires admin login.
          */
         put: operations["update_admin_configuration_api_v1_admin_config_put"];
         post?: never;
@@ -1669,80 +1648,30 @@ export interface components {
         };
         /**
          * Configuration
-         * @description Current API configuration with automatic camelCase conversion.
+         * @description Non-secret startup settings of the responding API process.
          */
         Configuration: {
-            /**
-             * Outputtemplate
-             * @description Default output filename template
-             */
-            outputTemplate: string;
-            /**
-             * Defaultformat
-             * @description Default format selection
-             */
-            defaultFormat: string;
-            /**
-             * Downloadsubtitles
-             * @description Default subtitle download setting
-             */
-            downloadSubtitles: boolean;
-            /**
-             * Downloadthumbnail
-             * @description Default thumbnail download setting
-             */
-            downloadThumbnail: boolean;
-            /**
-             * Outputdirectory
-             * @description Default output directory
-             */
+            /** Outputdirectory */
             outputDirectory: string;
-            /**
-             * Maxconcurrentdownloads
-             * @description Maximum concurrent downloads
-             */
-            maxConcurrentDownloads: number;
-            /**
-             * Retryattempts
-             * @description Number of retry attempts
-             */
-            retryAttempts: number;
-            /**
-             * Timeout
-             * @description Request timeout in seconds
-             */
-            timeout: number;
-            /**
-             * Tempdirectory
-             * @description Temporary files directory
-             */
+            /** Tempdirectory */
             tempDirectory: string;
             /**
-             * Cleanupenabled
-             * @description Automatic cleanup enabled
-             * @default true
+             * Downloadretentiondays
+             * @description Configured media retention age; scheduling is owned by Celery beat
              */
-            cleanupEnabled: boolean;
-            /**
-             * Cleanupolderthandays
-             * @description Auto-cleanup file age threshold
-             * @default 30
-             */
-            cleanupOlderThanDays: number;
-            /**
-             * Ratelimitperminute
-             * @description API rate limit per minute
-             */
-            rateLimitPerMinute: number;
-            /**
-             * Debugmode
-             * @description Debug mode enabled
-             */
+            downloadRetentionDays: number | null;
+            /** Maxloginattempts */
+            maxLoginAttempts: number;
+            /** Loginattemptwindowminutes */
+            loginAttemptWindowMinutes: number;
+            /** Ratelimitingenabled */
+            rateLimitingEnabled: boolean;
+            /** Debugmode */
             debugMode: boolean;
         };
         /**
          * ConfigurationUpdate
-         * @description Configuration update request with automatic camelCase conversion.
+         * @description Unsupported update request; valid requests are rejected with HTTP 501.
          */
         ConfigurationUpdate: {
             /**
@@ -5582,15 +5511,6 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Configuration"];
-                };
-            };
             /** @description Bad Request */
             400: {
                 headers: {
@@ -5661,6 +5581,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Successful Response */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
