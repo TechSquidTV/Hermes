@@ -18,6 +18,13 @@ depends_on = None
 
 def upgrade() -> None:
     """Normalize historical paths once, then enable indexed exact lookup."""
+    if op.get_context().as_sql:
+        raise RuntimeError(
+            "Managed path canonicalization requires an online migration on the "
+            "API host with its download filesystem mounted; SQL-only migration "
+            "generation cannot resolve historical paths or symlinks. Run "
+            "alembic upgrade head without --sql."
+        )
     files = sa.table(
         "download_files", sa.column("id", sa.String), sa.column("filepath", sa.String)
     )

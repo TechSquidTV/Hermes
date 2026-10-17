@@ -219,8 +219,13 @@ async def test_oldest_managed_file_remains_addressable_beyond_listing_cap(
     listing = await DownloadFileRepository(db_session).get_all()
     assert len(listing) == 10000
     assert all(file.filepath != str(media) for file in listing)
+    explain = (
+        "EXPLAIN QUERY PLAN"
+        if db_session.get_bind().dialect.name == "sqlite"
+        else "EXPLAIN"
+    )
     plan = await db_session.execute(
-        text("EXPLAIN QUERY PLAN SELECT * FROM download_files WHERE filepath = :path"),
+        text(f"{explain} SELECT * FROM download_files WHERE filepath = :path"),
         {"path": str(media)},
     )
     assert "ix_download_files_filepath" in str(plan.all())
