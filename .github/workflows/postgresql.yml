@@ -8,6 +8,10 @@ on:
       - '.github/workflows/postgresql.yml'
   workflow_dispatch:
 
+concurrency:
+  group: postgresql-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 

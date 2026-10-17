@@ -20,6 +20,7 @@ from app.db.repositories import (
 from app.services.download_files import register_download_file
 from app.services.redis_progress import redis_progress_service
 from app.services.yt_dlp_service import YTDLPService
+from app.tasks.runtime import run_async_task
 from app.tasks.types import task
 from app.utils.download_progress import (
     build_download_progress_payload,
@@ -706,7 +707,7 @@ def download_video_task(
 
     This is a synchronous wrapper that runs the async download logic.
     """
-    return asyncio.run(
+    return run_async_task(
         _download_video_task(
             download_id=download_id,
             url=url,

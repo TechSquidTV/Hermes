@@ -7,7 +7,8 @@ from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
-from sqlalchemy import and_, desc, select, update
+from sqlalchemy import and_, cast, desc, func, select, update
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -321,10 +322,17 @@ class WebhookRepository(BaseRepository):
 
     async def get_webhooks_for_event(self, event: str) -> List[Webhook]:
         """Get webhooks that subscribe to a specific event."""
-        result = await self.session.execute(
-            select(Webhook).where(
-                and_(Webhook.is_active, Webhook.events.contains([event]))
+        if self.session.get_bind().dialect.name == "postgresql":
+            membership = cast(Webhook.events, JSONB).contains([event])
+        else:
+            # SQLite JSON containment is a string LIKE operation, not array
+            # membership. json_each compares each element exactly instead.
+            events = func.json_each(Webhook.events).table_valued("value")
+            membership = (
+                select(1).select_from(events).where(events.c.value == event).exists()
             )
+        result = await self.session.execute(
+            select(Webhook).where(Webhook.is_active, membership)
         )
         return list(result.scalars().all())
 
