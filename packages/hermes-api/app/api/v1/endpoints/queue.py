@@ -19,6 +19,7 @@ from app.models.pydantic.download import (
     DownloadQueue,
     DownloadStatus,
 )
+from app.models.status import DownloadState
 from app.utils.files import relative_download_path
 
 router = APIRouter()
@@ -27,7 +28,9 @@ logger = get_logger(__name__)
 
 @router.get("/")
 async def get_download_queue(
-    status: Optional[str] = Query(None, description="Filter by download status"),
+    status: Optional[DownloadState] = Query(
+        None, description="Filter by download status"
+    ),
     limit: int = Query(
         20, ge=1, le=100, description="Maximum number of items to return"
     ),

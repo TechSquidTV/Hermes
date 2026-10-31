@@ -5,6 +5,7 @@ Database models for the Hermes API.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import get_args
 
 from pydantic import JsonValue
 from sqlalchemy import (
@@ -22,6 +23,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.db.types import UTCDateTime
+from app.models.status import DownloadState, HistoryStatus
 from app.utils.media import DEFAULT_FORMAT_SPEC
 
 
@@ -35,12 +37,7 @@ class Download(Base):
     title: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(
         Enum(
-            "pending",
-            "downloading",
-            "processing",
-            "completed",
-            "failed",
-            "cancelled",
+            *get_args(DownloadState),
             name="download_status",
         ),
         default="pending",
@@ -354,7 +351,7 @@ class DownloadHistory(Base):
     download_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
     url: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[str] = mapped_column(
-        Enum("completed", "failed", "cancelled", name="history_status"), nullable=False
+        Enum(*get_args(HistoryStatus), name="history_status"), nullable=False
     )
     duration: Mapped[float | None] = mapped_column(Float, nullable=True)
     file_size: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
