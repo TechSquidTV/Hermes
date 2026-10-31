@@ -4,6 +4,7 @@ Integration tests for API key functionality end-to-end.
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -13,7 +14,7 @@ if TYPE_CHECKING:
 from unittest.mock import Mock
 
 import pytest
-from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 
 from app.main import app
 
@@ -22,19 +23,24 @@ class TestApiKeyIntegration:
     """Test API key integration with download system."""
 
     @pytest.fixture
-    def client(self, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    async def client(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> AsyncGenerator[AsyncClient, None]:
         """Test client fixture."""
         from app.tasks.download_tasks import download_video_task
 
         monkeypatch.setattr(download_video_task, "apply_async", Mock())
-        return TestClient(app)
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
+            yield client
 
     async def test_api_key_full_lifecycle(
-        self, client: TestClient, test_user: User, auth_token: str
+        self, client: AsyncClient, test_user: User, auth_token: str
     ) -> None:
         """Test complete API key lifecycle: create, use, revoke."""
         # 1. Create API key
-        create_response = client.post(
+        create_response = await client.post(
             "/api/v1/auth/api-keys",
             headers={"Authorization": f"Bearer {auth_token}"},
             json={
@@ -49,7 +55,7 @@ class TestApiKeyIntegration:
         api_key_id = api_key_data["id"]
 
         # 2. Verify API key appears in list
-        list_response = client.get(
+        list_response = await client.get(
             "/api/v1/auth/api-keys", headers={"Authorization": f"Bearer {auth_token}"}
         )
         assert list_response.status_code == 200
@@ -61,8 +67,8 @@ class TestApiKeyIntegration:
         assert "key" not in keys_list[0]  # Should not expose the key
 
         # 3. Test API key authentication with download endpoint
-        download_response = client.post(
-            "/api/v1/download",
+        download_response = await client.post(
+            "/api/v1/download/",
             headers={"Authorization": f"Bearer {api_key}"},
             json={"url": "https://example.test/watch"},
         )
@@ -71,14 +77,14 @@ class TestApiKeyIntegration:
         assert download_response.status_code == 200
 
         # 4. Revoke API key
-        revoke_response = client.delete(
+        revoke_response = await client.delete(
             f"/api/v1/auth/api-keys/{api_key_id}",
             headers={"Authorization": f"Bearer {auth_token}"},
         )
         assert revoke_response.status_code == 200
 
         # 5. Verify API key is revoked (should appear as inactive)
-        list_response_after = client.get(
+        list_response_after = await client.get(
             "/api/v1/auth/api-keys", headers={"Authorization": f"Bearer {auth_token}"}
         )
         assert list_response_after.status_code == 200
@@ -88,11 +94,11 @@ class TestApiKeyIntegration:
         # or mark them as inactive in the response
 
     async def test_jwt_token_vs_api_key_authentication(
-        self, client: TestClient, test_user: User, auth_token: str
+        self, client: AsyncClient, test_user: User, auth_token: str
     ) -> None:
         """Test that both JWT tokens and API keys work for authentication."""
         # Test 1: JWT token authentication (should work)
-        jwt_response = client.get(
+        jwt_response = await client.get(
             "/api/v1/auth/me", headers={"Authorization": f"Bearer {auth_token}"}
         )
         # This should work with JWT tokens
@@ -100,7 +106,7 @@ class TestApiKeyIntegration:
 
         # Test 2: API key authentication (should also work for some endpoints)
         # Create API key first
-        create_response = client.post(
+        create_response = await client.post(
             "/api/v1/auth/api-keys",
             headers={"Authorization": f"Bearer {auth_token}"},
             json={"name": "Auth Test Key", "permissions": ["write"]},
@@ -108,19 +114,19 @@ class TestApiKeyIntegration:
         api_key = create_response.json()["key"]
 
         # Test API key with download endpoint (should not return 401)
-        api_key_response = client.post(
-            "/api/v1/download",
+        api_key_response = await client.post(
+            "/api/v1/download/",
             headers={"Authorization": f"Bearer {api_key}"},
             json={"url": "https://example.test/watch"},
         )
         assert api_key_response.status_code == 200
 
     async def test_multiple_users_api_key_isolation(
-        self, client: TestClient, test_user: User, auth_token: str
+        self, client: AsyncClient, test_user: User, auth_token: str
     ) -> None:
         """Test that multiple users have isolated API keys."""
         # Create API key for first user
-        create_response1 = client.post(
+        create_response1 = await client.post(
             "/api/v1/auth/api-keys",
             headers={"Authorization": f"Bearer {auth_token}"},
             json={"name": "User 1 Key", "permissions": ["read"]},
@@ -131,7 +137,7 @@ class TestApiKeyIntegration:
         # Note: This would require creating a second user in the test
         # For now, just test that the current user sees their own key
 
-        list_response = client.get(
+        list_response = await client.get(
             "/api/v1/auth/api-keys", headers={"Authorization": f"Bearer {auth_token}"}
         )
         assert list_response.status_code == 200

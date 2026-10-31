@@ -2,7 +2,6 @@
 Celery tasks for cleanup and maintenance operations.
 """
 
-import asyncio
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
@@ -13,6 +12,7 @@ from app.api.dependencies import get_repositories_from_session
 from app.core.logging import get_logger
 from app.db.base import async_session_maker
 from app.db.models import Download
+from app.tasks.runtime import run_async_task
 from app.tasks.types import task
 from app.utils.files import resolve_download_path
 
@@ -119,7 +119,7 @@ def cleanup_old_downloads(days: int = 30, dry_run: bool = False) -> Dict[str, An
     Returns:
         Dictionary with cleanup statistics
     """
-    return asyncio.run(_cleanup_old_downloads_async(days, dry_run))
+    return run_async_task(_cleanup_old_downloads_async(days, dry_run))
 
 
 async def _cleanup_old_downloads_async(
@@ -226,7 +226,7 @@ def cleanup_temp_files(
     Returns:
         Dictionary with cleanup statistics
     """
-    return asyncio.run(_cleanup_temp_files_async(max_age_hours, dry_run))
+    return run_async_task(_cleanup_temp_files_async(max_age_hours, dry_run))
 
 
 async def _cleanup_temp_files_async(
@@ -308,7 +308,7 @@ def cleanup_expired_tokens(dry_run: bool = False) -> Dict[str, Any]:
     Returns:
         Dictionary with cleanup statistics
     """
-    return asyncio.run(_cleanup_expired_tokens_async(dry_run))
+    return run_async_task(_cleanup_expired_tokens_async(dry_run))
 
 
 async def _cleanup_expired_tokens_async(dry_run: bool = False) -> Dict[str, Any]:

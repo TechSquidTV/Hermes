@@ -5,20 +5,40 @@ Database base configuration and session management.
 from pathlib import Path
 from typing import AsyncGenerator
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.engine import make_url
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import settings
 
-# Create async engine
-engine = create_async_engine(
-    settings.database_url,
-    echo=settings.database_echo,
-    pool_size=10,
-    max_overflow=20,
-    pool_pre_ping=True,
-    pool_recycle=3600,  # Recycle connections after 1 hour
-)
+
+def create_database_engine(database_url: str, *, echo: bool = False) -> AsyncEngine:
+    """Configure the supported async backends, including in-memory SQLite."""
+    url = make_url(database_url)
+    if url.get_backend_name() == "sqlite" and url.database not in (
+        None,
+        "",
+        ":memory:",
+    ):
+        Path(url.database).parent.mkdir(parents=True, exist_ok=True)
+    if url.get_backend_name() == "sqlite" and url.database in (None, "", ":memory:"):
+        return create_async_engine(url, echo=echo, pool_pre_ping=True)
+    return create_async_engine(
+        url,
+        echo=echo,
+        pool_size=10,
+        max_overflow=20,
+        pool_pre_ping=True,
+        pool_recycle=3600,
+    )
+
+
+engine = create_database_engine(settings.database_url, echo=settings.database_echo)
 
 # Create async session factory
 async_session_maker = async_sessionmaker(
@@ -53,14 +73,6 @@ async def create_tables() -> None:
     """Create all database tables."""
     # Register models even when this helper runs before application startup.
     from app.db import models  # noqa: F401
-
-    database = engine.url.database
-    if engine.url.get_backend_name() == "sqlite" and database not in (
-        None,
-        "",
-        ":memory:",
-    ):
-        Path(database).parent.mkdir(parents=True, exist_ok=True)
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

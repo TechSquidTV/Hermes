@@ -4,13 +4,15 @@ import os
 import re
 from typing import Any, Optional
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
     SettingsConfigDict,
 )
 from pydantic_settings.sources import EnvSettingsSource
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ArgumentError
 
 
 class CustomEnvSettingsSource(EnvSettingsSource):
@@ -92,6 +94,21 @@ class Settings(BaseSettings):
     # Database
     database_url: str = Field(default="sqlite+aiosqlite:///./data/hermes.db")
     database_echo: bool = Field(default=False)
+
+    @field_validator("database_url")
+    @classmethod
+    def validate_database_url(cls, value: str) -> str:
+        try:
+            url = make_url(value)
+        except ArgumentError:
+            raise ValueError("Invalid database URL") from None
+        if url.drivername not in {"sqlite+aiosqlite", "postgresql+asyncpg"}:
+            raise ValueError(
+                "Use sqlite+aiosqlite or postgresql+asyncpg for HERMES_DATABASE_URL"
+            )
+        if not url.database:
+            raise ValueError("Database URL must name a database")
+        return value
 
     # Redis/Cache
     redis_url: str = Field(default="redis://localhost:6379")

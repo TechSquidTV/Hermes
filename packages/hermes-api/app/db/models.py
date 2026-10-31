@@ -5,12 +5,13 @@ Database models for the Hermes API.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import get_args
 
 from pydantic import JsonValue
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
-    DateTime,
     Enum,
     Float,
     ForeignKey,
@@ -21,6 +22,8 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.db.types import UTCDateTime
+from app.models.status import DownloadState, HistoryStatus
 from app.utils.media import DEFAULT_FORMAT_SPEC
 
 
@@ -34,12 +37,7 @@ class Download(Base):
     title: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(
         Enum(
-            "pending",
-            "downloading",
-            "processing",
-            "completed",
-            "failed",
-            "cancelled",
+            *get_args(DownloadState),
             name="download_status",
         ),
         default="pending",
@@ -48,8 +46,8 @@ class Download(Base):
     progress: Mapped[float | None] = mapped_column(Float, default=0.0, nullable=True)
 
     # Progress tracking fields
-    downloaded_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    total_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    downloaded_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    total_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     download_speed: Mapped[float | None] = mapped_column(Float, nullable=True)
     eta: Mapped[float | None] = mapped_column(Float, nullable=True)
 
@@ -57,7 +55,7 @@ class Download(Base):
         String, default=DEFAULT_FORMAT_SPEC, nullable=True
     )
     output_path: Mapped[str | None] = mapped_column(String, nullable=True)
-    file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    file_size: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     duration: Mapped[float | None] = mapped_column(Float, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -79,10 +77,10 @@ class Download(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+        UTCDateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )
-    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
 
     # Relationships
     files: Mapped[list[DownloadFile]] = relationship(
@@ -107,7 +105,7 @@ class DownloadFile(Base):
     )
     filename: Mapped[str] = mapped_column(String, nullable=False)
     filepath: Mapped[str] = mapped_column(String, nullable=False)
-    file_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    file_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
     file_type: Mapped[str] = mapped_column(String, nullable=False)
 
     # Metadata
@@ -118,7 +116,7 @@ class DownloadFile(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+        UTCDateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )
 
     # Relationships
@@ -174,10 +172,13 @@ class DownloadBatch(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True
+        UTCDateTime,
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+        index=True,
     )
-    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
 
     # Settings applied to all downloads in batch
     format_spec: Mapped[str | None] = mapped_column(
@@ -218,7 +219,7 @@ class BatchVideo(Base):
     duration: Mapped[int | None] = mapped_column(Integer, nullable=True)
     thumbnail_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     uploader: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    view_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    view_count: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     upload_date: Mapped[str | None] = mapped_column(String(8), nullable=True)
 
     # Position in playlist
@@ -251,7 +252,7 @@ class BatchVideo(Base):
     retry_count: Mapped[int | None] = mapped_column(Integer, default=0, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+        UTCDateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )
 
     # Relationships
@@ -279,9 +280,9 @@ class Webhook(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+        UTCDateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )
-    last_triggered: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_triggered: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
 
     def __repr__(self) -> str:
         return f"<Webhook(id={self.id}, name={self.name}, url={self.url})>"
@@ -302,10 +303,10 @@ class ApiKey(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+        UTCDateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )
-    last_used: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_used: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
 
     def __repr__(self) -> str:
         return f"<ApiKey(id={self.id}, name={self.name}, active={self.is_active})>"
@@ -333,9 +334,9 @@ class User(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+        UTCDateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )
-    last_login: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_login: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, username={self.username}, email={self.email})>"
@@ -350,10 +351,10 @@ class DownloadHistory(Base):
     download_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
     url: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[str] = mapped_column(
-        Enum("completed", "failed", "cancelled", name="history_status"), nullable=False
+        Enum(*get_args(HistoryStatus), name="history_status"), nullable=False
     )
     duration: Mapped[float | None] = mapped_column(Float, nullable=True)
-    file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    file_size: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Metadata
@@ -362,8 +363,8 @@ class DownloadHistory(Base):
     format_used: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # Timestamps
-    started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    completed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
+    completed_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
 
     def __repr__(self) -> str:
         return f"<DownloadHistory(id={self.id}, status={self.status}, duration={self.duration}s)>"
@@ -381,12 +382,14 @@ class TokenBlacklist(Base):
     user_id: Mapped[str] = mapped_column(
         String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    expires_at: Mapped[datetime] = mapped_column(
+        UTCDateTime, nullable=False, index=True
+    )
     reason: Mapped[str] = mapped_column(String, default="logout", nullable=False)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+        UTCDateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )
 
     def __repr__(self) -> str:
@@ -406,7 +409,7 @@ class SystemSettings(Base):
 
     # Timestamps
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
+        UTCDateTime,
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
         nullable=False,

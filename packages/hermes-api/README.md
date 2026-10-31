@@ -328,3 +328,7 @@ See LICENSE file for details.
 ---
 
 Built with ❤️ using FastAPI and yt-dlp
+
+## PostgreSQL and SQLite
+
+Both are supported database backends. See [database deployment and validation](../../docs/POSTGRESQL.md) for connection URLs, migrations, TLS, and real PostgreSQL integration tests.
