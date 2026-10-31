@@ -7,6 +7,7 @@ type Tokens = Pick<components['schemas']['TokenResponse'], 'accessToken' | 'refr
 export class TokenStorage {
   private static readonly ACCESS_TOKEN_KEY = 'hermes_access_token'
   private static readonly REFRESH_TOKEN_KEY = 'hermes_refresh_token'
+  private static readonly SESSION_KEY = 'hermes_session_change'
   private static version = 0
 
   private static listeners = new Set<() => void>()
@@ -17,8 +18,7 @@ export class TokenStorage {
   private static onStorage = (event: StorageEvent): void => {
     if (
       event.key === null ||
-      event.key === TokenStorage.ACCESS_TOKEN_KEY ||
-      event.key === TokenStorage.REFRESH_TOKEN_KEY
+      event.key === TokenStorage.SESSION_KEY
     ) {
       TokenStorage.version += 1
       TokenStorage.notify()
@@ -39,7 +39,17 @@ export class TokenStorage {
     if (newSession) this.version += 1
     this.setAccessToken(tokens.accessToken)
     this.setRefreshToken(tokens.refreshToken)
-    if (newSession) this.notify()
+    if (newSession) this.publishSessionChange()
+  }
+
+  private static publishSessionChange(): void {
+    try {
+      // This is a notification marker, not a credential or a security token.
+      localStorage.setItem(this.SESSION_KEY, `${Date.now()}-${Math.random()}`)
+    } catch (error) {
+      debug.error('Unable to publish session change', error)
+    }
+    this.notify()
   }
 
   static setAccessToken(token: string): void {
@@ -100,7 +110,7 @@ export class TokenStorage {
     } catch (error) {
       debug.error('Unable to clear refresh token', error)
     }
-    this.notify()
+    this.publishSessionChange()
   }
 
   static clearAccessToken(): void {

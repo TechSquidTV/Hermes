@@ -137,7 +137,7 @@ describe('session state', () => {
     vi.mocked(authService.getCurrentUser).mockResolvedValue({ ...user, id: 'two' })
     act(() => {
       localStorage.setItem('hermes_access_token', 'B-access')
-      window.dispatchEvent(new StorageEvent('storage', { key: 'hermes_access_token' }))
+      window.dispatchEvent(new StorageEvent('storage', { key: 'hermes_session_change' }))
     })
     await waitFor(() => expect(result.current.auth.user?.id).toBe('two'))
     const invalidate = vi.spyOn(client, 'invalidateQueries')
@@ -154,6 +154,33 @@ describe('session state', () => {
     expect(invalidate).not.toHaveBeenCalled()
   })
 
+  it('preserves an in-flight key creation when another tab rotates credentials', async () => {
+    const creation = deferred<typeof createdKey>()
+    vi.mocked(apiClient.createApiKey).mockReturnValue(creation.promise)
+    const { result, client } = setup(() => ({ auth: useAuth(), keys: useApiKeys() }))
+    await waitFor(() => expect(result.current.auth.user?.id).toBe('one'))
+    let pending!: Promise<typeof createdKey>
+    act(() => {
+      pending = result.current.keys.createKey.mutateAsync({ name: 'key', permissions: ['read'] })
+    })
+    await waitFor(() => expect(apiClient.createApiKey).toHaveBeenCalledOnce())
+    const version = TokenStorage.getVersion()
+    const cached = client.getQueryData(['settings', 'api-keys', 'one'])
+    act(() => {
+      localStorage.setItem('hermes_access_token', 'rotated-access')
+      localStorage.setItem('hermes_refresh_token', 'rotated-refresh')
+      window.dispatchEvent(new StorageEvent('storage', { key: 'hermes_access_token' }))
+      window.dispatchEvent(new StorageEvent('storage', { key: 'hermes_refresh_token' }))
+    })
+    expect(TokenStorage.getVersion()).toBe(version)
+    expect(client.getQueryData(['settings', 'api-keys', 'one'])).toBe(cached)
+    await act(async () => {
+      creation.resolve(createdKey)
+      await expect(pending).resolves.toEqual(createdKey)
+    })
+    expect(toast.success).toHaveBeenCalled()
+  })
+
   it('does not send an old UI mutation with credentials from a newly switched session', async () => {
     const { result } = setup(() => ({ auth: useAuth(), keys: useApiKeys() }))
     await waitFor(() => expect(result.current.auth.user?.id).toBe('one'))
@@ -164,7 +191,7 @@ describe('session state', () => {
     act(() => {
       pending = create({ name: 'private A metadata', permissions: ['read'] }).then(() => {}).catch(rejected)
       localStorage.setItem('hermes_access_token', 'B-access')
-      window.dispatchEvent(new StorageEvent('storage', { key: 'hermes_access_token' }))
+      window.dispatchEvent(new StorageEvent('storage', { key: 'hermes_session_change' }))
     })
     await act(async () => { await pending })
     await waitFor(() => expect(result.current.auth.user?.id).toBe('two'))
@@ -195,7 +222,7 @@ describe('session state', () => {
     act(() => {
       localStorage.setItem('hermes_access_token', 'B-access')
       localStorage.setItem('hermes_refresh_token', 'B-refresh')
-      window.dispatchEvent(new StorageEvent('storage', { key: 'hermes_access_token' }))
+      window.dispatchEvent(new StorageEvent('storage', { key: 'hermes_session_change' }))
     })
     expect(client.getQueryData(key)).toBeUndefined()
     expect(client.getQueryData(['admin', 'users'])).toBeUndefined()
@@ -220,7 +247,7 @@ describe('session state', () => {
     vi.mocked(authService.getCurrentUser).mockResolvedValue({ ...user, id: 'two' })
     act(() => {
       localStorage.setItem('hermes_access_token', 'B-access')
-      window.dispatchEvent(new StorageEvent('storage', { key: 'hermes_access_token' }))
+      window.dispatchEvent(new StorageEvent('storage', { key: 'hermes_session_change' }))
     })
     expect(signal?.aborted).toBe(true)
     await waitFor(() => expect(result.current.auth.user?.id).toBe('two'))
