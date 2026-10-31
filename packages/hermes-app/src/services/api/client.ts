@@ -312,8 +312,8 @@ class ApiClient {
     })
   }
 
-  async getApiKeys(): Promise<ApiKeyListResponse[]> {
-    return this.request<ApiKeyListResponse[]>('/auth/api-keys')
+  async getApiKeys(signal?: AbortSignal): Promise<ApiKeyListResponse[]> {
+    return this.request<ApiKeyListResponse[]>('/auth/api-keys', { signal })
   }
 
   async revokeApiKey(apiKeyId: string): Promise<{ message: string }> {
