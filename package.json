@@ -2,7 +2,7 @@
   "name": "hermes-monorepo",
   "version": "0.6.0",
   "private": true,
-  "packageManager": "pnpm@12.3.4+sha512.961aa41fb077da3a04a441d9f8e15ebc0c96da8ef710b2eb67bf9ee7cb0610eabd48f1fd85f51cffe73846785fa0f87c56a3a872a1d893f8446741b5cce45457",
+  "packageManager": "pnpm@12.18.0+sha512.9d7882d5dc82147ecfc4e062aa34834e0ad0296710a1837a1115ae012127d36b7109e321ac1598a1dd0a65597681b1e99917e12ed0d749eae91187943363beb3",
   "scripts": {
     "dev": "docker compose -f docker-compose.dev.yml up --build",
     "dev:down": "docker compose -f docker-compose.dev.yml down",
@@ -29,16 +29,16 @@
     "format:check": "cd packages/hermes-api && uv run --locked black --check --diff app/ tests/ && uv run --locked isort --check-only --diff app/ tests/",
     "pre-check:api": "cd packages/hermes-api && uv run --locked black --check app/ tests/ && uv run --locked isort --check-only app/ tests/ && uv run --locked ruff check app/ tests/ && uv run --locked python -m mypy --explicit-package-bases app/ tests/ && uv run --locked pytest",
     "pre-check:app": "pnpm --filter hermes-app lint && pnpm --filter hermes-app build && pnpm --filter hermes-app type-check && pnpm --filter hermes-app test",
-    "update:all": "pnpm update --recursive --latest && cd packages/hermes-api && uv lock --upgrade && uv sync",
+    "update:all": "pnpm update --recursive --latest '!typescript' && cd packages/hermes-api && uv lock --upgrade && uv sync",
     "generate:routes": "pnpm --filter hermes-app generate:routes",
     "build:docker": "docker build -f packages/hermes-app/Dockerfile . && docker build -f packages/hermes-api/Dockerfile packages/hermes-api && docker build -f packages/hermes-app/Dockerfile.dev ."
   },
   "devDependencies": {
     "corepack": "0.36.0",
-    "shadcn": "^4.21.0"
+    "shadcn": "^4.23.0"
   },
   "engines": {
     "node": "^22.22.2 || ^24.15.0 || >=26.0.0",
-    "pnpm": ">=12.3.4"
+    "pnpm": ">=12.18.0"
   }
 }
