@@ -27,9 +27,9 @@ jobs:
       backend: ${{ github.event_name == 'push' || steps.filter.outputs.backend == 'true' }}
       dependency-config: ${{ github.event_name == 'push' || steps.filter.outputs.dependency-config == 'true' }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       
-      - uses: dorny/paths-filter@v4
+      - uses: dorny/paths-filter@v4.0.3
         if: github.event_name == 'pull_request'
         id: filter
         with:
@@ -64,11 +64,11 @@ jobs:
     if: needs.detect-changes.outputs.dependency-config == 'true'
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/renovatebot/renovate:44.147.0
+      image: ghcr.io/renovatebot/renovate:44.221.5@sha256:ff73c6043e78a4fa0d32378bc2093e65fceb082a040d10db20add14ebe1c650a
       # Checkout must write to GitHub's runner-owned state and workspace mounts.
       options: --user 0:0
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - name: Validate Renovate configuration
         run: renovate-config-validator --strict .github/renovate.json
 
@@ -80,13 +80,13 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@v6.1.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: '26'
           cache: 'pnpm'
@@ -112,7 +112,7 @@ jobs:
         run: docker build --pull -f packages/hermes-app/Dockerfile.dev .
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./packages/hermes-app/coverage/lcov.info
@@ -122,7 +122,7 @@ jobs:
 
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
-        uses: codecov/test-results-action@v1
+        uses: codecov/test-results-action@v1.2.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./packages/hermes-app/junit.xml
@@ -135,20 +135,20 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v10.2.0
+        uses: astral-sh/setup-uv@v10.3.3
         with:
           enable-cache: true
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@v7.1.0
         with:
-          python-version: '3.14'
+          python-version: '3.15'
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: '26'
 
@@ -160,7 +160,7 @@ jobs:
           uv sync --locked --all-groups
 
       - name: Set up pnpm for schema verification
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@v6.1.1
 
       - name: Verify generated frontend API types
         run: |
@@ -195,7 +195,7 @@ jobs:
         run: ls -la *.xml || echo "No XML files found"
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./packages/hermes-api/coverage.xml
@@ -205,7 +205,7 @@ jobs:
 
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
-        uses: codecov/test-results-action@v1
+        uses: codecov/test-results-action@v1.2.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./packages/hermes-api/junit.xml
@@ -216,7 +216,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - name: Validate all Compose configurations
         run: python3 -m unittest discover -s tests/infra -v
       - name: Build production images and verify both deployment topologies

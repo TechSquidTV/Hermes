@@ -10,6 +10,12 @@ and local media-conversion tests. Dynamic yt-dlp option and metadata dictionarie
 remain explicit at the external boundary. When updating yt-dlp, compare these
 signatures with the installed source and run the backend checks and tests.
 
-Celery and Kombu imports have narrowly scoped missing-import overrides. Celery's
-task decorator is typed through `app/tasks/types.py`, which preserves each task's
+Kombu 5.7 ships incomplete type information for its lazy `Queue` export and
+constructor. The partial Kombu stub describes only the named-queue constructor
+and `name` attribute used here. The real objects are exercised by the Celery
+queue configuration tests and Compose worker smoke test. Recheck the stub
+against `kombu/entity.py` when upgrading Kombu.
+
+Celery imports have a narrowly scoped missing-import override. Its task
+decorator is typed through `app/tasks/types.py`, which preserves each task's
 parameters and return type while returning the actual Celery task object.

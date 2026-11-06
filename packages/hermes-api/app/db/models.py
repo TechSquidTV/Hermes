@@ -104,7 +104,7 @@ class DownloadFile(Base):
         String, ForeignKey("downloads.id", ondelete="CASCADE"), nullable=False
     )
     filename: Mapped[str] = mapped_column(String, nullable=False)
-    filepath: Mapped[str] = mapped_column(String, nullable=False)
+    filepath: Mapped[str] = mapped_column(String, nullable=False, index=True)
     file_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
     file_type: Mapped[str] = mapped_column(String, nullable=False)
 
