@@ -126,7 +126,7 @@ export function useSSE<T = unknown>(
     callbacksRef.current = { onOpen, onClose, onError };
   }, [onOpen, onClose, onError]);
 
-  const [data, setData] = useState<T | null>(null);
+  const [data, setData] = useState<{ url: string; value: T } | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [isReconnecting, setIsReconnecting] = useState(false);
@@ -232,7 +232,7 @@ export function useSSE<T = unknown>(
         if (eventSourceRef.current !== eventSource || !event.data.trim()) return;
         try {
           const parsedData: T = JSON.parse(event.data);
-          setData(parsedData);
+          setData({ url, value: parsedData });
         } catch (error) {
           debug.error('Failed to parse SSE data:', error, 'Data:', event.data);
         }
@@ -278,7 +278,7 @@ export function useSSE<T = unknown>(
   }, [connect]);
 
   return {
-    data,
+    data: data?.url === url ? data.value : null,
     isConnected,
     error,
     isReconnecting,

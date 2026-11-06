@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
+import { TokenStorage } from '@/utils/tokenStorage'
 import { apiClient } from '@/services/api/client'
 import type { components } from '@/types/api.generated'
 
@@ -13,8 +14,10 @@ function renewalDelay(response: TokenResponse): number {
 }
 
 export function useSSEToken(scope: string, ttl: number, enabled = true) {
-  const [state, setState] = useState<{ scope: string; token: string | null; error: Error | null }>({
+  const version = useSyncExternalStore(TokenStorage.subscribe, TokenStorage.getVersion)
+  const [state, setState] = useState<{ scope: string; version: number; token: string | null; error: Error | null }>({
     scope,
+    version,
     token: null,
     error: null,
   })
@@ -30,7 +33,7 @@ export function useSSEToken(scope: string, ttl: number, enabled = true) {
         const response = await apiClient.createSSEToken({ scope, ttl }, controller.signal)
         if (controller.signal.aborted) return
         failures = 0
-        setState({ scope, token: response.token, error: null })
+        setState({ scope, version, token: response.token, error: null })
         timer = setTimeout(() => {
           void fetchToken()
         }, renewalDelay(response))
@@ -38,7 +41,8 @@ export function useSSEToken(scope: string, ttl: number, enabled = true) {
         if (controller.signal.aborted) return
         setState((previous) => ({
           scope,
-          token: previous.scope === scope ? previous.token : null,
+          version,
+          token: previous.scope === scope && previous.version === version ? previous.token : null,
           error: error instanceof Error ? error : new Error('Live updates unavailable'),
         }))
         timer = setTimeout(
@@ -54,10 +58,10 @@ export function useSSEToken(scope: string, ttl: number, enabled = true) {
       controller.abort()
       clearTimeout(timer)
     }
-  }, [scope, ttl, attempt, enabled])
+  }, [scope, ttl, attempt, enabled, version])
   return {
-    token: enabled && state.scope === scope ? state.token : null,
-    error: state.scope === scope ? state.error : null,
+    token: enabled && state.scope === scope && state.version === version ? state.token : null,
+    error: state.scope === scope && state.version === version ? state.error : null,
     retry,
   }
 }
