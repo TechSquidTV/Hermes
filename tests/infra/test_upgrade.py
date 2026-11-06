@@ -343,11 +343,23 @@ with patch("scripts.upgrade.run", side_effect=inspect_output):
         )
 
     def test_terminal_interrupt_does_not_kill_the_current_child_operation(self) -> None:
+        self.assert_child_operation_finishes(signal.SIGINT)
+
+    def test_disconnected_stderr_does_not_interrupt_the_current_child_operation(
+        self,
+    ) -> None:
+        self.assert_child_operation_finishes(signal.SIGHUP, close_stderr=True)
+
+    def assert_child_operation_finishes(
+        self, interruption: signal.Signals, *, close_stderr: bool = False
+    ) -> None:
         program = """
-import sys
+import os, sys
 from pathlib import Path
 from scripts.upgrade import Upgrade, UpgradeError, defer_signals, run
 directory = Path(sys.argv[1])
+if sys.argv[2] == "True":
+    os.close(2)
 upgrade = Upgrade([], directory / ".env", "1.2.3", 1)
 child = "import sys, time; from pathlib import Path; p = Path(sys.argv[1]); (p/'started').touch(); time.sleep(1); (p/'finished').touch()"
 with defer_signals(upgrade):
@@ -359,7 +371,7 @@ with defer_signals(upgrade):
 """
         environment = {**os.environ, "PYTHONPATH": str(ROOT)}
         process = subprocess.Popen(
-            [sys.executable, "-c", program, str(self.directory)],
+            [sys.executable, "-c", program, str(self.directory), str(close_stderr)],
             env=environment,
             start_new_session=True,
             stdout=subprocess.PIPE,
@@ -376,7 +388,7 @@ with defer_signals(upgrade):
                     self.fail(str(process.communicate()))
                 time.sleep(0.01)
             self.assertTrue((self.directory / "started").exists())
-            os.killpg(process.pid, signal.SIGINT)
+            os.killpg(process.pid, interruption)
             output, error = process.communicate(timeout=10)
             self.assertEqual(process.returncode, 0, (output, error))
             self.assertTrue((self.directory / "finished").exists())

@@ -139,12 +139,17 @@ def defer_signals(upgrade: Upgrade) -> Iterator[None]:
     """Finish the current Docker operation before cancelling at a checkpoint."""
 
     def request_stop(number: int, frame: FrameType | None) -> None:
-        if not upgrade.stop_requested:
+        if upgrade.stop_requested:
+            return
+        upgrade.stop_requested = True
+        try:
             os.write(
                 2,
                 b"Cancellation requested; finishing the current step before cleanup.\n",
             )
-        upgrade.stop_requested = True
+        except OSError:
+            # A disconnected terminal must not interrupt the active operation.
+            pass
 
     previous = {
         number: signal.signal(number, request_stop)
