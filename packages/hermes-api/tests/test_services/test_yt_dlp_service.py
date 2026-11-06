@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from pathlib import Path
     from types import TracebackType
 
-
+import os
 import shutil
 import wave
 from unittest.mock import patch
@@ -92,7 +92,8 @@ async def test_download_video_enables_node_js_runtime(tmp_path: Path) -> None:
             str(output_path),
         )
 
-    assert result_path == str(downloaded_path)
+    assert result_path.media_path == str(downloaded_path)
+    assert result_path.sidecar_paths == ()
     assert FakeYoutubeDL.calls[0]["js_runtimes"] == {"node": {}}
     assert "remote_components" not in FakeYoutubeDL.calls[0]
 
@@ -144,7 +145,7 @@ async def test_download_video_returns_real_final_path_after_processing(
             result_path = await service.download_video(
                 source.as_uri(), str(tmp_path / "download.%(ext)s"), **options
             )
-            assert result_path == str(tmp_path / f"download.{extension}")
+            assert result_path.media_path == str(tmp_path / f"download.{extension}")
             assert (tmp_path / f"download.{extension}").stat().st_size > 0
     if extension == "mp3":
         assert not (tmp_path / "download.wav").exists()
@@ -230,3 +231,121 @@ def test_default_format_selects_separate_video_and_audio_streams() -> None:
     with YoutubeDL({"quiet": True, "format": "best"}) as ydl:
         with pytest.raises(ExtractorError, match="Requested format is not available"):
             ydl.process_ie_result(info, download=False)
+
+
+async def test_download_outputs_follow_final_move_manifest_only(tmp_path: Path) -> None:
+    """Do not glob neighboring files or register pre-conversion intermediates."""
+    from collections.abc import Callable
+    from typing import cast
+
+    from app.services.yt_dlp_service import DownloadOutputs
+
+    media = tmp_path / "final.mp4"
+    subtitle = tmp_path / "final.en.srt"
+    thumbnail = tmp_path / "final.jpg"
+    unrelated = tmp_path / "final.private.txt"
+    for path in (media, subtitle, thumbnail, unrelated):
+        path.write_bytes(b"output")
+    intermediate = tmp_path / "final.en.vtt"
+
+    def extract(
+        self: FakeYoutubeDL, url: str, download: bool = False
+    ) -> dict[str, object]:
+        assert self.opts["http_headers"] == {"Cookie": "session=provided"}
+        hooks = cast(
+            "list[Callable[[dict[str, object]], None]]",
+            self.opts["postprocessor_hooks"],
+        )
+        for hook in hooks:
+            hook(
+                {
+                    "status": "finished",
+                    "postprocessor": "MoveFiles",
+                    "info_dict": {
+                        "filepath": str(media),
+                        "__files_to_move": {
+                            str(tmp_path / "temp.mp4"): str(media),
+                            str(tmp_path / "temp.en.srt"): str(subtitle),
+                            str(thumbnail): "",
+                            str(intermediate): str(intermediate),
+                        },
+                    },
+                }
+            )
+        return {"requested_downloads": [{"filepath": str(media)}]}
+
+    with (
+        patch.object(FakeYoutubeDL, "extract_info", extract),
+        patch("app.services.yt_dlp_service.PublicYoutubeDL", FakeYoutubeDL),
+    ):
+        result = await YTDLPService().download_video(
+            "https://example.test/watch",
+            str(tmp_path / "final.%(ext)s"),
+            http_headers={"Cookie": "session=provided"},
+        )
+    assert result == DownloadOutputs(
+        str(media), tuple(sorted((str(subtitle), str(thumbnail))))
+    )
+    assert str(unrelated) not in result.paths
+    assert str(intermediate) not in result.paths
+
+
+async def test_real_ytdlp_tracks_subtitles_and_thumbnail_after_moves(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.wav"
+    with wave.open(str(source), "wb") as sample:
+        sample.setnchannels(1)
+        sample.setsampwidth(2)
+        sample.setframerate(8000)
+        sample.writeframes(b"\0\0" * 800)
+    thumbnail = tmp_path / "source.jpg"
+    thumbnail.write_bytes(b"fixture image")
+    output_dir = tmp_path / "final"
+    output_dir.mkdir()
+
+    class FixtureYoutubeDL(YoutubeDL):
+        def extract_info(
+            self, url: str, download: bool = False, **kwargs: object
+        ) -> dict[str, object]:
+            return self.process_ie_result(
+                {
+                    "id": "fixture",
+                    "title": "Fixture",
+                    "ext": "wav",
+                    "url": source.as_uri(),
+                    "extractor": "fixture",
+                    "webpage_url": "https://example.test/watch",
+                    "subtitles": {
+                        "en": [
+                            {
+                                "ext": "vtt",
+                                "data": "WEBVTT\n\n00:00.000 --> 00:00.100\nHello\n",
+                            }
+                        ]
+                    },
+                    "thumbnails": [{"url": thumbnail.as_uri()}],
+                },
+                download=download,
+            )
+
+    with (
+        patch("app.services.yt_dlp_service.validate_public_url"),
+        patch("app.services.yt_dlp_service.PublicYoutubeDL", FixtureYoutubeDL),
+    ):
+        result = await YTDLPService().download_video(
+            "https://example.test/watch",
+            str(output_dir / "media.%(ext)s"),
+            enable_file_urls=True,
+            writesubtitles=True,
+            writethumbnail=True,
+            subtitleslangs=["en"],
+            noprogress=True,
+            paths={"temp": str(tmp_path / "temp")},
+        )
+    assert result.media_path == str(output_dir / "media.wav")
+    assert set(result.sidecar_paths) == {
+        str(output_dir / "media.en.vtt"),
+        str(output_dir / "media.jpg"),
+    }
+    assert all(os.path.isfile(path) for path in result.paths)

@@ -7,7 +7,7 @@ import {
   LayoutGroup,
   type Transition,
   motion,
-} from 'framer-motion';
+} from 'motion/react';
 import {
   FloatingArrow,
   FloatingPortal,

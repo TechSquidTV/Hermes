@@ -25,6 +25,7 @@ from app.db.models import (
 )
 from app.models.pydantic.playlist import PlaylistVideoInfo
 from app.utils.dates import as_utc
+from app.utils.files import resolve_download_path
 from app.utils.media import DEFAULT_FORMAT_SPEC
 
 
@@ -235,7 +236,7 @@ class DownloadFileRepository(BaseRepository):
             id=file_id,
             download_id=download_id,
             filename=filename,
-            filepath=filepath,
+            filepath=str(resolve_download_path(filepath)),
             file_size=file_size,
             file_type=file_type,
             created_at=datetime.now(timezone.utc),
@@ -254,6 +255,16 @@ class DownloadFileRepository(BaseRepository):
             .order_by(DownloadFile.created_at)
         )
         return list(result.scalars().all())
+
+    async def get_by_filepath(self, filepath: str) -> Optional[DownloadFile]:
+        """Look up a canonical managed path using the filepath index."""
+        result = await self.session.execute(
+            select(DownloadFile)
+            .where(DownloadFile.filepath == str(resolve_download_path(filepath)))
+            .order_by(DownloadFile.id)
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
 
     async def get_all(self, limit: int = 10000) -> List[DownloadFile]:
         """Get all downloaded file records."""

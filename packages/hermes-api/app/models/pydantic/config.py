@@ -10,42 +10,22 @@ from app.models.base import CamelCaseModel
 
 
 class Configuration(CamelCaseModel):
-    """Current API configuration with automatic camelCase conversion."""
+    """Non-secret startup settings of the responding API process."""
 
-    # Download settings
-    output_template: str = Field(..., description="Default output filename template")
-    default_format: str = Field(..., description="Default format selection")
-    download_subtitles: bool = Field(
-        ..., description="Default subtitle download setting"
+    output_directory: str
+    temp_directory: str
+    download_retention_days: int | None = Field(
+        ...,
+        description="Configured media retention age; scheduling is owned by Celery beat",
     )
-    download_thumbnail: bool = Field(
-        ..., description="Default thumbnail download setting"
-    )
-    output_directory: str = Field(..., description="Default output directory")
-
-    # Performance settings
-    max_concurrent_downloads: int = Field(
-        ..., ge=1, le=10, description="Maximum concurrent downloads"
-    )
-    retry_attempts: int = Field(
-        ..., ge=0, le=10, description="Number of retry attempts"
-    )
-    timeout: int = Field(..., ge=10, description="Request timeout in seconds")
-
-    # Storage settings
-    temp_directory: str = Field(..., description="Temporary files directory")
-    cleanup_enabled: bool = Field(True, description="Automatic cleanup enabled")
-    cleanup_older_than_days: int = Field(
-        30, description="Auto-cleanup file age threshold"
-    )
-
-    # API settings
-    rate_limit_per_minute: int = Field(..., description="API rate limit per minute")
-    debug_mode: bool = Field(..., description="Debug mode enabled")
+    max_login_attempts: int
+    login_attempt_window_minutes: int
+    rate_limiting_enabled: bool
+    debug_mode: bool
 
 
 class ConfigurationUpdate(CamelCaseModel):
-    """Configuration update request with automatic camelCase conversion."""
+    """Unsupported update request; valid requests are rejected with HTTP 501."""
 
     # Download settings
     output_template: Optional[str] = Field(
