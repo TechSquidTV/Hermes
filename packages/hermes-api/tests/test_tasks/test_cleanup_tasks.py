@@ -5,6 +5,8 @@ Tests for cleanup tasks.
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 import tempfile
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
@@ -15,7 +17,6 @@ from app.core.config import settings
 from app.tasks.cleanup_tasks import (
     _cleanup_download_files,
     _cleanup_temp_files,
-    cleanup_temp_files,
 )
 
 
@@ -123,7 +124,7 @@ class TestCleanupTempFiles:
             assert not os.path.exists(old_file)
 
     def test_cleanup_temp_files_sync_wrapper(self) -> None:
-        """Test the synchronous wrapper function."""
+        """Exercise a worker process, separate from pytest's database event loop."""
         with tempfile.TemporaryDirectory() as tmpdir:
             test_file = os.path.join(tmpdir, "test.tmp")
             with open(test_file, "w") as f:
@@ -133,11 +134,28 @@ class TestCleanupTempFiles:
             old_time = datetime.now(timezone.utc).timestamp() - (25 * 3600)
             os.utime(test_file, (old_time, old_time))
 
-            with patch.object(settings, "temp_dir", tmpdir):
-                result = cleanup_temp_files(max_age_hours=24)
-
-            assert result["deleted_files"] == 1
-            assert result["total_freed_bytes"] > 0
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-c",
+                    "; ".join(
+                        [
+                            "from app.tasks.cleanup_tasks import cleanup_temp_files",
+                            "result = cleanup_temp_files(max_age_hours=24)",
+                            "assert result['deleted_files'] == 1, result",
+                            "assert result['total_freed_bytes'] > 0, result",
+                        ]
+                    ),
+                ],
+                env={
+                    **os.environ,
+                    "HERMES_TEMP_DIR": tmpdir,
+                    "HERMES_DATABASE_URL": settings.database_url,
+                },
+                text=True,
+                capture_output=True,
+            )
+            assert result.returncode == 0, result.stdout + result.stderr
             assert not os.path.exists(test_file)
 
 
