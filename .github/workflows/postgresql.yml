@@ -34,11 +34,13 @@ jobs:
       run:
         working-directory: packages/hermes-api
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.3.3
+      - uses: actions/setup-python@v7.1.0
         with:
-          python-version: '3.14'
+          python-version: '3.15'
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - run: uv sync --locked --all-groups
       - name: Validate migrations against PostgreSQL
         env:

@@ -9,10 +9,11 @@ from typing import cast
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy import inspect, select
+from sqlalchemy import BigInteger, inspect, text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.engine import Dialect
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.core.config import Settings
 from app.db.base import Base, create_database_engine
@@ -41,6 +42,8 @@ def migrate(url: str, *arguments: str) -> subprocess.CompletedProcess[str]:
         "sqlite:///test.db",
         "mysql+aiomysql://host/db",
         "not-a-url",
+        "postgresql+asyncpg://host",
+        "sqlite+aiosqlite://",
     ],
 )
 def test_reject_unsupported_database_urls(url: str) -> None:
@@ -48,14 +51,40 @@ def test_reject_unsupported_database_urls(url: str) -> None:
         Settings(database_url=url)
 
 
+@pytest.mark.parametrize(
+    "variable", ["HERMES_TEST_DATABASE_URL", "HERMES_TEST_POSTGRES_URL"]
+)
+def test_test_database_urls_reject_unsupported_drivers(variable: str) -> None:
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if key not in {"HERMES_TEST_DATABASE_URL", "HERMES_TEST_POSTGRES_URL"}
+    }
+    result = subprocess.run(
+        [sys.executable, "-c", "import runpy; runpy.run_path('tests/conftest.py')"],
+        cwd=API_ROOT,
+        env={**environment, variable: "postgresql://localhost/disposable"},
+        text=True,
+        capture_output=True,
+    )
+    assert result.returncode != 0
+    assert f"{variable} must use postgresql+asyncpg" in result.stderr
+
+
 def test_postgres_offline_migrations_support_encoded_password() -> None:
     result = migrate(
         "postgresql+asyncpg://hermes:p%25ss%40word@localhost/hermes",
         "upgrade",
-        "head",
+        "d5e92b7f3a1c",
         "--sql",
     )
-    assert "ALTER TABLE downloads ALTER COLUMN file_size TYPE BIGINT" in result.stdout
+    counters = migrate(
+        "postgresql+asyncpg://hermes:p%25ss%40word@localhost/hermes",
+        "upgrade",
+        "e7f31a92c604:f2a84c6d901b",
+        "--sql",
+    )
+    assert "ALTER TABLE downloads ALTER COLUMN file_size TYPE BIGINT" in counters.stdout
     assert "false" in result.stdout.lower()
     assert "INSERT INTO system_settings" in result.stdout
 
@@ -144,8 +173,13 @@ async def test_postgresql_migration_cycle() -> None:
 async def test_memory_sqlite_engine() -> None:
     engine = create_database_engine("sqlite+aiosqlite:///:memory:")
     try:
-        async with engine.connect() as conn:
-            assert await conn.scalar(select(1)) == 1
+        assert isinstance(engine.pool, StaticPool)
+        async with engine.begin() as conn:
+            await conn.execute(text("CREATE TABLE memory_probe (value INTEGER)"))
+            await conn.execute(text("INSERT INTO memory_probe VALUES (7)"))
+        async with engine.connect() as first, engine.connect() as second:
+            assert await first.scalar(text("SELECT value FROM memory_probe")) == 7
+            assert await second.scalar(text("SELECT value FROM memory_probe")) == 7
     finally:
         await engine.dispose()
 
@@ -153,9 +187,32 @@ async def test_memory_sqlite_engine() -> None:
 def test_timestamp_binding_normalizes_offsets() -> None:
     value = datetime(2026, 1, 1, 4, tzinfo=timezone(timedelta(hours=4)))
     timestamp = UTCDateTime()
-    dialect = cast("type[Dialect]", postgresql.asyncpg.dialect)()
+    dialect = cast(type[Dialect], postgresql.asyncpg.dialect)()
     assert timestamp.process_bind_param(value, dialect) == datetime(2026, 1, 1)
     assert timestamp.process_bind_param(datetime(2026, 1, 1), dialect) == datetime(
         2026, 1, 1
     )
     assert timestamp.process_bind_param(None, dialect) is None
+
+
+def test_counter_migration_matches_model_columns_and_has_one_head() -> None:
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    scripts = ScriptDirectory.from_config(Config(str(API_ROOT / "alembic.ini")))
+    assert scripts.get_heads() == ["f2a84c6d901b"]
+    revision = scripts.get_revision("f2a84c6d901b")
+    assert revision is not None
+    assert revision.down_revision == "e7f31a92c604"
+    model_columns = {
+        table.name: {
+            column.name
+            for column in table.columns
+            if isinstance(column.type, BigInteger)
+        }
+        for table in Base.metadata.tables.values()
+        if any(isinstance(column.type, BigInteger) for column in table.columns)
+    }
+    assert {
+        table: set(columns) for table, columns in revision.module.COLUMNS.items()
+    } == model_columns

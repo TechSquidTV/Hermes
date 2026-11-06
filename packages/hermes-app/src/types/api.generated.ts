@@ -4035,7 +4035,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Filter by download status */
-                status?: string | null;
+                status?: ("pending" | "downloading" | "processing" | "completed" | "failed" | "cancelled") | null;
                 /** @description Maximum number of items to return */
                 limit?: number;
                 /** @description Number of items to skip */
@@ -5604,7 +5604,7 @@ export interface operations {
                 /** @description Filter by extractor (youtube, vimeo, etc.) */
                 extractor?: string | null;
                 /** @description Filter by status (completed, failed, cancelled) */
-                status?: string | null;
+                status?: ("completed" | "failed" | "cancelled") | null;
                 /** @description Maximum number of items to return */
                 limit?: number;
                 /** @description Number of items to skip */
@@ -5889,7 +5889,7 @@ export interface operations {
                 /** @description Filter by extractor */
                 extractor?: string | null;
                 /** @description Filter by status */
-                status?: string | null;
+                status?: ("completed" | "failed" | "cancelled") | null;
             };
             header?: never;
             path?: never;

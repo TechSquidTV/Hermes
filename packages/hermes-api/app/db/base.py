@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import StaticPool
 
 from app.core.config import settings
 
@@ -27,7 +28,9 @@ def create_database_engine(database_url: str, *, echo: bool = False) -> AsyncEng
     ):
         Path(url.database).parent.mkdir(parents=True, exist_ok=True)
     if url.get_backend_name() == "sqlite" and url.database in (None, "", ":memory:"):
-        return create_async_engine(url, echo=echo, pool_pre_ping=True)
+        return create_async_engine(
+            url, echo=echo, pool_pre_ping=True, poolclass=StaticPool
+        )
     return create_async_engine(
         url,
         echo=echo,

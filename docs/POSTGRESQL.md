@@ -47,7 +47,10 @@ same migrated database. Each process uses at most 10 pooled connections plus 20
 overflow connections; budget the server connection limit for all processes.
 Celery task wrappers dispose database connections before their temporary event
 loop closes, so successive tasks cannot reuse connections from a closed loop.
-The API retains pooling on its application event loop.
+The API retains pooling on its application event loop. Use Celery's default
+`prefork` pool (or `solo` for single-process debugging). Thread, gevent and
+eventlet pools and concurrent eager task execution are unsupported: each worker
+process must execute only one task/event loop at a time.
 
 Timestamps retain the existing schema: timezone-naive UTC in the database.
 Aware input values are normalized to UTC; naive input values mean UTC.
@@ -64,6 +67,12 @@ existing users, settings or download records. Plan a separate data migration and
 backup/restore exercise if transferring an existing installation.
 
 ## Real PostgreSQL validation
+
+The migration chain includes the already-published managed-path revision
+`e7f31a92c604`, then the PostgreSQL counter revision `f2a84c6d901b`.
+Run the complete upgrade online with the download filesystem mounted; the
+managed-path step intentionally rejects SQL-only generation. Counter SQL can be
+inspected separately with `alembic upgrade e7f31a92c604:f2a84c6d901b --sql`.
 
 The `PostgreSQL integration` GitHub Actions workflow provisions PostgreSQL 17,
 checks a clean migration upgrade/downgrade/re-upgrade with runtime writes, then

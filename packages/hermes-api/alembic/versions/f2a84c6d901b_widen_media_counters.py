@@ -1,7 +1,7 @@
 """Use 64-bit media sizes and counters on PostgreSQL.
 
 Revision ID: f2a84c6d901b
-Revises: d5e92b7f3a1c
+Revises: e7f31a92c604
 """
 
 import sqlalchemy as sa
@@ -9,7 +9,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "f2a84c6d901b"
-down_revision: str = "d5e92b7f3a1c"
+down_revision: str = "e7f31a92c604"
 branch_labels: None = None
 depends_on: None = None
 
