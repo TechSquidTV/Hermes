@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { type HTMLMotionProps, motion, useInView } from 'framer-motion'
+import { type HTMLMotionProps, motion, useInView } from 'motion/react'
 
 export interface BlurProps extends Omit<HTMLMotionProps<'div'>, 'initial' | 'animate'> {
   /**

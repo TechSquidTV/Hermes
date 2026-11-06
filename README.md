@@ -193,9 +193,9 @@ These templates help us help you faster!
 
 ### Manual Installation (Development)
 
-For development and contribution purposes, use Node.js 22.22.2+ (22.x), 24.15+ (24.x), or 26+ (used in Docker and CI), pnpm 12.3.4, and Python 3.11+ (Python 3.14 in Docker and CI). Corepack uses the pnpm version pinned in `package.json`. Node 26 requires installing Corepack separately; the Docker builds use its pinned root development dependency.
+For development and contribution purposes, use Node.js 22.22.2+ (22.x), 24.15+ (24.x), or 26+ (used in Docker and CI), pnpm 12.18.0, and Python 3.11+ (Python 3.15 in Docker and CI). Corepack uses the pnpm version pinned in `package.json`. Node 26 requires installing Corepack separately; the Docker builds use its pinned root development dependency.
 
-**Breaking tooling update:** pnpm 10 and Node versions outside those ranges are no longer supported. Run `corepack enable` and `pnpm install` after pulling. TypeScript remains on 6.0.3 because the current ESLint and OpenAPI tooling does not support the TypeScript 7 compiler API.
+**Tooling update:** use the pinned pnpm 12.18.0 release and a Node version in the ranges above. Run `corepack enable` and `pnpm install` after pulling. Docker and CI now use Python 3.15; native Python support remains 3.11+. Frontend animation imports use `motion/react`. TypeScript remains on 6.0.3 because the current ESLint and OpenAPI tooling does not support the TypeScript 7 compiler API; `pnpm update:all` preserves that restriction.
 
 ```bash
 # Install the repository's Corepack version, then enable pnpm
