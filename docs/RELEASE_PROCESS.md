@@ -479,3 +479,25 @@ successful batch members. HTTP transport failures remain ambiguous; request-leve
 idempotency is not provided. Workers atomically claim pending records, preventing
 duplicate broker deliveries from executing the same ID twice. An uncertain broker
 acknowledgement does not fail a record already claimed by a worker.
+
+### Final release fixes
+
+Session refresh is coordinated across tabs with the browser's Web Locks API on
+secure origins (HTTPS or localhost). A late refresh rejection can reuse credentials
+already rotated by another tab only when their signed session-family ID matches;
+logout and account changes still invalidate the initiating operation.
+
+Failed downloads remove their task-prefixed partial outputs immediately. Scheduled
+temporary cleanup also reclaims failed/cancelled task outputs in download storage
+after the configured temporary-file age. Retention previews include unregistered
+task outputs, and failed-record cleanup counts file removals and records against
+the same limit. Cleanup skips symlinks and preserves records when removal fails.
+Completed media and active task outputs remain protected from temporary cleanup.
+New successful and failed history records retain extractor, video and format
+metadata when extraction supplied it.
+
+The queue summary now reports all download attempts and converts success fractions
+to percentages. Unfinished Retry and Forgot password controls are hidden until
+implemented. The unused shadcn generator was removed from normal dependencies,
+eliminating the development-only deepmerge advisory; the JavaScript audit reports
+zero vulnerabilities as of 2026-11-06.

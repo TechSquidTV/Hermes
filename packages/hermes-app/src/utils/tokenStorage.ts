@@ -60,20 +60,28 @@ export class TokenStorage {
     }
   }
 
-  static getTokenExpiry(): number | null {
+  private static accessClaims(): { exp?: number; sid?: string } | null {
     const token = this.read(this.ACCESS_TOKEN_KEY)
     const encoded = token?.split('.')[1]
     if (!encoded) return null
     try {
-      const payload: { exp?: number } = JSON.parse(
+      const payload: { exp?: number; sid?: string } = JSON.parse(
         atob(encoded.replace(/-/g, '+').replace(/_/g, '/'))
       )
-      return typeof payload.exp === 'number' && Number.isFinite(payload.exp)
-        ? payload.exp * 1000
-        : null
+      return payload
     } catch {
       return null
     }
+  }
+
+  static getSessionId(): string | null {
+    const sid = this.accessClaims()?.sid
+    return typeof sid === 'string' ? sid : null
+  }
+
+  static getTokenExpiry(): number | null {
+    const expiry = this.accessClaims()?.exp
+    return typeof expiry === 'number' && Number.isFinite(expiry) ? expiry * 1000 : null
   }
 
   static getAccessToken(): string | null {

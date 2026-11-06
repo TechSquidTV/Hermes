@@ -4,17 +4,19 @@ Celery tasks for cleanup and maintenance operations.
 
 import os
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Any, Dict, List
 
 from sqlalchemy import select
 
 from app.api.dependencies import get_repositories_from_session
-from app.core.config import settings
 from app.core.logging import get_logger
 from app.db.base import async_session_maker
 from app.db.models import Download
-from app.services.file_cleanup import active_download_prefixes, cleanup_candidates
+from app.services.file_cleanup import (
+    download_artifacts,
+    remove_download_artifacts,
+    temporary_cleanup_candidates,
+)
 from app.tasks.runtime import run_async_task
 from app.tasks.types import task
 from app.utils.files import resolve_download_path
@@ -42,7 +44,9 @@ async def _get_old_downloads(days: int = 30) -> List[Dict[str, Any]]:
         return [{"id": download.id} for download in downloads]
 
 
-async def _cleanup_download_files(download_ids: List[str]) -> Dict[str, Any]:
+async def _cleanup_download_files(
+    download_ids: List[str], dry_run: bool = False
+) -> Dict[str, Any]:
     """Clean up files for specified downloads."""
     total_freed = 0
     deleted_files = 0
@@ -50,6 +54,7 @@ async def _cleanup_download_files(download_ids: List[str]) -> Dict[str, Any]:
 
     async with async_session_maker() as session:
         repos = get_repositories_from_session(session)
+        artifacts_by_id = download_artifacts(download_ids)
 
         for download_id in download_ids:
             try:
@@ -60,9 +65,22 @@ async def _cleanup_download_files(download_ids: List[str]) -> Dict[str, Any]:
                     file_path = resolve_download_path(file_info.filepath)
                     if os.path.exists(file_path):
                         file_size = os.path.getsize(file_path)
-                        os.remove(file_path)
+                        if not dry_run:
+                            os.remove(file_path)
                         total_freed += file_size
                         deleted_files += 1
+                managed = {file.filepath for file in files}
+                # In preview, managed files still exist; count each path once.
+                artifacts = remove_download_artifacts(
+                    download_id,
+                    dry_run=dry_run,
+                    excluded_paths=managed,
+                    paths=artifacts_by_id[download_id],
+                )
+                total_freed += artifacts.bytes_freed
+                deleted_files += artifacts.files
+                if not artifacts.complete:
+                    failed_files.append(download_id)
 
             except Exception as e:
                 logger.error(
@@ -80,22 +98,16 @@ async def _cleanup_download_files(download_ids: List[str]) -> Dict[str, Any]:
 
 async def _cleanup_temp_files(max_age_hours: int = 24) -> Dict[str, Any]:
     """Clean up temporary files older than specified hours."""
-    temp_dir = settings.temp_dir
-
-    if not os.path.exists(temp_dir):
-        return {"deleted_files": 0, "total_freed_bytes": 0}
-
     total_freed = 0
     deleted_files = 0
 
     try:
         async with async_session_maker() as session:
-            prefixes = await active_download_prefixes(session)
-        for file_path in cleanup_candidates(Path(temp_dir), max_age_hours, prefixes):
-            file_size = file_path.stat().st_size
-            file_path.unlink()
-            total_freed += file_size
-            deleted_files += 1
+            async for file_path in temporary_cleanup_candidates(session, max_age_hours):
+                file_size = file_path.stat().st_size
+                file_path.unlink()
+                total_freed += file_size
+                deleted_files += 1
 
     except Exception as e:
         logger.error("Failed to cleanup temp files", error=str(e))
@@ -142,21 +154,12 @@ async def _cleanup_old_downloads_async(
         download_ids = [d["id"] for d in old_downloads]
 
         if dry_run:
-            # Just count what would be deleted
-            total_files = 0
-            async with async_session_maker() as session:
-                repos = get_repositories_from_session(session)
-
-                for download_id in download_ids:
-                    files = await repos["download_files"].get_by_download_id(
-                        download_id
-                    )
-                    total_files += len(files)
+            preview = await _cleanup_download_files(download_ids, dry_run=True)
 
             return {
                 "total_downloads": len(download_ids),
                 "would_delete_downloads": len(download_ids),
-                "would_delete_files": total_files,
+                "would_delete_files": preview["deleted_files"],
                 "dry_run": True,
             }
 
@@ -235,28 +238,17 @@ async def _cleanup_temp_files_async(
     )
 
     try:
-        temp_dir = settings.temp_dir
-
-        if not os.path.exists(temp_dir):
-            result = {"deleted_files": 0, "total_freed_bytes": 0}
-            if dry_run:
-                result["would_delete_files"] = 0
-                result["would_free_bytes"] = 0
-                result["dry_run"] = True
-            return result
-
         if dry_run:
             # Just count what would be deleted without actually deleting
             total_would_free = 0
             would_delete_files = 0
 
             async with async_session_maker() as session:
-                prefixes = await active_download_prefixes(session)
-            for file_path in cleanup_candidates(
-                Path(temp_dir), max_age_hours, prefixes
-            ):
-                total_would_free += file_path.stat().st_size
-                would_delete_files += 1
+                async for file_path in temporary_cleanup_candidates(
+                    session, max_age_hours
+                ):
+                    total_would_free += file_path.stat().st_size
+                    would_delete_files += 1
 
             return {
                 "would_delete_files": would_delete_files,

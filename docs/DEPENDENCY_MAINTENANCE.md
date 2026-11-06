@@ -30,11 +30,12 @@ The development-tool minimatch override uses 11.0.5 to address
 [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249);
 the advisory has no fix on the 10.x line used by the toolchain. Recheck and
 remove this override when upstream dependencies adopt patched releases.
-The audit still reports one low-severity development-only
-[deepmerge advisory](https://github.com/advisories/GHSA-gcqx-w48m-w2h4) through
-shadcn, with no published fix. Production JavaScript and the audited Python
-dependencies have no reported advisories at the time of this refresh. This is
-a point-in-time audit, not a scheduled audit service.
+The unused shadcn CLI was removed from workspace dependencies, eliminating its
+transitive `deepmerge` dependency and [GHSA-gcqx-w48m-w2h4](https://github.com/advisories/GHSA-gcqx-w48m-w2h4).
+Existing checked-in UI components do not depend on the generator at runtime.
+Use a reviewed, explicitly pinned generator version only when adding components;
+it is not part of the normal install or build. Audit the resolved dependencies
+again before release; audit results describe a point in time.
 
 ## Activation and migration
 

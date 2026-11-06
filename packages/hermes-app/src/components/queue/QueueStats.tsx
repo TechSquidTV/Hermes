@@ -35,8 +35,8 @@ export function QueueStats() {
     )
   }
 
-  const totalDownloads = stats?.successfulDownloads || 0
-  const successRate = stats?.successRate || 0
+  const totalDownloads = stats?.totalDownloads || 0
+  const successRate = (stats?.successRate || 0) * 100
   const totalSize = stats?.totalBandwidthUsed || 0
 
   return (

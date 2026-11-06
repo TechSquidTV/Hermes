@@ -360,7 +360,7 @@ describe('QueueCard', () => {
       expect(screen.getByTitle('Delete')).toBeInTheDocument()
     })
 
-    it('shows retry button for failed status', () => {
+    it('shows failure without an unfinished retry control', () => {
       const failedDownload = {
         ...mockDownload,
         status: 'failed' as const,
@@ -369,7 +369,7 @@ describe('QueueCard', () => {
 
       render(<QueueCard download={failedDownload} />, { wrapper: createWrapper() })
 
-      expect(screen.getByTitle('Retry Download')).toBeInTheDocument()
+      expect(screen.queryByTitle('Retry Download')).not.toBeInTheDocument()
       expect(screen.getByText('Failed')).toBeInTheDocument()
     })
 
@@ -443,18 +443,6 @@ describe('QueueCard', () => {
       await user.click(deleteButton)
 
       expect(toast.error).toHaveBeenCalledWith('File path not available')
-    })
-
-    it('shows toast when retry button clicked', async () => {
-      const user = userEvent.setup()
-      const failedDownload = { ...mockDownload, status: 'failed' as const }
-
-      render(<QueueCard download={failedDownload} />, { wrapper: createWrapper() })
-
-      const retryButton = screen.getByTitle('Retry Download')
-      await user.click(retryButton)
-
-      expect(toast.info).toHaveBeenCalledWith('Retry functionality coming soon!')
     })
 
     it('cancels download when cancel button clicked', async () => {

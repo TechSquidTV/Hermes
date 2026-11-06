@@ -18,6 +18,7 @@ from app.db.repositories import (
     WebhookRepository,
 )
 from app.services.download_files import register_download_file
+from app.services.file_cleanup import remove_download_artifacts
 from app.services.redis_progress import redis_progress_service
 from app.services.yt_dlp_service import DownloadOutputs, YTDLPService
 from app.tasks.runtime import run_async_task
@@ -320,6 +321,7 @@ async def _download_video_task(
 ) -> Dict[str, Any]:
     """Core download logic."""
     started_at = datetime.now(timezone.utc)
+    video_info = None
 
     try:
         output_directory = resolve_download_path(output_path or settings.download_dir)
@@ -592,6 +594,9 @@ async def _download_video_task(
             started_at=started_at,
             completed_at=completed_at,
             file_size=file_size,
+            extractor=extractor,
+            video_id=video_info.get("id"),
+            format_used=format_spec,
         )
 
         # Trigger download completed webhook
@@ -654,12 +659,21 @@ async def _download_video_task(
 
         logger.error("Download task failed", download_id=download_id, error=str(e))
 
-        await _update_download_status(
+        failed = await _update_download_status(
             download_id,
             "failed",
             completed_at=completed_at,
             error_message=error_message,
         )
+        if failed:
+            try:
+                remove_download_artifacts(download_id)
+            except OSError:
+                # Keep the failed record so scheduled cleanup can retry safely.
+                logger.exception(
+                    "Failed to remove interrupted download outputs",
+                    download_id=download_id,
+                )
 
         await _create_download_history(
             download_id=download_id,
@@ -668,6 +682,9 @@ async def _download_video_task(
             started_at=started_at,
             completed_at=completed_at,
             error_message=error_message,
+            extractor=video_info.get("extractor") if video_info else None,
+            video_id=video_info.get("id") if video_info else None,
+            format_used=format_spec,
         )
 
         await _trigger_webhooks(
