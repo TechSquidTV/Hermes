@@ -86,6 +86,7 @@ the same length limits.
 | `HERMES_DOWNLOAD_DIR` | `./downloads` | Shared root for managed downloads. |
 | `HERMES_TEMP_DIR` | `./temp` | Shared temporary processing directory. |
 | `HERMES_DOWNLOAD_RETENTION_DAYS` | Unset | Opt-in hourly removal of terminal downloads older than this many days; minimum one. |
+| `HERMES_DOWNLOAD_STALE_AFTER_SECONDS` | `300` | Active work without a heartbeat becomes failed after this timeout; minimum 60 seconds. |
 
 The bundled stacks run one `celery_beat` scheduler. It enqueues temporary-file
 cleanup every 30 minutes (files older than 24 hours) and expired token-blacklist
@@ -101,6 +102,15 @@ repair skips missing files and paths or symlinks outside that root.
 `HERMES_DOWNLOADS_DIR` has been removed. Use `HERMES_DOWNLOAD_DIR` and restart the
 API, worker, and scheduler together. File/status responses expose paths relative
 to the managed root, including subdirectories.
+
+Workers heartbeat every 30 seconds, including during metadata extraction and
+postprocessing. The API checks for abandoned active work every 30 seconds in its
+own process, so recovery does not depend on an available download worker.
+Abandoned downloads become failed with a message to resubmit the URL. Pending
+queue members and recently heartbeating downloads are preserved. Late worker
+results cannot replace a terminal state. Redis in the bundled stacks uses
+`noeviction`; a full broker rejects new writes so publication failures can be
+reported instead of silently deleting queued work.
 
 ### Authentication budgets and proxy trust
 

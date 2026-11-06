@@ -482,8 +482,8 @@ acknowledgement does not fail a record already claimed by a worker.
 
 ### Final release fixes
 
-Session refresh is coordinated across tabs with the browser's Web Locks API on
-secure origins (HTTPS or localhost). A late refresh rejection can reuse credentials
+Session refresh is coordinated across tabs through atomic IndexedDB leases on
+HTTP and HTTPS origins. A late refresh rejection can reuse credentials
 already rotated by another tab only when their signed session-family ID matches;
 logout and account changes still invalidate the initiating operation.
 
@@ -501,3 +501,28 @@ to percentages. Unfinished Retry and Forgot password controls are hidden until
 implemented. The unused shadcn generator was removed from normal dependencies,
 eliminating the development-only deepmerge advisory; the JavaScript audit reports
 zero vulnerabilities as of 2026-11-06.
+
+### Startup and worker recovery upgrade
+
+**Migration required:** stop old workers, back up the database, run
+`alembic upgrade head`, then upgrade/recreate the API, workers and scheduler
+together. Revision `a7c4e19d82b6` adds the nullable worker heartbeat and its active
+download index. Active historical records use their start/creation timestamp
+until they have a heartbeat. The API fails abandoned active records after
+`HERMES_DOWNLOAD_STALE_AFTER_SECONDS` (300 by default), recording failure history
+and publishing a status update. Submit the failed URL again to create new work.
+Workers acknowledge downloads after execution and reject worker-loss deliveries;
+duplicate delivery never starts an already-claimed record. Stale work cannot
+complete after recovery has made its status terminal.
+
+Configured initial-administrator seeding failures now stop API startup with a
+redacted error. Empty installations with partially supplied seed credentials
+also stop. Existing installations may remove the seed password after bootstrap;
+the presence of users continues to prevent seeding. An installation with no seed
+credentials retains the documented first-user-admin bootstrap.
+
+Reload all open browser tabs after upgrade. Refresh coordination requires
+IndexedDB storage and works on plain HTTP too; a closed tab's lease expires after
+60 seconds. Refresh operations are bounded to 30 seconds, and a suspended tab
+cannot persist credentials after that deadline. A storage failure leaves the
+current credentials intact and reports an error so the user can retry.

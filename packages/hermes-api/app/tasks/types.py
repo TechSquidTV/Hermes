@@ -25,8 +25,17 @@ class Task(Protocol[P, R]):
     ) -> object: ...
 
 
-def task(*, name: str) -> Callable[[Callable[P, R]], Task[P, R]]:
+def task(
+    *, name: str, acks_late: bool = False, reject_on_worker_lost: bool = False
+) -> Callable[[Callable[P, R]], Task[P, R]]:
     def decorate(function: Callable[P, R]) -> Task[P, R]:
-        return cast(Task[P, R], celery_app.task(name=name)(function))
+        return cast(
+            Task[P, R],
+            celery_app.task(
+                name=name,
+                acks_late=acks_late,
+                reject_on_worker_lost=reject_on_worker_lost,
+            )(function),
+        )
 
     return decorate

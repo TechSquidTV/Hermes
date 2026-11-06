@@ -3,13 +3,14 @@ import { getApiBaseUrl } from '@/lib/config'
 import type { components } from '@/types/api.generated'
 import { TokenStorage } from '@/utils/tokenStorage'
 import { checkResponse, isAuthenticationError, withRequestSignal } from './http'
+import { SESSION_REFRESH_TIMEOUT_MS, withSessionLock } from './sessionLock'
 
 type TokenResponse = components['schemas']['TokenResponse']
 let pendingRefresh: { token: string; version: number; promise: Promise<TokenResponse> } | null =
   null
 
 async function exchangeRefreshToken(refreshToken: string, version: number, sessionId: string | null): Promise<TokenResponse> {
-  return withRequestSignal(undefined, 30_000, async (signal) => {
+  return withRequestSignal(undefined, SESSION_REFRESH_TIMEOUT_MS, async (signal) => {
     const rotatedTokens = (): TokenResponse | null => {
       if (TokenStorage.getVersion() !== version || TokenStorage.getSessionId() !== sessionId)
         throw new DOMException('Session changed during token refresh', 'SessionChangedError')
@@ -20,8 +21,8 @@ async function exchangeRefreshToken(refreshToken: string, version: number, sessi
         throw new DOMException('Session changed during token refresh', 'SessionChangedError')
       return { accessToken, refreshToken: currentRefresh, tokenType: 'bearer' }
     }
-    const exchange = async (): Promise<TokenResponse> => {
-      // A tab waiting for the origin-wide lock reuses the winner's rotation.
+    const exchange = async (assertCurrent: () => void): Promise<TokenResponse> => {
+      // A tab waiting for the shared lease reuses the winner's rotation.
       const alreadyRotated = rotatedTokens()
       if (alreadyRotated) return alreadyRotated
       let response: Response
@@ -35,7 +36,7 @@ async function exchangeRefreshToken(refreshToken: string, version: number, sessi
           })
         )
       } catch (error) {
-        // Also handle rotations from older tabs or contexts without Web Locks.
+        // Another version of the app may already have rotated the credential.
         if (isAuthenticationError(error)) {
           const current = rotatedTokens()
           if (current) return current
@@ -43,15 +44,13 @@ async function exchangeRefreshToken(refreshToken: string, version: number, sessi
         throw error
       }
       const tokens: TokenResponse = await response.json()
-      signal.throwIfAborted()
+      assertCurrent()
       const current = rotatedTokens()
       if (current) return current
       TokenStorage.setTokens(tokens, false)
       return tokens
     }
-    return navigator.locks
-      ? navigator.locks.request('hermes-session-refresh', { signal }, exchange)
-      : exchange()
+    return withSessionLock(signal, exchange)
   })
 }
 

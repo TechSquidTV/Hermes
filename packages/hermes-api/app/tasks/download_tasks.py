@@ -6,6 +6,7 @@ import asyncio
 import os
 import re
 import time
+from contextlib import AsyncExitStack
 from datetime import datetime, timezone
 from typing import Any, Dict, TypedDict
 
@@ -20,6 +21,7 @@ from app.db.repositories import (
 from app.services.download_files import register_download_file
 from app.services.file_cleanup import remove_download_artifacts
 from app.services.redis_progress import redis_progress_service
+from app.services.worker_health import download_heartbeat
 from app.services.yt_dlp_service import DownloadOutputs, YTDLPService
 from app.tasks.runtime import run_async_task
 from app.tasks.types import task
@@ -208,6 +210,7 @@ async def _update_download_status(
             download_speed=download_speed,
             eta=eta,
             expected_status="pending" if claim_pending else None,
+            require_transition=True,
             **kwargs,
         )
 
@@ -319,6 +322,28 @@ async def _download_video_task(
     output_template: str | None = None,
     **kwargs: object,
 ) -> Dict[str, Any]:
+    async with AsyncExitStack() as resources:
+        return await _execute_download_video(
+            download_id,
+            url,
+            format_spec,
+            output_path,
+            output_template,
+            resources=resources,
+            **kwargs,
+        )
+
+
+async def _execute_download_video(
+    download_id: str,
+    url: str,
+    format_spec: str,
+    output_path: str | None,
+    output_template: str | None,
+    *,
+    resources: AsyncExitStack,
+    **kwargs: object,
+) -> Dict[str, Any]:
     """Core download logic."""
     started_at = datetime.now(timezone.utc)
     video_info = None
@@ -327,7 +352,11 @@ async def _download_video_task(
         output_directory = resolve_download_path(output_path or settings.download_dir)
         # A cancelled/finished task may still be delivered after broker retries.
         if not await _update_download_status(
-            download_id, "downloading", started_at=started_at, claim_pending=True
+            download_id,
+            "downloading",
+            started_at=started_at,
+            last_heartbeat_at=started_at,
+            claim_pending=True,
         ):
             return {
                 "success": False,
@@ -335,11 +364,15 @@ async def _download_video_task(
                 "error": "Download is no longer active",
             }
 
+        stopped = await resources.enter_async_context(download_heartbeat(download_id))
+
         # Trigger download started webhook
         await _trigger_webhooks("download_started", download_id, {"url": url})
 
         # First, extract info to get the video title and metadata
         video_info = await yt_service.extract_info(url, download=False, **kwargs)
+        if stopped.is_set():
+            raise RuntimeError("Download is no longer active")
 
         if not video_info:
             raise Exception("Failed to extract video information")
@@ -408,6 +441,8 @@ async def _download_video_task(
 
         def progress_hook(d: Dict[str, Any]) -> None:
             """Progress callback for yt-dlp downloads."""
+            if stopped.is_set():
+                raise RuntimeError("Download is no longer active")
             try:
                 if d.get("status") == "downloading":
                     # Extract progress information
@@ -665,6 +700,12 @@ async def _download_video_task(
             completed_at=completed_at,
             error_message=error_message,
         )
+        if not failed:
+            return {
+                "success": False,
+                "download_id": download_id,
+                "error": "Download is no longer active",
+            }
         if failed:
             try:
                 remove_download_artifacts(download_id)
@@ -716,7 +757,11 @@ async def _download_video_task(
         return {"success": False, "download_id": download_id, "error": error_message}
 
 
-@task(name="app.tasks.download_tasks.download_video_task")
+@task(
+    name="app.tasks.download_tasks.download_video_task",
+    acks_late=True,
+    reject_on_worker_lost=True,
+)
 def download_video_task(
     download_id: str,
     url: str,

@@ -459,7 +459,7 @@ HERMES_DATABASE_ECHO=true
 - **Configure Redis maxmemory** policy:
   ```yaml
   redis:
-    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy noeviction
   ```
 
 ### Worker Performance

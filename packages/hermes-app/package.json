@@ -44,6 +44,7 @@
     "eslint": "^10.14.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.7",
+    "fake-indexeddb": "6.2.7",
     "jsdom": "31.0.0",
     "knip": "^6.44.1",
     "openapi-typescript": "^7.13.0",

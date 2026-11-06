@@ -163,16 +163,10 @@ function sessionAccess(sid: string): string {
   return `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 900, sid }))}.signature`
 }
 
-it('serializes independent tabs and reuses the rotation completed under the browser lock', async () => {
+it('serializes independent HTTP tabs and reuses the completed rotation', async () => {
   localStorage.clear()
   TokenStorage.setTokens({ accessToken: sessionAccess('family'), refreshToken: 'old-refresh' })
-  let tail = Promise.resolve()
-  const request = <T,>(_name: string, _options: LockOptions, callback: () => Promise<T>) => {
-    const result = tail.then(callback)
-    tail = result.then(() => {}, () => {})
-    return result
-  }
-  vi.stubGlobal('navigator', { locks: { request } })
+  vi.stubGlobal('navigator', {})
   const tokens = { accessToken: sessionAccess('family'), refreshToken: 'new-refresh', tokenType: 'bearer' }
   const exchange = deferred<Response>()
   const fetchMock = vi.fn<typeof fetch>().mockReturnValue(exchange.promise)
@@ -229,5 +223,40 @@ it('does not adopt a different account even before its storage event arrives', a
     exchange.resolve(new Response('{}', { status: 401 }))
     await rejected
     expect(TokenStorage.getRefreshToken()).toBe('other-account-refresh')
+  } finally { vi.unstubAllGlobals(); localStorage.clear() }
+})
+
+it('prevents a plain-HTTP losing rejection before the winning response is persisted', async () => {
+  localStorage.clear()
+  const expired = `header.${btoa(JSON.stringify({ exp: 1, sid: 'family' }))}.signature`
+  localStorage.setItem('hermes_access_token', expired)
+  localStorage.setItem('hermes_refresh_token', 'old-refresh')
+  vi.stubGlobal('navigator', {})
+  const exchange = deferred<Response>()
+  const tokens = { accessToken: sessionAccess('family'), refreshToken: 'rotated', tokenType: 'bearer' }
+  let refreshes = 0
+  const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (url, options) => {
+    if (url === '/api/v1/auth/refresh') {
+      refreshes += 1
+      return refreshes === 1 ? exchange.promise : new Response('{}', { status: 401 })
+    }
+    expect(new Headers(options?.headers).get('Authorization')).toBe(`Bearer ${tokens.accessToken}`)
+    return new Response('{"result":"ok"}')
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  try {
+    vi.resetModules()
+    const winner = await import('../session')
+    vi.resetModules()
+    const loser = await import('../api/client')
+    const first = winner.refreshSession()
+    await vi.waitFor(() => expect(refreshes).toBe(1))
+    const second = loser.apiClient.request<{ result: string }>('/auth/me')
+    await new Promise(resolve => setTimeout(resolve, 25))
+    expect(refreshes).toBe(1)
+    exchange.resolve(new Response(JSON.stringify(tokens)))
+    expect(await first).toEqual(tokens)
+    expect(await second).toEqual({ result: 'ok' })
+    expect(localStorage.getItem('hermes_refresh_token')).toBe('rotated')
   } finally { vi.unstubAllGlobals(); localStorage.clear() }
 })

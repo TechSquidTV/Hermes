@@ -91,6 +91,7 @@ class DownloadRepository(BaseRepository):
         download_speed: float | None = None,
         eta: float | None = None,
         expected_status: str | None = None,
+        require_transition: bool = False,
         **kwargs: object,
     ) -> Optional[Download]:
         """Update download status and progress."""
@@ -105,6 +106,8 @@ class DownloadRepository(BaseRepository):
         terminal_statuses = {"completed", "failed", "cancelled"}
         if download.status in terminal_statuses:
             await self.session.rollback()
+            if require_transition:
+                return None
             return await self.get_by_id(download_id)
 
         previous_status = download.status
@@ -136,7 +139,7 @@ class DownloadRepository(BaseRepository):
         if result.rowcount != 1:
             # Also roll back any file registration staged by the worker.
             await self.session.rollback()
-            if expected_status is not None:
+            if expected_status is not None or require_transition:
                 return None
         else:
             await self.commit()

@@ -15,6 +15,7 @@ from sqlalchemy import (
     Enum,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -31,6 +32,9 @@ class Download(Base):
     """Model for tracking download jobs."""
 
     __tablename__ = "downloads"
+    __table_args__ = (
+        Index("ix_downloads_active_heartbeat", "status", "last_heartbeat_at"),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     url: Mapped[str] = mapped_column(String, nullable=False, index=True)
@@ -80,6 +84,9 @@ class Download(Base):
         UTCDateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )
     started_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    last_heartbeat_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime, nullable=True
+    )
     completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
 
     # Relationships
