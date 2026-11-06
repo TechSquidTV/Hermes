@@ -277,8 +277,8 @@ class ApiClient {
     return this.request<Configuration>('/admin/config')
   }
 
-  async updateAdminConfig(config: ConfigurationUpdate): Promise<Configuration> {
-    return this.request<Configuration>('/admin/config', {
+  async updateAdminConfig(config: ConfigurationUpdate): Promise<never> {
+    return this.request<never>('/admin/config', {
       method: 'PUT',
       body: JSON.stringify(config),
     })

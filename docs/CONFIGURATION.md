@@ -186,3 +186,36 @@ Set that result as `HERMES_SECRET_KEY` in your untracked `.env`. Back up
 `data/data`, `data/downloads`, and the deployment configuration. Keep `.env` out
 of version control and restrict its permissions. See the
 [deployment guide](DEPLOYMENT.md) for volume ownership, backup, and recovery.
+
+### API-key owner authorization
+
+**Breaking security change:** ordinary users cannot mint keys with `admin`
+permissions. Database-backed keys require an existing, active owner on every
+request. Disabling an account suspends its keys; re-enabling it restores only
+keys that are still active and unexpired. Demoting an administrator removes
+`admin` from its keys' effective grants, including keys issued before this fix;
+explicit `read`, `write`, and `download` grants remain usable. The stored grants
+are unchanged, so promotion restores the admin grant.
+
+`HERMES_API_KEYS` are operator-managed service credentials with administrator
+permissions and no user owner. User disable/demotion does not affect them;
+remove them from configuration and restart the API to revoke them. They cannot
+use endpoints that require a user session, including key creation.
+
+### Admin configuration API
+
+**Breaking API change:** `PUT /api/v1/admin/config` returns HTTP 501 for valid
+requests, including empty requests. Runtime updates are unsupported; no fields
+are applied. Invalid requests return validation errors. Change supported
+`HERMES_*` deployment settings and restart every affected API process, Celery
+worker and Celery beat process. There is no cross-process runtime propagation.
+Worker concurrency is controlled by worker launch options, and download options
+belong on individual download requests.
+
+`GET /api/v1/admin/config` reports only non-secret startup settings of the
+responding API process: directories, configured media retention age, authentication attempt limit and window, whether authentication rate limiting is
+enabled, and debug mode. Authentication limits are enforced only when enabled. This response does not inspect worker or scheduler
+state. The former hardcoded download, concurrency, retry, timeout, unused global rate limit and cleanup
+fields were removed because they did not describe effective consumer behavior.
+The database-backed signup setting retains its dedicated `/admin/settings/signup`
+endpoint.

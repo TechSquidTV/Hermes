@@ -501,6 +501,14 @@ async def create_api_key_endpoint(
     db_session: AsyncSession = Depends(get_database_session),
 ) -> ApiKeyResponse:
     """Create a new API key for the authenticated user."""
+    if (
+        ApiKeyPermission.ADMIN in api_key_data.permissions
+        and not current_user["is_admin"]
+    ):
+        raise HTTPException(
+            status_code=403, detail="Admin access required to grant admin permission"
+        )
+
     # Generate the actual API key
     plain_api_key = create_api_key()  # Call the imported function from security module
 
