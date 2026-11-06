@@ -9,14 +9,14 @@ on:
         type: string
 
 concurrency:
-  group: ${{ github.workflow }}-${{ inputs.tag }}
+  group: hermes-release-publication
   cancel-in-progress: false
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
     env:
       RELEASE_TAG: ${{ inputs.tag }}
@@ -172,6 +172,14 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
+
+      - name: Create missing GitHub release after recovery
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --verify-tag --title "$RELEASE_TAG" --generate-notes
+          fi
 
       - name: Generate publish summary
         run: |

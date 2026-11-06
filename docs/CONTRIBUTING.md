@@ -29,55 +29,19 @@ Thank you for considering contributing to Hermes! We welcome contributions from 
 
 ## 🌳 Branch Strategy
 
-Hermes uses a structured branching workflow to ensure stable releases:
-
-### Branches
-
-- **`main`** - Production-ready code
-  - Protected branch
-  - Docker images tagged as `latest` and semantic versions (v1.2.3)
-  - Only receives PRs from `develop`
-  - Releases are manual and explicit
-
-- **`develop`** - Integration and testing branch
-  - All feature branches merge here first
-  - Docker images automatically built and tagged as `develop`
-  - Used for testing before production release
-
-- **`feature/*`, `fix/*`, `docs/*`** - Your work branches
-  - Branch from `develop`
-  - Merge back to `develop` via PR
-
-### Development Flow
-
-```
-Your Feature → develop → (test with develop images) → main → production release
-```
-
-**Step-by-step:**
-1. Create feature branch from `develop`
-2. Make changes and push
-3. Open PR to `develop` (runs automated checks)
-4. After merge, `develop` images are automatically built
-5. Test using `develop` Docker images
-6. When ready for release, create PR from `develop` to `main`
-7. After merge to `main`, manually trigger release workflow
-
-### Testing with Develop Images
-
-After your PR is merged to `develop`, test with the staging images:
+Create work branches from current `main` and open pull requests back to `main`.
+Every PR must pass the required CI checks before merging. Production releases
+are manually dispatched from `main` after the combined changes are validated.
 
 ```bash
-# Pull develop images
-docker pull ghcr.io/techsquidtv/hermes-app:develop
-docker pull ghcr.io/techsquidtv/hermes-api:develop
-
-# Use with docker compose
-docker compose -f docker-compose.example.yml up -d
-# Edit docker-compose.example.yml to use :develop tags instead of :latest
+git switch main
+git pull --ff-only origin main
+git switch -c fix/describe-the-change
 ```
 
-These `develop` images are **not for production** - they're for testing before release.
+An optional `develop` branch and preview-image workflow remain available for
+future staging use, but that branch does not currently exist on the remote and
+is not required for contributions. Test unreleased changes with source builds.
 
 ## 🐳 Development Workflow
 
@@ -146,7 +110,7 @@ pnpm test:all        # All tests
 See [Dependency maintenance](./DEPENDENCY_MAINTENANCE.md) for automated update
 schedules, lockfile requirements, and how to check Renovate runs.
 
-We have three automated workflows:
+The main automated workflows are:
 
 ### 1. PR Checks (`.github/workflows/pr-checks.yml`)
 Runs on all PRs to `main` and `develop`:
@@ -199,7 +163,7 @@ cd packages/hermes-api && uv run pytest --cov=app --cov-report=html
 
 ### Writing Tests
 
-**Frontend:** Use Jest + React Testing Library in `__tests__/` folders
+**Frontend:** Use Vitest + React Testing Library in `__tests__/` folders
 **Backend:** Use pytest + httpx in `tests/` folders
 
 **Add tests for:**
@@ -226,9 +190,9 @@ We use Cursor with AI assistance. The `.cursor/` directory contains project-spec
 
 ### 2. Create Feature Branch
 ```bash
-# First, ensure you're starting from develop
-git checkout develop
-git pull origin develop
+# First, ensure you're starting from main
+git checkout main
+git pull --ff-only origin main
 
 # Create your feature branch
 git checkout -b feature/amazing-new-feature
@@ -259,12 +223,12 @@ git push origin feature/amazing-new-feature
 ```
 
 ### 6. Create Pull Request
-- **Target**: Open PR against `develop` branch (not `main`)
+- **Target**: Open PR against `main`
 - Clear title and description
 - Link related issues
 - Add screenshots for UI changes
 - Ensure all CI checks pass
-- After merge, test with `develop` Docker images
+- Before release, test the combined source-built Docker images
 
 ## 🏗️ Architecture Guidelines
 

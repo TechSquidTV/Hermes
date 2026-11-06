@@ -227,10 +227,10 @@ pnpm dev
 ### 🔀 Branch Strategy
 
 - **`main`** - Stable production releases (Docker: `latest`)
-- **`develop`** - Integration branch for testing (Docker: `develop`)
-- **Feature branches** - Your contributions (merge to `develop`)
+- **`develop`** - Optional staging branch (currently inactive)
+- **Feature branches** - Your contributions (merge to `main`)
 
-Contributors: Open PRs to `develop`, not `main`. See the [Contributing Guide](docs/CONTRIBUTING.md) for details.
+Contributors: Open PRs to `main`. The `develop` workflow is optional and its branch is not currently active. See the [Contributing Guide](docs/CONTRIBUTING.md) for details.
 ---
 
 ## Hosting Partner

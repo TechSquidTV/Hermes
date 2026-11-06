@@ -4,14 +4,17 @@ Celery tasks for cleanup and maintenance operations.
 
 import os
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Dict, List
 
 from sqlalchemy import select
 
 from app.api.dependencies import get_repositories_from_session
+from app.core.config import settings
 from app.core.logging import get_logger
 from app.db.base import async_session_maker
 from app.db.models import Download
+from app.services.file_cleanup import active_download_prefixes, cleanup_candidates
 from app.tasks.runtime import run_async_task
 from app.tasks.types import task
 from app.utils.files import resolve_download_path
@@ -77,8 +80,7 @@ async def _cleanup_download_files(download_ids: List[str]) -> Dict[str, Any]:
 
 async def _cleanup_temp_files(max_age_hours: int = 24) -> Dict[str, Any]:
     """Clean up temporary files older than specified hours."""
-    temp_dir = os.getenv("HERMES_TEMP_DIR", "./temp")
-    cutoff_time = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+    temp_dir = settings.temp_dir
 
     if not os.path.exists(temp_dir):
         return {"deleted_files": 0, "total_freed_bytes": 0}
@@ -87,19 +89,13 @@ async def _cleanup_temp_files(max_age_hours: int = 24) -> Dict[str, Any]:
     deleted_files = 0
 
     try:
-        for filename in os.listdir(temp_dir):
-            file_path = os.path.join(temp_dir, filename)
-
-            if os.path.isfile(file_path):
-                file_mtime = datetime.fromtimestamp(
-                    os.path.getmtime(file_path), tz=timezone.utc
-                )
-
-                if file_mtime < cutoff_time:
-                    file_size = os.path.getsize(file_path)
-                    os.remove(file_path)
-                    total_freed += file_size
-                    deleted_files += 1
+        async with async_session_maker() as session:
+            prefixes = await active_download_prefixes(session)
+        for file_path in cleanup_candidates(Path(temp_dir), max_age_hours, prefixes):
+            file_size = file_path.stat().st_size
+            file_path.unlink()
+            total_freed += file_size
+            deleted_files += 1
 
     except Exception as e:
         logger.error("Failed to cleanup temp files", error=str(e))
@@ -239,8 +235,7 @@ async def _cleanup_temp_files_async(
     )
 
     try:
-        temp_dir = os.getenv("HERMES_TEMP_DIR", "./temp")
-        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+        temp_dir = settings.temp_dir
 
         if not os.path.exists(temp_dir):
             result = {"deleted_files": 0, "total_freed_bytes": 0}
@@ -255,18 +250,13 @@ async def _cleanup_temp_files_async(
             total_would_free = 0
             would_delete_files = 0
 
-            for filename in os.listdir(temp_dir):
-                file_path = os.path.join(temp_dir, filename)
-
-                if os.path.isfile(file_path):
-                    file_mtime = datetime.fromtimestamp(
-                        os.path.getmtime(file_path), tz=timezone.utc
-                    )
-
-                    if file_mtime < cutoff_time:
-                        file_size = os.path.getsize(file_path)
-                        total_would_free += file_size
-                        would_delete_files += 1
+            async with async_session_maker() as session:
+                prefixes = await active_download_prefixes(session)
+            for file_path in cleanup_candidates(
+                Path(temp_dir), max_age_hours, prefixes
+            ):
+                total_would_free += file_path.stat().st_size
+                would_delete_files += 1
 
             return {
                 "would_delete_files": would_delete_files,

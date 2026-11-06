@@ -27,7 +27,7 @@ from app.core.security import (
     verify_password,
     verify_token,
 )
-from app.db.registration import lock_user_registration
+from app.db.registration import lock_user_changes
 from app.db.session import get_database_session
 from app.models.auth import AuthenticatedUser
 from app.models.base import CamelCaseModel
@@ -160,7 +160,7 @@ async def signup(
     """Create new user account."""
     repos = get_repositories_from_session(db_session)
 
-    await lock_user_registration(db_session)
+    await lock_user_changes(db_session)
 
     # Check if any users exist
     user_count = await repos["users"].count()
