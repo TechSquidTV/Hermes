@@ -142,8 +142,8 @@ async def cleanup_orphaned_downloads(
     """
     Clean up orphaned download records where files no longer exist on disk.
 
-    This endpoint removes database records for downloads where the output_path
-    file is missing from the filesystem. This can happen due to:
+    This endpoint removes terminal download records only when every known
+    managed deliverable, including the primary output, is missing. This can happen due to:
     - External file deletion
     - System crashes during deletion
     - Manual database operations

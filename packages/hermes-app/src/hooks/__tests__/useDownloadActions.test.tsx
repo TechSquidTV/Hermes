@@ -107,7 +107,7 @@ describe('useDownloadActions', () => {
 
   it('shows a publication failure and refreshes its failed queue record', async () => {
     mockStartDownload.mockResolvedValue({
-      downloadId: 'download-1', status: 'failed', message: 'Task publication failed; retry this failed download',
+      downloadId: 'download-1', status: 'failed', message: 'Task publication failed; submit this URL again',
     })
     const { result, invalidateQueries } = renderWithQueryClient(useStartDownload)
 
@@ -117,7 +117,7 @@ describe('useDownloadActions', () => {
       })
     })
 
-    expect(mockToast.error).toHaveBeenCalledWith('Task publication failed; retry this failed download')
+    expect(mockToast.error).toHaveBeenCalledWith('Task publication failed; submit this URL again')
     expect(mockToast.success).not.toHaveBeenCalled()
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['queue'], exact: false })
   })

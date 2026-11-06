@@ -73,7 +73,7 @@ describe('VideoPreview download format', () => {
 
       await user.click(screen.getByRole('button', { name: 'Download 2 Videos' }))
       await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ['queue'], exact: false }))
-      expect(error).toHaveBeenCalledWith(`${failedDownloads.length} downloads could not be queued. Retry the failed items shown in the queue.`)
+      expect(error).toHaveBeenCalledWith(`${failedDownloads.length} downloads could not be queued. Resubmit only the URLs listed as failed in the queue.`)
       expect(track).toHaveBeenCalledWith('one')
       expect(track).toHaveBeenCalledWith('two')
       if (status === 'partial') expect(success).toHaveBeenCalledWith('Successfully queued 1 video in 1 batch')

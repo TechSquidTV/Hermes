@@ -153,7 +153,7 @@ async def start_download(
         download_id=download.id,
         status=dispatch_status,
         message=(
-            "Task publication failed; retry this failed download"
+            "Task publication failed; submit this URL again"
             if dispatch_status == "failed"
             else "Download queued successfully"
         ),
@@ -338,7 +338,11 @@ async def start_batch_download(
         if dispatch_status == "failed":
             failed_downloads.append(download_id)
 
-    logger.info("Batch download queued successfully", download_count=len(download_ids))
+    logger.info(
+        "Batch publication finished",
+        download_count=len(download_ids),
+        failed_count=len(failed_downloads),
+    )
 
     return BatchDownloadResponse(
         batch_id=str(uuid.uuid4()),
@@ -376,7 +380,7 @@ async def _dispatch_download(
             download_id,
             "failed",
             expected_status="pending",
-            error_message="Task publication failed; retry this failed download",
+            error_message="Task publication failed; submit this URL again",
         )
         current = await repository.get_by_id(download_id)
         return current.status if current is not None else "failed"

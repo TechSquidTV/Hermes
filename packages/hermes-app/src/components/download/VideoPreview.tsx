@@ -165,7 +165,7 @@ export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewPr
           }
           
           const failedCount = response.failedDownloads.length
-          if (failedCount > 0) toast.error(`${failedCount} downloads could not be queued. Retry the failed items shown in the queue.`)
+          if (failedCount > 0) toast.error(`${failedCount} downloads could not be queued. Resubmit only the URLs listed as failed in the queue.`)
           if (failedCount < batch.length) successfulBatches++
           successfulVideoCount += batch.length - failedCount
           

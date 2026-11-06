@@ -70,10 +70,12 @@ async def test_orphan_cleanup_preserves_surviving_deliverables(
 async def test_broker_failure_is_explicit_and_late_delivery_cannot_start(
     db_session: AsyncSession,
 ) -> None:
-    with patch("app.api.v1.endpoints.downloads._validate_urls", AsyncMock()), patch(
+    validation = patch("app.api.v1.endpoints.downloads._validate_urls", AsyncMock())
+    publication = patch(
         "app.api.v1.endpoints.downloads._queue_download",
         side_effect=RuntimeError("broker unavailable"),
-    ):
+    )
+    with validation, publication:
         result = await start_download(
             DownloadRequest(url="https://example.test/video"), db_session, ADMIN
         )
@@ -91,9 +93,9 @@ async def test_partial_batch_reports_failed_ids_and_continues(
     db_session: AsyncSession,
 ) -> None:
     publish = Mock(side_effect=[None, RuntimeError("broker unavailable"), None])
-    with patch("app.api.v1.endpoints.downloads._validate_urls", AsyncMock()), patch(
-        "app.api.v1.endpoints.downloads._queue_download", publish
-    ):
+    validation = patch("app.api.v1.endpoints.downloads._validate_urls", AsyncMock())
+    publication = patch("app.api.v1.endpoints.downloads._queue_download", publish)
+    with validation, publication:
         result = await start_batch_download(
             BatchDownloadRequest(urls=[f"https://example.test/{i}" for i in range(3)]),
             db_session,
