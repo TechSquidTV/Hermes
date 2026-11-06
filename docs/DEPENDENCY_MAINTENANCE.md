@@ -4,6 +4,38 @@ The hosted [Renovate GitHub app](https://github.com/apps/renovate) owns automate
 version updates. Its repository configuration is in `.github/renovate.json`;
 no scheduled Renovate workflow or repository token is required.
 
+## Manual refresh: 2026-11-06
+
+The full maintenance refresh updates the JavaScript workspace and Python
+dependency floors and regenerates both lockfiles. It uses pnpm 12.18.0,
+Vitest/coverage 5.1.0, jsdom 31, Motion 14 (`motion/react`), Celery 5.7 with
+stable Kombu 5.7, FastAPI 0.162, and SQLAlchemy 2.1.8. yt-dlp remains at its
+current stable 2026.10.26 release with the matching EJS dependency.
+
+**Tooling update:** use pnpm 12.18.0; animation imports move to `motion/react`,
+and Docker/CI move to Python 3.15. Native Python support remains 3.11+.
+Dependency floors now match the
+tested current releases, including previously permitted major Python upgrades.
+Reinstall with `pnpm install --frozen-lockfile` and `uv sync --locked --all-groups`;
+rebuild the app, API, worker, and scheduler together. No API or database migration
+is introduced by this refresh.
+
+Container references include verified multi-platform digests, and workflow
+actions use explicit release versions. uv is 0.13.7 and Renovate is 44.221.5.
+The TypeScript 6 restriction remains; `pnpm update:all` excludes TypeScript from
+unrestricted upgrades. The js-yaml override stays within its patched 4.x API
+instead of forcing Redocly onto an incompatible major.
+
+The development-tool minimatch override uses 11.0.5 to address
+[GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249);
+the advisory has no fix on the 10.x line used by the toolchain. Recheck and
+remove this override when upstream dependencies adopt patched releases.
+The audit still reports one low-severity development-only
+[deepmerge advisory](https://github.com/advisories/GHSA-gcqx-w48m-w2h4) through
+shadcn, with no published fix. Production JavaScript and the audited Python
+dependencies have no reported advisories at the time of this refresh. This is
+a point-in-time audit, not a scheduled audit service.
+
 ## Activation and migration
 
 Install or configure the app for **TechSquidTV/Hermes** before merging this

@@ -12,6 +12,8 @@ allowBuilds:
   esbuild: true
   msw: false
 
-# openapi-typescript's Redocly dependency pins a vulnerable patch.
 overrides:
+  # openapi-typescript's Redocly dependency pins a vulnerable patch.
   'js-yaml@>=4.0.0 <4.3.2': 4.3.2
+  # GHSA-g3hv-75wg-m249 has no fix on the tooling's minimatch 10 line.
+  'minimatch@>=7.0.0 <11.0.1': 11.0.5
