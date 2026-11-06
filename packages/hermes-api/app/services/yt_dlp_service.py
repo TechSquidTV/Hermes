@@ -5,6 +5,8 @@ YoutubeDL service wrapper for async operations.
 import asyncio
 import os
 import shutil
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
 from yt_dlp.utils import DownloadError, ExtractorError
@@ -15,6 +17,18 @@ from app.utils.media import DEFAULT_FORMAT_SPEC
 from app.utils.urls import validate_public_url
 
 logger = get_logger(__name__)
+
+
+@dataclass(frozen=True)
+class DownloadOutputs:
+    """Verified final media and sidecar paths after yt-dlp postprocessing."""
+
+    media_path: str
+    sidecar_paths: tuple[str, ...] = ()
+
+    @property
+    def paths(self) -> tuple[str, ...]:
+        return (self.media_path, *self.sidecar_paths)
 
 
 class YTDLPService:
@@ -74,13 +88,41 @@ class YTDLPService:
         format_spec: str = DEFAULT_FORMAT_SPEC,
         progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
         **kwargs: object,
-    ) -> str:
-        """Download media and return its final path after all postprocessing.
+    ) -> DownloadOutputs:
+        """Download media and return all final deliverables after postprocessing.
 
         yt-dlp errors propagate to the task so it can report the actual failure.
         """
 
-        def _download_sync() -> str:
+        def _download_sync() -> DownloadOutputs:
+            final_paths: set[str] = set()
+
+            def collect_final_paths(event: dict[str, object]) -> None:
+                # The MoveFiles hook runs after conversion/embedding and before
+                # yt-dlp discards its exact source-to-destination manifest.
+                if (
+                    event.get("status") != "finished"
+                    or event.get("postprocessor") != "MoveFiles"
+                ):
+                    return
+                info = event.get("info_dict")
+                if not isinstance(info, dict):
+                    return
+                moves = info.get("__files_to_move", {})
+                media_path = info.get("filepath")
+                if not isinstance(moves, dict) or not isinstance(media_path, str):
+                    return
+                final_directory = info.get("__finaldir", str(Path(media_path).parent))
+                if not isinstance(final_directory, str):
+                    return
+                for source, destination in moves.items():
+                    if isinstance(source, str):
+                        final_paths.add(
+                            destination
+                            if isinstance(destination, str) and destination
+                            else str(Path(final_directory) / Path(source).name)
+                        )
+
             opts = {
                 **self._default_opts,
                 "format": format_spec,
@@ -88,6 +130,7 @@ class YTDLPService:
                 "restrictfilenames": True,
                 **kwargs,
             }
+            opts["postprocessor_hooks"] = [collect_final_paths]
             if progress_callback:
                 opts["progress_hooks"] = [progress_callback]
 
@@ -105,7 +148,14 @@ class YTDLPService:
                 raise FileNotFoundError("Downloaded file is missing")
 
             logger.info("Downloaded media file", path=actual_path)
-            return actual_path
+            canonical_media = str(Path(actual_path).resolve())
+            sidecars = {
+                str(Path(path).resolve())
+                for path in final_paths
+                if os.path.isfile(path)
+            }
+            sidecars.discard(canonical_media)
+            return DownloadOutputs(canonical_media, tuple(sorted(sidecars)))
 
         return await asyncio.to_thread(_download_sync)
 

@@ -28,6 +28,7 @@ from app.db.base import async_session_maker
 from app.db.models import User
 from app.db.repositories import ApiKeyRepository, DownloadRepository
 from app.main import app
+from app.services.yt_dlp_service import DownloadOutputs
 from app.tasks import download_tasks
 
 
@@ -303,7 +304,7 @@ async def test_cancelled_download_cannot_register_output_or_publish_completion(
     progress = AsyncMock()
     monkeypatch.setattr(download_tasks, "redis_progress_service", progress)
     assert not await download_tasks._update_download_status(
-        download_id, "completed", output_path=str(output)
+        download_id, "completed", outputs=DownloadOutputs(str(output))
     )
     async with async_session_maker() as session:
         stored = await DownloadRepository(session).get_by_id(download_id)
