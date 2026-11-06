@@ -24,8 +24,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # Set test environment variables BEFORE any imports
 os.environ.setdefault("HERMES_DEBUG", "true")
 _test_database_dir = TemporaryDirectory(prefix="hermes-tests-")
+# Explicit test-only opt-in: never inherit an operator's HERMES_DATABASE_URL.
+for _test_variable in ("HERMES_TEST_DATABASE_URL", "HERMES_TEST_POSTGRES_URL"):
+    _test_url = os.environ.get(_test_variable)
+    if _test_url and not _test_url.startswith("postgresql+asyncpg://"):
+        raise ValueError(f"{_test_variable} must use postgresql+asyncpg")
+if os.environ.get("HERMES_TEST_DATABASE_URL") and os.environ.get(
+    "HERMES_TEST_POSTGRES_URL"
+):
+    raise ValueError("Set only one PostgreSQL test database variable at a time")
+_test_postgres_url = os.environ.get("HERMES_TEST_DATABASE_URL")
 os.environ["HERMES_DATABASE_URL"] = (
-    f"sqlite+aiosqlite:///{_test_database_dir.name}/hermes.db"
+    _test_postgres_url or f"sqlite+aiosqlite:///{_test_database_dir.name}/hermes.db"
 )
 os.environ.setdefault("HERMES_REDIS_URL", "redis://localhost:6379/1")
 os.environ.setdefault(

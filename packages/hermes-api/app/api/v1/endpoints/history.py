@@ -23,6 +23,7 @@ from app.models.pydantic.history import (
     HistoryItem,
     PopularExtractor,
 )
+from app.models.status import HistoryStatus
 
 router = APIRouter(prefix="/history", tags=["history"])
 logger = get_logger(__name__)
@@ -106,7 +107,7 @@ async def get_download_history(
     extractor: Optional[str] = Query(
         None, description="Filter by extractor (youtube, vimeo, etc.)"
     ),
-    status: Optional[str] = Query(
+    status: Optional[HistoryStatus] = Query(
         None, description="Filter by status (completed, failed, cancelled)"
     ),
     limit: int = Query(

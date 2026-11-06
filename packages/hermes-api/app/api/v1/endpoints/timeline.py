@@ -15,6 +15,7 @@ from app.core.security import ApiKeyPermission, AuthPrincipal, require_api_permi
 from app.db.models import DownloadHistory as DownloadHistoryModel
 from app.db.session import get_database_session
 from app.models.pydantic.history import DailyStats, TimelineSummary
+from app.models.status import HistoryStatus
 from app.utils.time_periods import get_period_delta
 
 router = APIRouter(prefix="/timeline", tags=["timeline"])
@@ -29,7 +30,7 @@ async def get_timeline_stats(
     ),
     end_date: Optional[date_type] = Query(None, description="End date (YYYY-MM-DD)"),
     extractor: Optional[str] = Query(None, description="Filter by extractor"),
-    status: Optional[str] = Query(None, description="Filter by status"),
+    status: Optional[HistoryStatus] = Query(None, description="Filter by status"),
     db_session: AsyncSession = Depends(get_database_session),
     principal: AuthPrincipal = Depends(require_api_permission(ApiKeyPermission.READ)),
 ) -> list[DailyStats]:
