@@ -235,10 +235,15 @@ If you need to rollback a release:
 
 ### Option 1: Deploy a Previous Version
 
-Simply deploy a previous working version:
+After a schema migration, an image-only rollback is unsafe: older backends may
+reject the new revision or interpret changed data incorrectly. Use the
+[upgrade recovery procedure](UPGRADING.md#failed-upgrades-and-recovery) to restore
+a matching database snapshot, configuration and images, or ship a forward fix.
+Restoring a snapshot discards subsequent database writes. A failed managed
+upgrade prints this explicit recovery command:
 
 ```bash
-docker pull ghcr.io/<your-org>/hermes-app:1.0.0  # Previous working version
+python3 scripts/upgrade.py --recover .hermes-upgrades/<upgrade-id>/state.json --restore-database
 ```
 
 ### Option 2: Create a Hotfix Release
@@ -504,9 +509,11 @@ zero vulnerabilities as of 2026-11-06.
 
 ### Startup and worker recovery upgrade
 
-**Migration required:** stop old workers, back up the database, run
-`alembic upgrade head`, then upgrade/recreate the API, workers and scheduler
-together. Revision `a7c4e19d82b6` adds the nullable worker heartbeat and its active
+**Migration required:** use `python3 scripts/upgrade.py X.Y.Z` with the target
+release's prebuilt Compose files. It drains work, backs up the database, runs
+migrations and verifies matching API/worker/scheduler images. Native deployments
+follow the [manual upgrade steps](UPGRADING.md#backups-and-native-deployments).
+Revision `a7c4e19d82b6` adds the nullable worker heartbeat and its active
 download index. Active historical records use their start/creation timestamp
 until they have a heartbeat. The API fails abandoned active records after
 `HERMES_DOWNLOAD_STALE_AFTER_SECONDS` (300 by default), recording failure history
@@ -521,7 +528,8 @@ also stop. Existing installations may remove the seed password after bootstrap;
 the presence of users continues to prevent seeding. An installation with no seed
 credentials retains the documented first-user-admin bootstrap.
 
-Reload all open browser tabs after upgrade. Refresh coordination requires
+Open tabs now prompt to reload after deployment; save changes and choose Reload.
+Refresh coordination requires
 IndexedDB storage and works on plain HTTP too; a closed tab's lease expires after
 60 seconds. Refresh operations are bounded to 30 seconds, and a suspended tab
 cannot persist credentials after that deadline. A storage failure leaves the

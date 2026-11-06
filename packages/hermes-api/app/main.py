@@ -16,6 +16,7 @@ from starlette.responses import Response
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.logging import setup_logging
+from app.core.maintenance import in_maintenance
 from app.models.pydantic.response import ErrorResponse
 
 # Setup logging
@@ -124,12 +125,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Initialize database tables and repair completed downloads from older workers
     try:
-        from app.db.base import async_session_maker, create_tables
+        from app.db.base import async_session_maker
+        from app.db.migrations import migrate_database
         from app.services.download_files import backfill_download_files
 
-        logger.info("Creating database tables...")
-        await create_tables()
-        logger.info("Database tables created successfully")
+        logger.info("Applying database migrations...")
+        await migrate_database()
         async with async_session_maker() as session:
             repaired = await backfill_download_files(session)
         logger.info("Repaired %d completed download file records", repaired)
@@ -241,7 +242,24 @@ def create_application() -> FastAPI:
     async def add_security_headers(
         request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
-        response = await call_next(request)
+        if in_maintenance() and request.url.path not in {
+            "/api/v1/health/",
+            "/api/v1/health/detailed",
+            "/api/v1/health/ready",
+        }:
+            response: Response = JSONResponse(
+                status_code=503,
+                headers={"Retry-After": "30"},
+                content={
+                    "error": {
+                        "code": "maintenance",
+                        "message": "Hermes is being upgraded; try again shortly",
+                        "details": None,
+                    }
+                },
+            )
+        else:
+            response = await call_next(request)
 
         # Add security headers
         response.headers["X-Content-Type-Options"] = "nosniff"

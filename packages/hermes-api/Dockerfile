@@ -35,6 +35,7 @@ ARG HERMES_BUILD_VERSION
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     curl \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -83,9 +84,9 @@ EXPOSE 8000
 
 # Health check with better error handling
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f http://localhost:8000/api/v1/health/ready || exit 1
 
-# Set entrypoint to run migrations before starting
+# Workers verify the schema; API startup applies locked migrations.
 ENTRYPOINT ["/app/entrypoint.sh"]
 
 # Run the application with optimized settings

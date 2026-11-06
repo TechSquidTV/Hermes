@@ -65,9 +65,17 @@ docker compose -f docker-compose.example.yml pull
 docker compose -f docker-compose.example.yml up -d --wait
 ```
 
-For upgrades, update the single `HERMES_IMAGE_TAG`, pull, and recreate the entire
-stack together. See the [deployment guide](docs/DEPLOYMENT.md) before upgrading
-an existing installation.
+For upgrades, use the script from the target release (Python 3.11+ on Linux/macOS):
+
+```bash
+python3 scripts/upgrade.py 1.2.3  # Replace with the published version you selected.
+```
+
+It pulls matching images, pauses requests, drains queued and active work, backs
+up the database, migrates it, and checks the replacement services. It updates
+`HERMES_IMAGE_TAG` only after success. Open tabs offer a Reload button after the
+new frontend is deployed. See the [upgrade and recovery guide](docs/UPGRADING.md)
+for requirements, maintenance timeouts, custom Compose files, and recovery.
 
 ### Development with hot reload
 

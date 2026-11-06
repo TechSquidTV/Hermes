@@ -45,6 +45,7 @@ jobs:
               - 'tests/infra/**'
               - '.github/workflows/**'
             backend:
+              - 'scripts/**'
               - '.github/scripts/**'
               - 'packages/hermes-api/**'
               - 'packages/hermes-app/src/types/api.generated.ts'
@@ -172,21 +173,21 @@ jobs:
 
       - name: Run black (format check)
         working-directory: packages/hermes-api
-        run: uv run --locked black --check app/ tests/ typings/ ../../tests/infra/ ../../.github/scripts/
+        run: uv run --locked black --check app/ tests/ typings/ ../../tests/infra/ ../../.github/scripts/ ../../scripts/
 
       - name: Run isort (import sorting check)
         working-directory: packages/hermes-api
-        run: uv run --locked isort --check-only app/ tests/ typings/ ../../tests/infra/ ../../.github/scripts/
+        run: uv run --locked isort --check-only app/ tests/ typings/ ../../tests/infra/ ../../.github/scripts/ ../../scripts/
 
       - name: Run ruff (linting)
         working-directory: packages/hermes-api
-        run: uv run --locked ruff check app/ tests/ typings/ ../../tests/infra/ ../../.github/scripts/
+        run: uv run --locked ruff check app/ tests/ typings/ ../../tests/infra/ ../../.github/scripts/ ../../scripts/
 
       - name: Run mypy (type checking)
         working-directory: packages/hermes-api
         run: |
           uv run --locked python -m mypy --explicit-package-bases app/ tests/
-          uv run --locked python -m mypy --config-file pyproject.toml ../../tests/infra/ ../../.github/scripts/
+          uv run --locked python -m mypy --config-file pyproject.toml ../../tests/infra/ ../../.github/scripts/ ../../scripts/
 
       - name: Run tests with coverage
         working-directory: packages/hermes-api

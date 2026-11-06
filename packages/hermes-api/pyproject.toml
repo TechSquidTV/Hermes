@@ -42,6 +42,7 @@ target-version = ['py311']
 [tool.isort]
 profile = "black"
 line_length = 88
+known_third_party = ["alembic"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -70,6 +71,9 @@ ignore = [
     "E501",  # Line too long (handled by black)
 ]
 
+[tool.ruff.lint.isort]
+known-third-party = ["alembic"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
@@ -86,6 +90,7 @@ asyncio_default_fixture_loop_scope = "function"
 
 [tool.coverage.run]
 source = ["app"]
+patch = ["subprocess"]
 omit = [
     "*/tests/*",
     "*/test_*",
