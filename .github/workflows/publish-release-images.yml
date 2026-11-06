@@ -65,6 +65,19 @@ jobs:
             fi
           done
 
+      - name: Checkout publication policy from workflow commit
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: .release-policy
+          sparse-checkout: .github/scripts
+
+      - name: Determine eligible release aliases
+        id: aliases
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: python3 .release-policy/.github/scripts/release_aliases.py "$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Verify package versions match tag
         run: |
           VERSION="${{ steps.version.outputs.version }}"
@@ -128,11 +141,12 @@ jobs:
         uses: docker/metadata-action@v6.2.0
         with:
           images: ghcr.io/${{ github.repository_owner }}/hermes-app
+          flavor: latest=false
           tags: |
             type=semver,pattern={{version}},value=${{ steps.version.outputs.version }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.version }}
-            type=semver,pattern={{major}},value=${{ steps.version.outputs.version }}
-            type=raw,value=latest
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.version }},enable=${{ steps.aliases.outputs.minor == 'true' }}
+            type=semver,pattern={{major}},value=${{ steps.version.outputs.version }},enable=${{ steps.aliases.outputs.major == 'true' }}
+            type=raw,value=latest,enable=${{ steps.aliases.outputs.latest == 'true' }}
 
       - name: Build and push hermes-app Docker image
         uses: docker/build-push-action@v7.4.0
@@ -153,11 +167,12 @@ jobs:
         uses: docker/metadata-action@v6.2.0
         with:
           images: ghcr.io/${{ github.repository_owner }}/hermes-api
+          flavor: latest=false
           tags: |
             type=semver,pattern={{version}},value=${{ steps.version.outputs.version }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.version }}
-            type=semver,pattern={{major}},value=${{ steps.version.outputs.version }}
-            type=raw,value=latest
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.version }},enable=${{ steps.aliases.outputs.minor == 'true' }}
+            type=semver,pattern={{major}},value=${{ steps.version.outputs.version }},enable=${{ steps.aliases.outputs.major == 'true' }}
+            type=raw,value=latest,enable=${{ steps.aliases.outputs.latest == 'true' }}
 
       - name: Build and push hermes-api Docker image
         uses: docker/build-push-action@v7.4.0

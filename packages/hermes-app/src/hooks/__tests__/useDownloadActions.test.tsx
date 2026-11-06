@@ -105,6 +105,23 @@ describe('useDownloadActions', () => {
     expect(invalidateQueries).toHaveBeenCalledTimes(1)
   })
 
+  it('shows a publication failure and refreshes its failed queue record', async () => {
+    mockStartDownload.mockResolvedValue({
+      downloadId: 'download-1', status: 'failed', message: 'Task publication failed; submit this URL again',
+    })
+    const { result, invalidateQueries } = renderWithQueryClient(useStartDownload)
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        url: 'https://example.test/watch', format: 'best', downloadSubtitles: false, downloadThumbnail: false,
+      })
+    })
+
+    expect(mockToast.error).toHaveBeenCalledWith('Task publication failed; submit this URL again')
+    expect(mockToast.success).not.toHaveBeenCalled()
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['queue'], exact: false })
+  })
+
   it.each([
     {
       status: 404,

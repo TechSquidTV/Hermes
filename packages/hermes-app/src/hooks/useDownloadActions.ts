@@ -13,8 +13,9 @@ export function useStartDownload() {
 
   return useMutation({
     mutationFn: (request: DownloadRequest) => apiClient.startDownload(request),
-    onSuccess: () => {
-      toast.success('Download started successfully!')
+    onSuccess: (data) => {
+      if (data.status === 'failed') toast.error(data.message)
+      else toast.success('Download started successfully!')
       invalidateQueueQueries(queryClient)
     },
     onError: (error) => {

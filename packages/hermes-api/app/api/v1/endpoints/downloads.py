@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_repositories_from_session
 from app.core.logging import get_logger
 from app.core.security import ApiKeyPermission, AuthPrincipal, require_api_permission
+from app.db.repositories import DownloadRepository
 from app.db.session import get_database_session
 from app.models.pydantic.download import (
     BatchDownloadRequest,
@@ -137,7 +138,8 @@ async def start_download(
         status="pending",
     )
 
-    _queue_download(
+    dispatch_status = await _dispatch_download(
+        db_session,
         download.id,
         download_request.url,
         download_request.format,
@@ -149,8 +151,12 @@ async def start_download(
 
     return DownloadResponse(
         download_id=download.id,
-        status=download.status,
-        message="Download queued successfully",
+        status=dispatch_status,
+        message=(
+            "Task publication failed; submit this URL again"
+            if dispatch_status == "failed"
+            else "Download queued successfully"
+        ),
     )
 
 
@@ -319,23 +325,65 @@ async def start_batch_download(
 
     # Independent tasks keep cancellation of one member isolated.
     options = _batch_download_options_from_request(batch_request)
+    failed_downloads = []
     for download_id, url in zip(download_ids, batch_request.urls, strict=True):
-        _queue_download(
+        dispatch_status = await _dispatch_download(
+            db_session,
             download_id,
             url,
             batch_request.format,
             batch_request.output_directory,
             options,
         )
+        if dispatch_status == "failed":
+            failed_downloads.append(download_id)
 
-    logger.info("Batch download queued successfully", download_count=len(download_ids))
+    logger.info(
+        "Batch publication finished",
+        download_count=len(download_ids),
+        failed_count=len(failed_downloads),
+    )
 
     return BatchDownloadResponse(
         batch_id=str(uuid.uuid4()),
         total_downloads=len(download_ids),
-        status="queued",
+        status=(
+            "failed"
+            if len(failed_downloads) == len(download_ids)
+            else "partial" if failed_downloads else "queued"
+        ),
         downloads=download_ids,
+        failed_downloads=failed_downloads,
     )
+
+
+async def _dispatch_download(
+    session: AsyncSession,
+    download_id: str,
+    url: str,
+    format_spec: str,
+    output_directory: str | None,
+    options: dict[str, object],
+) -> str:
+    """Expose each publication outcome without retrying already queued batch members."""
+    try:
+        await asyncio.to_thread(
+            _queue_download, download_id, url, format_spec, output_directory, options
+        )
+        return "pending"
+    except Exception:
+        logger.exception("Task publication failed", download_id=download_id)
+        repository = DownloadRepository(session)
+        # A broker may accept the message before its acknowledgement is lost.
+        # Fail only an unclaimed task; a worker that already claimed it may finish.
+        await repository.update_status(
+            download_id,
+            "failed",
+            expected_status="pending",
+            error_message="Task publication failed; submit this URL again",
+        )
+        current = await repository.get_by_id(download_id)
+        return current.status if current is not None else "failed"
 
 
 def _queue_download(

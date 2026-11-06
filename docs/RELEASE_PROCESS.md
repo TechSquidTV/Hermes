@@ -421,8 +421,9 @@ push failed:
 2. Repair the build or registry access problem. For source changes, cut a new
    version; do not move existing release tags.
 3. For a transient failure with unchanged source, dispatch **Publish Release
-   Images** from `main`, supplying the existing `vX.Y.Z` tag. Do this before
-   starting a newer release; recovery publishes the version and mutable aliases.
+   Images** from `main`, supplying the existing `vX.Y.Z` tag. Historical recovery
+   always publishes the exact version. Mutable aliases are updated only if it is
+   the newest stable tag in the corresponding series.
 4. The recovery workflow reruns validation and republishes both images. After
    both succeed it creates a missing GitHub Release, or preserves the existing one.
 5. Verify both architectures in both manifests, then deploy the same exact
@@ -456,3 +457,25 @@ at least once per second and close after logout, account disable, key revocation
 or token expiry. Manual temporary cleanup defaults to files older than 24 hours,
 protects active task outputs and skips symlinks. Failed-record cleanup now honors
 preview mode and the shared deletion limit, reporting record counts separately.
+
+### Release alias ordering
+
+Release and recovery share a numeric stable-version policy. `latest` can point
+only to the highest `vX.Y.Z` tag, a major alias only to the highest version in
+that major, and a minor alias only to the highest patch in that minor. Prerelease
+and component tags do not participate. Historical recovery cannot move an alias
+backwards, even if its package versions and component tags all match. Recovery
+loads the policy from the workflow commit rather than the historical source tag,
+so older releases do not need to contain this script.
+
+### Download dispatch outcomes
+
+A publication failure is recorded on an unclaimed download as `failed` with an
+explanation, rather than leaving it pending forever. The API returns the created
+record and its status; callers must inspect that status. Batches continue through
+individual broker failures and return `partial` or `failed` with `failedDownloads`
+listing only the unsuccessful IDs. Retry those items instead of resubmitting
+successful batch members. HTTP transport failures remain ambiguous; request-level
+idempotency is not provided. Workers atomically claim pending records, preventing
+duplicate broker deliveries from executing the same ID twice. An uncertain broker
+acknowledgement does not fail a record already claimed by a worker.
