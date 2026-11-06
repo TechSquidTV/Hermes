@@ -282,7 +282,22 @@ assert result.get("dry_run") is True, result
                 compose("logs", "--no-color", "--tail", "100")
                 raise
             finally:
-                compose("down", "--volumes", "--remove-orphans")
+                try:
+                    # Backup directories are intentionally private to UID 1000.
+                    # Remove disposable snapshots as their owner before host-side
+                    # TemporaryDirectory cleanup (the CI runner has a different UID).
+                    compose(
+                        "run",
+                        "--rm",
+                        "--no-deps",
+                        "--entrypoint",
+                        "python",
+                        "api",
+                        "-c",
+                        "import shutil; from pathlib import Path; path = Path('/app/data/backups'); shutil.rmtree(path) if path.exists() else None",
+                    )
+                finally:
+                    compose("down", "--volumes", "--remove-orphans")
 
     # Exercise the actual image entrypoint with characters that broke JS interpolation.
     for api_url in ('https://example.com/a"b\\c\nline\u2028end', "/api/v1"):
