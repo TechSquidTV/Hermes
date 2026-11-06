@@ -1,11 +1,11 @@
 import asyncio
 from logging.config import fileConfig
 
+from alembic import command, context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from alembic import context
 from app.core.config import settings
 
 # Import your app's base and models
@@ -22,7 +22,9 @@ config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
-if config.config_file_name is not None:
+if config.config_file_name is not None and config.attributes.get(
+    "configure_logger", True
+):
     fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # add your model's MetaData object here
@@ -60,7 +62,11 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    adopt_native_schema(connection)
+    cli_command = getattr(config.cmd_opts, "cmd", None)
+    if config.attributes.get("adopt_native") or (
+        cli_command and cli_command[0] is command.upgrade
+    ):
+        adopt_native_schema(connection)
     context.configure(connection=connection, target_metadata=target_metadata)
 
     with context.begin_transaction():

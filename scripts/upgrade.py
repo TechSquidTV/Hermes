@@ -24,6 +24,7 @@ SERVICES = ("api", "celery_worker", "celery_beat", "app")
 WORKER_CONTROL = """
 import json, socket, sys
 from app.tasks.celery_app import celery_app
+from kombu.exceptions import ChannelError
 action, saved = sys.argv[1], json.loads(sys.argv[2])
 inspection = celery_app.control.inspect(timeout=5)
 queues = inspection.active_queues()
@@ -50,7 +51,13 @@ else:
     with celery_app.connection_for_read() as connection:
         channel = connection.channel()
         for name in names:
-            busy += channel.queue_declare(queue=name, passive=True).message_count
+            try:
+                busy += channel.queue_declare(queue=name, passive=True).message_count
+            except ChannelError as error:
+                # Redis removes empty list keys. Missing queues are empty;
+                # permission/protocol errors must still stop the upgrade.
+                if str(error.reply_code) != "404":
+                    raise
     print(json.dumps({"busy": busy, "queues": names}))
 """
 
@@ -368,14 +375,20 @@ class Upgrade:
                     self.compose("start", *SERVICES)
                 self.save(phase="aborted-before-migration")
             else:
-                self.helper("maintenance", "on")
-                self.compose("stop", "--timeout", "60", "app", "api", "celery_beat")
-                print(
-                    "Upgrade stopped. Keep services offline until recovery or a forward fix.\n"
-                    f"Recovery: python3 scripts/upgrade.py --recover {shlex.quote(str(self.state_file))} --restore-database",
-                    file=sys.stderr,
-                    flush=True,
-                )
+                try:
+                    self.helper("maintenance", "on")
+                finally:
+                    try:
+                        self.compose(
+                            "stop", "--timeout", "60", "app", "api", "celery_beat"
+                        )
+                    finally:
+                        print(
+                            "Upgrade stopped. Keep services offline until recovery or a forward fix.\n"
+                            f"Recovery: python3 scripts/upgrade.py --recover {shlex.quote(str(self.state_file))} --restore-database",
+                            file=sys.stderr,
+                            flush=True,
+                        )
             raise
 
     def persist_version(self) -> None:
@@ -411,6 +424,12 @@ def recover(state_file: Path, *, restore: bool) -> None:
         900,
     )
     with upgrade_lock(upgrade.env_file.parent):
+        previous = json.loads(
+            (state_file.parent / "previous-services.json").read_text()
+        )
+        for service in previous["services"].values():
+            # Fail before replacing the database if recorded images were pruned.
+            run(["docker", "image", "inspect", service["image"]])
         # A failed startup may already have started workers; drain them too.
         running = upgrade.compose("ps", "--status", "running", "--services").split()
         upgrade.compose("stop", "--timeout", "60", "app", "api", "celery_beat")

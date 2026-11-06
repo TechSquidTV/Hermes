@@ -2,18 +2,23 @@
 
 from __future__ import annotations
 
+import io
 import json
+import socket
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
-from unittest.mock import patch
+from types import ModuleType
+from unittest.mock import MagicMock, patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from scripts.upgrade import (  # noqa: E402
     SERVICES,
+    WORKER_CONTROL,
     Upgrade,
     UpgradeError,
     WorkerState,
@@ -185,6 +190,42 @@ class UpgradeLifecycleTests(unittest.TestCase):
             )
         with self.assertRaisesRegex(UpgradeError, "Storage mount"):
             validate_storage({}, [], mounts, {**mounts, "/app/data": "/other-volume"})
+
+
+class WorkerProbeTests(unittest.TestCase):
+    def test_missing_redis_queue_is_empty_but_other_channel_errors_fail(self) -> None:
+        class ChannelError(Exception):
+            def __init__(self, reply_code: str) -> None:
+                self.reply_code = reply_code
+
+        exceptions = ModuleType("kombu.exceptions")
+        setattr(exceptions, "ChannelError", ChannelError)
+        celery_module = ModuleType("app.tasks.celery_app")
+        app = MagicMock()
+        setattr(celery_module, "celery_app", app)
+        node = "hermes-worker@" + socket.gethostname()
+        inspection = app.control.inspect.return_value
+        inspection.active_queues.return_value = {node: [{"name": "hermes.downloads"}]}
+        for method in ("active", "reserved", "scheduled"):
+            getattr(inspection, method).return_value = {node: []}
+        channel = (
+            app.connection_for_read.return_value.__enter__.return_value.channel.return_value
+        )
+        modules = {
+            "app.tasks.celery_app": celery_module,
+            "kombu.exceptions": exceptions,
+        }
+        with patch.dict(sys.modules, modules), patch.object(
+            sys, "argv", ["worker-probe", "probe", "[]"]
+        ):
+            channel.queue_declare.side_effect = ChannelError("404")
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exec(WORKER_CONTROL, {})
+            self.assertEqual(json.loads(output.getvalue())["busy"], 0)
+            channel.queue_declare.side_effect = ChannelError("403")
+            with self.assertRaises(ChannelError):
+                exec(WORKER_CONTROL, {})
 
 
 if __name__ == "__main__":

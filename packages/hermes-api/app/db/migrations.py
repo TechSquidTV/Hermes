@@ -35,7 +35,10 @@ def expected_revision() -> str:
 
 async def migrate_database() -> None:
     # Alembic owns an event loop and global context; keep it off the API loop.
-    await asyncio.to_thread(command.upgrade, migration_config(), "head")
+    config = migration_config()
+    config.attributes["adopt_native"] = True
+    config.attributes["configure_logger"] = False
+    await asyncio.to_thread(command.upgrade, config, "head")
 
 
 async def check_schema() -> str:
@@ -98,7 +101,13 @@ def adopt_native_schema(connection: Connection) -> None:
     """Baseline only recognized create_all schemas; never blindly stamp head."""
     inspector = inspect(connection)
     tables = set(inspector.get_table_names())
-    if not tables or "alembic_version" in tables:
+    if not (tables - {"alembic_version"}):
+        return
+    if (
+        "alembic_version" in tables
+        and connection.execute(text("SELECT version_num FROM alembic_version")).first()
+        is not None
+    ):
         return
     from app.db import models  # noqa: F401
 

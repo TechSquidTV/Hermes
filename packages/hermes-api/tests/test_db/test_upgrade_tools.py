@@ -1,5 +1,6 @@
 """Exercise upgrade failures against disposable databases, not operator data."""
 
+import json
 import os
 import sqlite3
 import subprocess
@@ -36,8 +37,9 @@ def migration_command() -> list[str]:
 
 
 @pytest.mark.parametrize("legacy", [False, True])
+@pytest.mark.parametrize("empty_version", [False, True])
 async def test_adopt_validated_native_schema_preserves_data(
-    tmp_path: Path, legacy: bool
+    tmp_path: Path, legacy: bool, empty_version: bool
 ) -> None:
     database = tmp_path / "native.db"
     if legacy:
@@ -52,6 +54,12 @@ async def test_adopt_validated_native_schema_preserves_data(
         async with engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
         await engine.dispose()
+    if empty_version:
+        with closing(sqlite3.connect(database)) as connection:
+            connection.execute(
+                "CREATE TABLE alembic_version (version_num VARCHAR(32) PRIMARY KEY)"
+            )
+            connection.commit()
     result = subprocess.run(
         migration_command(),
         env=migration_environment(database),
@@ -103,6 +111,62 @@ def test_refuse_unknown_native_schema_without_stamping(tmp_path: Path) -> None:
             ).fetchone()
             is None
         )
+
+
+async def test_readonly_alembic_inspection_never_adopts_native_schema(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "native-inspection.db"
+    engine = create_database_engine(f"sqlite+aiosqlite:///{database}")
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all)
+    finally:
+        await engine.dispose()
+    result = subprocess.run(
+        [*migration_command()[:-2], "current"],
+        env=migration_environment(database),
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    with closing(sqlite3.connect(database)) as connection:
+        assert (
+            connection.execute(
+                "SELECT name FROM sqlite_master WHERE name='alembic_version'"
+            ).fetchone()
+            is None
+        )
+
+
+def test_in_process_migration_preserves_application_logging(tmp_path: Path) -> None:
+    program = """
+import asyncio, logging
+from app.core.logging import setup_logging, get_logger
+from app.db.migrations import migrate_database
+logging.getLogger().handlers.clear()
+setup_logging()
+root = logging.getLogger()
+handlers = list(root.handlers)
+logger = get_logger("upgrade_logging_probe")
+logger.info("before_upgrade")
+asyncio.run(migrate_database())
+assert root.level == logging.INFO and root.handlers == handlers
+logger.info("after_upgrade")
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", program],
+        env=migration_environment(tmp_path / "logging.db"),
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    events = [
+        json.loads(line)["event"]
+        for line in result.stdout.splitlines()
+        if line.startswith("{")
+    ]
+    assert events == ["before_upgrade", "after_upgrade"]
 
 
 def test_concurrent_migrations_all_succeed(tmp_path: Path) -> None:
@@ -244,5 +308,24 @@ async def test_postgresql_snapshot_restore_and_concurrent_migration(
             text=True,
         )
         assert result.returncode == 0, result.stderr
+        # Reproduce a native installation from immediately before heartbeat
+        # tracking: ORM-created BIGINT columns and path index, no version table.
+        async with engine.begin() as connection:
+            await connection.execute(text("DROP TABLE alembic_version"))
+            await connection.run_sync(Base.metadata.create_all)
+            await connection.execute(
+                text("ALTER TABLE downloads DROP COLUMN last_heartbeat_at CASCADE")
+            )
+        adopted = subprocess.run(
+            migration_command(), env=environment, capture_output=True, text=True
+        )
+        assert adopted.returncode == 0, adopted.stderr
+        cleanup = subprocess.run(
+            [*migration_command()[:-2], "downgrade", "base"],
+            env=environment,
+            capture_output=True,
+            text=True,
+        )
+        assert cleanup.returncode == 0, cleanup.stderr
     finally:
         await engine.dispose()
