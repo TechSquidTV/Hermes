@@ -8,6 +8,11 @@ database, storage mounts, Redis URL, and secrets. Do database moves separately.
 External API clients, workers and schedulers must be stopped separately; this
 command only coordinates the selected Compose project and rejects extra workers.
 
+**Authentication change:** existing browser sessions must sign in again after
+this release. Access, refresh and live-event credentials are now bound to the
+password that issued them. Changing a password signs the user out on every
+device as soon as the password update commits.
+
 **Breaking deployment change:** worker and scheduler containers now verify the
 schema instead of migrating it themselves. Start the API or run the migration
 command first. Bundled Compose dependencies and the managed upgrade handle this
@@ -28,8 +33,10 @@ for this invocation; leave the old tag in `.env` until it succeeds. Use
 Source-build and development stacks are intentionally excluded: build and test
 release images first, or follow the native/manual procedure below.
 
-The upgrade pulls images and validates the backend version and worker visibility
-while the old stack is serving. It then stops the frontend, API and scheduler,
+The upgrade records the resolved Compose project name and reuses it explicitly
+for every subsequent step and recovery, even in a fresh shell with different
+environment variables. The upgrade pulls images and validates the backend
+version and worker visibility while the old stack is serving. It then stops the frontend, API and scheduler,
 lets queued, active, reserved and scheduled tasks finish, pauses consumers, and
 checks again before stopping the worker. A drain timeout (15 minutes by default,
 adjustable with `--drain-timeout SECONDS`) resumes the original containers and
@@ -57,8 +64,22 @@ upgrade command, Docker can force-stop them when that allowance expires.
 
 ## Failed upgrades and recovery
 
-Failures before migration restart the original containers. Failures during
-migration or replacement startup leave requests and scheduling offline and print
+Failures before migration restart the original containers. SIGINT, SIGTERM and
+SIGHUP request cancellation at a safe checkpoint: the current Docker operation
+finishes before cleanup starts. If the host or operator process is killed before
+migration, resume the original containers without restoring the database:
+
+```bash
+python3 scripts/upgrade.py --recover .hermes-upgrades/<upgrade-id>/state.json
+```
+
+This clears maintenance and resumes any paused consumers. It also works after a
+backup finished if no migration started. Do not add `--restore-database` in these
+phases; the database has not changed. Recovery records must include a saved
+Compose project identity; older records without one require manual recovery
+using the installation's explicit project name.
+
+Failures during migration or replacement startup leave requests and scheduling offline and print
 the recovery record. Prefer a forward fix when practical. **An older image alone
 cannot safely roll back a newer database schema.**
 
@@ -73,6 +94,9 @@ python3 scripts/upgrade.py \
 
 **Restoring replaces the database and discards writes after the snapshot.** Media
 files are retained; reconcile files created after the snapshot if necessary.
+Recovery records when database restoration finishes. If service startup is
+interrupted afterward, repeating recovery resumes startup without restoring the
+database again or discarding subsequent writes.
 Do not delete or prune the recorded old images until recovery is no longer needed.
 Automatic recovery is refused for completed upgrades because users may already
 have made new changes. For a later rollback, stop every backend process, make a

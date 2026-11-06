@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.db.models import User
 from app.db.repositories import (
     ApiKeyRepository,
     TokenBlacklistRepository,
@@ -64,6 +65,7 @@ class AuthPrincipal:
     last_login: Optional[str] = None
     token_id: Optional[str] = None
     session_id: Optional[str] = None
+    credential_id: Optional[str] = None
     api_key_id: Optional[str] = None
     api_key_name: Optional[str] = None
     permissions: list[str] = field(default_factory=list)
@@ -110,6 +112,25 @@ def hash_api_key(api_key: str) -> str:
 def verify_api_key(plain_key: str, hashed_key: str) -> bool:
     """Verify a plain API key against its hash."""
     return hmac.compare_digest(hash_api_key(plain_key), hashed_key)
+
+
+def credential_id(user: User) -> str:
+    """Bind sessions to the stored password without disclosing its bcrypt hash."""
+    return hmac.new(
+        settings.secret_key.encode(),
+        f"hermes:credential:{user.id}:{user.password_hash}".encode(),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def credential_matches(user: User, value: object) -> bool:
+    return isinstance(value, str) and hmac.compare_digest(
+        value.encode(), credential_id(user).encode()
+    )
+
+
+def user_token_claims(user: User) -> dict[str, str]:
+    return {"sub": user.username, "user_id": user.id, "credential": credential_id(user)}
 
 
 def create_access_token(
@@ -195,11 +216,22 @@ def verify_token(token: str) -> Optional[TokenClaims]:
             algorithms=[settings.algorithm],
             audience=["hermes-app", "hermes-api"],  # Accept tokens for app or API
             issuer="hermes-api",
-            options={"require": ["exp", "iat", "jti", "type", "sid", "sub", "user_id"]},
+            options={
+                "require": [
+                    "exp",
+                    "iat",
+                    "jti",
+                    "type",
+                    "sid",
+                    "sub",
+                    "user_id",
+                    "credential",
+                ]
+            },
         )
         if not all(
             isinstance(payload.get(name), str) and payload[name]
-            for name in ("sub", "user_id", "jti", "sid")
+            for name in ("sub", "user_id", "jti", "sid", "credential")
         ):
             return None
         if payload.get("type") not in ("access", "refresh") or not all(
@@ -274,6 +306,11 @@ async def _principal_from_jwt(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    if not credential_matches(user, payload["credential"]):
+        raise HTTPException(
+            status_code=401, detail="Session revoked by a password change"
+        )
+
     return AuthPrincipal(
         kind="user",
         subject=f"user:{user.id}",
@@ -287,6 +324,7 @@ async def _principal_from_jwt(
         last_login=user.last_login.isoformat() if user.last_login else None,
         token_id=token_id,
         session_id=payload["sid"],
+        credential_id=payload["credential"],
     )
 
 
@@ -561,6 +599,8 @@ async def _validate_sse_origin(data: dict[str, Any]) -> None:
         if owner is None or not owner.is_active:
             raise denied
         if kind == "user":
+            if not credential_matches(owner, data.get("credential_id")):
+                raise denied
             sid, jti = data.get("session_id"), data.get("token_id")
             if not isinstance(sid, str) or not isinstance(jti, str):
                 raise denied

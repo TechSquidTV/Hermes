@@ -20,7 +20,7 @@ import pytest
 from httpx import AsyncClient
 
 from app.core.config import settings
-from app.core.security import create_refresh_token
+from app.core.security import create_refresh_token, user_token_claims
 from app.db.repositories import DownloadFileRepository, DownloadRepository
 
 
@@ -107,7 +107,7 @@ class TestAuthentication:
 
         app.dependency_overrides.clear()
 
-        token_data = {"sub": test_user.username, "user_id": test_user.id}
+        token_data = user_token_claims(test_user)
 
         response = await client.post(
             "/api/v1/auth/refresh",

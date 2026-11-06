@@ -19,6 +19,7 @@ class AuthenticatedUser(TypedDict):
 
 
 class TokenClaims(TypedDict):
+    credential: str
     sub: str
     user_id: str
     jti: str

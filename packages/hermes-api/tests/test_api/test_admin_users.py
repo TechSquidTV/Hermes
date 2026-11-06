@@ -38,11 +38,9 @@ async def admin_user(db_session: AsyncSession, setup_test_database: None) -> Use
 @pytest.fixture
 async def admin_token(admin_user: User) -> str:
     """Create an authentication token for the admin user."""
-    from app.core.security import create_access_token
+    from app.core.security import create_access_token, user_token_claims
 
-    token = create_access_token(
-        data={"sub": admin_user.username, "user_id": admin_user.id}
-    )
+    token = create_access_token(data=user_token_claims(admin_user))
     return token
 
 
@@ -478,11 +476,9 @@ class TestDeleteUser:
         await db_session.commit()
 
         # Create token for test_user (now admin)
-        from app.core.security import create_access_token
+        from app.core.security import create_access_token, user_token_claims
 
-        test_user_admin_token = create_access_token(
-            data={"sub": test_user.username, "user_id": test_user.id}
-        )
+        test_user_admin_token = create_access_token(data=user_token_claims(test_user))
 
         # test_user (admin) deletes admin_user (the first admin) - should succeed
         response = await client.delete(

@@ -9,6 +9,7 @@ import json
 import os
 import re
 import shlex
+import signal
 import subprocess
 import sys
 import time
@@ -16,9 +17,18 @@ import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from types import FrameType
 from typing import Iterator, TypedDict
 
 SERVICES = ("api", "celery_worker", "celery_beat", "app")
+PRE_MIGRATION_PHASES = {
+    "prepared",
+    "draining",
+    "backing-up",
+    "backed-up",
+    "aborting",
+    "aborted-before-migration",
+}
 # Sent to the EXISTING worker: upgrades must not depend on new code being installed.
 # Stop publishers first, empty its queues, pause consumption, then check again.
 WORKER_CONTROL = """
@@ -97,7 +107,14 @@ def validate_storage(
 
 
 def run(arguments: list[str], *, environment: dict[str, str] | None = None) -> str:
-    result = subprocess.run(arguments, env=environment, capture_output=True, text=True)
+    result = subprocess.run(
+        arguments,
+        env=environment,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        start_new_session=True,
+    )
     if result.returncode:
         raise UpgradeError(
             f"Command failed: {shlex.join(arguments[:3])}\n{result.stderr.strip()}"
@@ -117,9 +134,43 @@ def upgrade_lock(project: Path) -> Iterator[None]:
         yield
 
 
+@contextmanager
+def defer_signals(upgrade: Upgrade) -> Iterator[None]:
+    """Finish the current Docker operation before cancelling at a checkpoint."""
+
+    def request_stop(number: int, frame: FrameType | None) -> None:
+        if upgrade.stop_requested:
+            return
+        upgrade.stop_requested = True
+        try:
+            os.write(
+                2,
+                b"Cancellation requested; finishing the current step before cleanup.\n",
+            )
+        except OSError:
+            # A disconnected terminal must not interrupt the active operation.
+            pass
+
+    previous = {
+        number: signal.signal(number, request_stop)
+        for number in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
+    }
+    try:
+        yield
+    finally:
+        for number, handler in previous.items():
+            signal.signal(number, handler)
+
+
 class Upgrade:
     def __init__(
-        self, files: list[Path], env_file: Path, version: str, timeout: int
+        self,
+        files: list[Path],
+        env_file: Path,
+        version: str,
+        timeout: int,
+        *,
+        project: str | None = None,
     ) -> None:
         self.files = [file.resolve() for file in files]
         self.env_file = env_file.resolve()
@@ -129,9 +180,13 @@ class Upgrade:
         self.state: dict[str, object] = {}
         self.state_file: Path | None = None
         self.queues: list[str] = []
+        self.project = project
+        self.stop_requested = False
 
     def compose(self, *arguments: str) -> str:
         command = ["docker", "compose", "--env-file", str(self.env_file)]
+        if self.project is not None:
+            command.extend(["--project-name", self.project])
         for file in self.files:
             command.extend(["--file", str(file)])
         return run([*command, *arguments], environment=self.environment)
@@ -178,12 +233,14 @@ class Upgrade:
         deadline = time.monotonic() + self.timeout
         while time.monotonic() < deadline:
             result = self.worker("probe")
+            self.check_stop()
             if not self.queues:
                 self.queues = list(result["queues"])
                 self.save(queues=self.queues)
             if result["busy"] == 0:
                 self.worker("pause")
                 if self.worker("probe")["busy"] == 0:
+                    self.check_stop()
                     return
                 self.worker("resume")
             time.sleep(2)
@@ -191,8 +248,25 @@ class Upgrade:
             "Drain timed out; existing work was preserved and no migration ran"
         )
 
+    def check_stop(self) -> None:
+        if self.stop_requested:
+            raise UpgradeError("Upgrade interrupted at a safe checkpoint")
+
+    def abort_before_migration(self) -> None:
+        self.save(phase="aborting")
+        # Keep publishers stopped if consumers or maintenance cannot be restored.
+        # The durable aborting phase lets recovery retry these steps safely.
+        running = self.compose("ps", "--status", "running", "--services").split()
+        if "celery_worker" in running and self.queues:
+            self.worker("resume")
+        self.helper("maintenance", "off")
+        # Reuse the original containers and their configured consumers.
+        self.compose("start", *SERVICES)
+        self.save(phase="aborted-before-migration")
+
     def preflight(self, pull: bool) -> dict[str, str]:
         config = json.loads(self.compose("config", "--format", "json"))
+        self.project = config["name"]
         images: dict[str, str] = {}
         for name in SERVICES:
             service = config["services"][name]
@@ -247,6 +321,9 @@ class Upgrade:
 
     def apply(self, *, pull: bool = True) -> None:
         images = self.preflight(pull)
+        self.check_stop()
+        if not self.project:
+            raise UpgradeError("Compose project identity could not be resolved")
         existing: dict[str, object] = {}
         for name in SERVICES:
             ids = self.compose("ps", "--all", "--quiet", name).split()
@@ -304,6 +381,7 @@ class Upgrade:
         backup = f"/app/data/backups/{identifier}"
         self.save(
             version=self.version,
+            project_name=self.project,
             files=[str(file) for file in self.files],
             env_file=str(self.env_file),
             backup_directory=backup,
@@ -311,6 +389,7 @@ class Upgrade:
         )
         print(f"Recovery record: {self.state_file}", flush=True)
         try:
+            self.check_stop()
             print(
                 "Pausing requests and scheduling; waiting for queued and active work...",
                 flush=True,
@@ -318,13 +397,18 @@ class Upgrade:
             self.compose("stop", "--timeout", "60", "app", "api", "celery_beat")
             self.save(phase="draining")
             self.helper("maintenance", "on")
+            self.check_stop()
             self.drain()
             self.compose("stop", "--timeout", "60", "celery_worker")
             self.save(phase="backing-up")
+            self.check_stop()
             snapshot = json.loads(self.helper("backup", backup))["snapshot"]
-            self.save(snapshot=snapshot, phase="migrating")
+            self.save(snapshot=snapshot, phase="backed-up")
+            self.check_stop()
+            self.save(phase="migrating")
             print("Backup complete. Applying database migrations once...", flush=True)
             self.helper("migrate")
+            self.check_stop()
             self.save(phase="starting")
             self.compose(
                 "up",
@@ -338,6 +422,7 @@ class Upgrade:
                 "app",
             )
             self.helper("check-schema")
+            self.check_stop()
             # Compose health checks verify readiness and worker reachability. Also
             # reject stale containers, even if an old build answers health checks.
             for name in ("api", "celery_worker", "app"):
@@ -357,6 +442,7 @@ class Upgrade:
                 "60",
                 "celery_beat",
             )
+            self.check_stop()
             self.persist_version()
             self.helper("maintenance", "off")
             self.save(phase="complete")
@@ -365,15 +451,8 @@ class Upgrade:
                 flush=True,
             )
         except BaseException:
-            if self.state.get("phase") in {"prepared", "draining", "backing-up"}:
-                try:
-                    self.helper("maintenance", "off")
-                    if self.queues and self.state.get("phase") == "draining":
-                        self.worker("resume")
-                finally:
-                    # Starting a stopped worker restores its configured consumers.
-                    self.compose("start", *SERVICES)
-                self.save(phase="aborted-before-migration")
+            if self.state.get("phase") in PRE_MIGRATION_PHASES:
+                self.abort_before_migration()
             else:
                 try:
                     self.helper("maintenance", "on")
@@ -409,7 +488,16 @@ class Upgrade:
 def recover(state_file: Path, *, restore: bool) -> None:
     state_file = state_file.resolve()
     state = json.loads(state_file.read_text())
-    if not restore or not state.get("snapshot"):
+    before_migration = state["phase"] in PRE_MIGRATION_PHASES
+    if before_migration and restore:
+        raise UpgradeError(
+            "No migration ran; omit --restore-database to resume the original services"
+        )
+    if (
+        not before_migration
+        and state["phase"] != "restored"
+        and (not restore or not state.get("snapshot"))
+    ):
         raise UpgradeError(
             "Recovery requires a completed backup and --restore-database; it replaces current database contents"
         )
@@ -422,29 +510,43 @@ def recover(state_file: Path, *, restore: bool) -> None:
         Path(state["env_file"]),
         state["version"],
         900,
+        project=state.get("project_name"),
     )
-    with upgrade_lock(upgrade.env_file.parent):
+    if not upgrade.project:
+        raise UpgradeError(
+            "Recovery record has no Compose project identity; use manual recovery"
+        )
+    upgrade.state, upgrade.state_file = state, state_file
+    upgrade.queues = state.get("queues", [])
+    with defer_signals(upgrade), upgrade_lock(upgrade.env_file.parent):
+        if before_migration:
+            upgrade.abort_before_migration()
+            print("Original services resumed. No database restore was needed.")
+            return
         previous = json.loads(
             (state_file.parent / "previous-services.json").read_text()
         )
         for service in previous["services"].values():
             # Fail before replacing the database if recorded images were pruned.
             run(["docker", "image", "inspect", service["image"]])
-        # A failed startup may already have started workers; drain them too.
-        running = upgrade.compose("ps", "--status", "running", "--services").split()
-        upgrade.compose("stop", "--timeout", "60", "app", "api", "celery_beat")
-        if "celery_worker" in running:
-            upgrade.drain()
-            upgrade.compose("stop", "--timeout", "60", "celery_worker")
-        upgrade.helper("restore", state["snapshot"], "--confirm-stopped")
+        if state["phase"] != "restored":
+            # A failed startup may already have started workers; drain them too.
+            running = upgrade.compose("ps", "--status", "running", "--services").split()
+            upgrade.compose("stop", "--timeout", "60", "app", "api", "celery_beat")
+            if "celery_worker" in running:
+                upgrade.drain()
+                upgrade.compose("stop", "--timeout", "60", "celery_worker")
+            upgrade.check_stop()
+            upgrade.helper("restore", state["snapshot"], "--confirm-stopped")
+            upgrade.save(phase="restored")
+        upgrade.check_stop()
         upgrade.helper("maintenance", "off")
         upgrade.env_file.write_bytes((state_file.parent / "previous.env").read_bytes())
         upgrade.files.append(state_file.parent / "previous-services.json")
         upgrade.compose(
             "up", "--detach", "--no-deps", "--wait", "--wait-timeout", "180", *SERVICES
         )
-        state["phase"] = "recovered"
-        state_file.write_text(json.dumps(state, indent=2) + "\n")
+        upgrade.save(phase="recovered")
         print(
             "Previous images and database snapshot restored. Any writes after the snapshot were discarded."
         )
@@ -489,7 +591,7 @@ def main() -> None:
             args.version,
             args.drain_timeout,
         )
-        with upgrade_lock(upgrade.env_file.parent):
+        with defer_signals(upgrade), upgrade_lock(upgrade.env_file.parent):
             upgrade.apply(pull=not args.skip_pull)
     except (UpgradeError, OSError, KeyboardInterrupt) as error:
         print(f"Upgrade failed: {error}", file=sys.stderr)

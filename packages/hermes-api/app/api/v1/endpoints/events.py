@@ -443,6 +443,7 @@ async def create_sse_token(
             ),
             "credential_subject": principal.subject,
             "session_id": principal.session_id,
+            "credential_id": principal.credential_id,
             "token_id": principal.token_id,
             "api_key_id": principal.api_key_id,
             "scope": sse_token.scope,

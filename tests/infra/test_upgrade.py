@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import io
 import json
+import os
+import signal
 import socket
+import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -22,6 +26,7 @@ from scripts.upgrade import (  # noqa: E402
     Upgrade,
     UpgradeError,
     WorkerState,
+    defer_signals,
     recover,
     upgrade_lock,
     validate_storage,
@@ -44,7 +49,7 @@ class FakeUpgrade(Upgrade):
     def compose(self, *arguments: str) -> str:
         self.actions.append(arguments)
         if arguments[0] == "ps":
-            return "container-id"
+            return "celery_worker" if "--services" in arguments else "container-id"
         if arguments[0] == "up" and self.failure == "startup":
             raise UpgradeError("Injected startup failure")
         return ""
@@ -62,6 +67,7 @@ class FakeUpgrade(Upgrade):
         return {"busy": 1 if self.busy else 0, "queues": ["hermes.downloads"]}
 
     def preflight(self, pull: bool) -> dict[str, str]:
+        self.project = "test-project"
         return {name: f"hermes-{name}:1.1.0" for name in SERVICES}
 
 
@@ -141,6 +147,43 @@ class UpgradeLifecycleTests(unittest.TestCase):
         self.assertNotIn(("helper", "migrate"), upgrade.actions)
         self.assertIn(("start", *SERVICES), upgrade.actions)
 
+    def test_failed_abort_cleanup_keeps_publishers_stopped_and_can_be_retried(
+        self,
+    ) -> None:
+        for failure in ("resume", "maintenance"):
+            with self.subTest(failure=failure):
+                upgrade = FakeUpgrade(self.directory, failure="backup")
+                with self.assertRaises(UpgradeError):
+                    upgrade.apply()
+                assert upgrade.state_file is not None
+                commands: list[list[str]] = []
+                cleanup_failed = False
+
+                def docker(arguments: list[str], **keywords: object) -> str:
+                    nonlocal cleanup_failed
+                    commands.append(arguments)
+                    if "ps" in arguments:
+                        return "celery_worker"
+                    if failure in arguments and not cleanup_failed:
+                        cleanup_failed = True
+                        raise UpgradeError("Injected cleanup failure")
+                    return ""
+
+                with patch("scripts.upgrade.run", side_effect=docker):
+                    with self.assertRaisesRegex(UpgradeError, "cleanup failure"):
+                        recover(upgrade.state_file, restore=False)
+                    self.assertFalse(any("start" in args for args in commands))
+                    self.assertEqual(
+                        json.loads(upgrade.state_file.read_text())["phase"],
+                        "aborting",
+                    )
+                    recover(upgrade.state_file, restore=False)
+                self.assertTrue(any("start" in args for args in commands))
+                self.assertEqual(
+                    json.loads(upgrade.state_file.read_text())["phase"],
+                    "aborted-before-migration",
+                )
+
     def test_migration_and_startup_failures_leave_recovery_record_and_no_image_rollback(
         self,
     ) -> None:
@@ -175,6 +218,185 @@ class UpgradeLifecycleTests(unittest.TestCase):
             with self.assertRaisesRegex(UpgradeError, "already running"):
                 with upgrade_lock(self.directory):
                     self.fail("Second upgrade acquired the lock")
+
+    def test_recovery_pins_the_recorded_project_despite_current_environment(
+        self,
+    ) -> None:
+        upgrade = FakeUpgrade(self.directory, failure="migrate")
+        with self.assertRaises(UpgradeError):
+            upgrade.apply()
+        assert upgrade.state_file is not None
+        commands: list[list[str]] = []
+
+        def docker(arguments: list[str], **keywords: object) -> str:
+            commands.append(arguments)
+            if arguments[:2] == ["docker", "compose"]:
+                self.assertEqual(
+                    arguments[arguments.index("--project-name") + 1], "test-project"
+                )
+            return ""
+
+        with patch("scripts.upgrade.run", side_effect=docker), patch.dict(
+            os.environ, {"COMPOSE_PROJECT_NAME": "wrong-project"}
+        ):
+            recover(upgrade.state_file, restore=True)
+        self.assertTrue(any("restore" in arguments for arguments in commands))
+        self.assertEqual(
+            json.loads(upgrade.state_file.read_text())["phase"], "recovered"
+        )
+
+    def test_interrupted_recovery_resumes_without_restoring_database_twice(
+        self,
+    ) -> None:
+        upgrade = FakeUpgrade(self.directory, failure="migrate")
+        with self.assertRaises(UpgradeError):
+            upgrade.apply()
+        assert upgrade.state_file is not None
+        commands: list[list[str]] = []
+        fail_start = True
+
+        def docker(arguments: list[str], **keywords: object) -> str:
+            nonlocal fail_start
+            commands.append(arguments)
+            if "up" in arguments and fail_start:
+                fail_start = False
+                raise UpgradeError("synthetic recovery startup failure")
+            return ""
+
+        with patch("scripts.upgrade.run", side_effect=docker):
+            with self.assertRaisesRegex(UpgradeError, "recovery startup failure"):
+                recover(upgrade.state_file, restore=True)
+            self.assertEqual(
+                json.loads(upgrade.state_file.read_text())["phase"], "restored"
+            )
+            recover(upgrade.state_file, restore=False)
+        self.assertEqual(sum("restore" in arguments for arguments in commands), 1)
+
+    def test_sigterm_is_deferred_until_a_safe_abort(self) -> None:
+        class Interrupted(FakeUpgrade):
+            def drain(self) -> None:
+                os.kill(os.getpid(), signal.SIGTERM)
+                self.check_stop()
+
+        upgrade = Interrupted(self.directory)
+        with defer_signals(upgrade), self.assertRaisesRegex(
+            UpgradeError, "interrupted"
+        ):
+            upgrade.apply()
+        self.assertEqual(upgrade.state["phase"], "aborted-before-migration")
+        self.assertIn(("start", *SERVICES), upgrade.actions)
+        self.assertNotIn(("helper", "migrate"), upgrade.actions)
+
+    def test_hard_kill_before_backup_can_resume_without_restoring_data(self) -> None:
+        program = """
+import os, signal, sys
+from pathlib import Path
+from unittest.mock import patch
+from test_upgrade import FakeUpgrade, inspect_output
+from scripts.upgrade import upgrade_lock
+class Interrupted(FakeUpgrade):
+    def drain(self):
+        self.queues = ["hermes.downloads"]
+        self.save(queues=self.queues)
+        Path(self.env_file.parent / "maintenance").touch()
+        os.kill(os.getpid(), signal.SIGKILL)
+with patch("scripts.upgrade.run", side_effect=inspect_output):
+    upgrade = Interrupted(Path(sys.argv[1]))
+    with upgrade_lock(upgrade.env_file.parent):
+        upgrade.apply()
+"""
+        environment = {
+            **os.environ,
+            "PYTHONPATH": os.pathsep.join((str(ROOT), str(ROOT / "tests/infra"))),
+        }
+        process = subprocess.run(
+            [sys.executable, "-c", program, str(self.directory)],
+            env=environment,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(process.returncode, -signal.SIGKILL, process.stderr)
+        state_file = next((self.directory / ".hermes-upgrades").glob("*/state.json"))
+        self.assertEqual(json.loads(state_file.read_text())["phase"], "draining")
+        commands: list[list[str]] = []
+
+        def docker(arguments: list[str], **keywords: object) -> str:
+            commands.append(arguments)
+            if "ps" in arguments:
+                return "celery_worker"
+            if "maintenance" in arguments and "off" in arguments:
+                (self.directory / "maintenance").unlink()
+            return ""
+
+        with patch("scripts.upgrade.run", side_effect=docker):
+            recover(state_file, restore=False)
+        self.assertFalse((self.directory / "maintenance").exists())
+        self.assertFalse(
+            any(
+                "restore" in arguments or "migrate" in arguments
+                for arguments in commands
+            )
+        )
+        self.assertTrue(any("start" in arguments for arguments in commands))
+        self.assertEqual(
+            json.loads(state_file.read_text())["phase"], "aborted-before-migration"
+        )
+
+    def test_terminal_interrupt_does_not_kill_the_current_child_operation(self) -> None:
+        self.assert_child_operation_finishes(signal.SIGINT)
+
+    def test_disconnected_stderr_does_not_interrupt_the_current_child_operation(
+        self,
+    ) -> None:
+        self.assert_child_operation_finishes(signal.SIGHUP, close_stderr=True)
+
+    def assert_child_operation_finishes(
+        self, interruption: signal.Signals, *, close_stderr: bool = False
+    ) -> None:
+        program = """
+import os, sys
+from pathlib import Path
+from scripts.upgrade import Upgrade, UpgradeError, defer_signals, run
+directory = Path(sys.argv[1])
+if sys.argv[2] == "True":
+    os.close(2)
+upgrade = Upgrade([], directory / ".env", "1.2.3", 1)
+child = "import sys, time; from pathlib import Path; p = Path(sys.argv[1]); (p/'started').touch(); time.sleep(1); (p/'finished').touch()"
+with defer_signals(upgrade):
+    run([sys.executable, "-c", child, str(directory)])
+    try:
+        upgrade.check_stop()
+    except UpgradeError:
+        (directory / "safe-checkpoint").touch()
+"""
+        environment = {**os.environ, "PYTHONPATH": str(ROOT)}
+        process = subprocess.Popen(
+            [sys.executable, "-c", program, str(self.directory), str(close_stderr)],
+            env=environment,
+            start_new_session=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            deadline = time.monotonic() + 10
+            while (
+                not (self.directory / "started").exists()
+                and time.monotonic() < deadline
+            ):
+                if process.poll() is not None:
+                    self.fail(str(process.communicate()))
+                time.sleep(0.01)
+            self.assertTrue((self.directory / "started").exists())
+            os.killpg(process.pid, interruption)
+            output, error = process.communicate(timeout=10)
+            self.assertEqual(process.returncode, 0, (output, error))
+            self.assertTrue((self.directory / "finished").exists())
+            self.assertTrue((self.directory / "safe-checkpoint").exists())
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.communicate()
 
     def test_preflight_rejects_changed_database_or_mounts(self) -> None:
         mounts = {
