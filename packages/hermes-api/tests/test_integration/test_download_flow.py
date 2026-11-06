@@ -16,12 +16,12 @@ import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import event, func, select
 from sqlalchemy.exc import IntegrityError
 
 from app.core.config import settings
-from app.db.base import async_session_maker
-from app.db.models import Download, DownloadFile
+from app.db.base import async_session_maker, engine
+from app.db.models import Download, DownloadFile, DownloadHistory
 from app.db.repositories import DownloadFileRepository, DownloadRepository
 from app.services.download_files import backfill_download_files
 from app.tasks import download_tasks
@@ -81,6 +81,14 @@ async def test_worker_completion_registers_retrievable_file(
                 assert completed is not None
                 assert completed.status == "completed"
                 assert len(completed.files) == 1
+                assert (
+                    await session.scalar(
+                        select(func.count())
+                        .select_from(DownloadHistory)
+                        .where(DownloadHistory.download_id == download_id)
+                    )
+                    == 1
+                )
             response = await client.get(
                 "/api/v1/files/download", params={"path": str(final_path)}
             )
@@ -444,6 +452,71 @@ async def test_sidecar_registration_failure_rolls_back_completion(
         assert current is not None
         assert current.status == "pending"
         assert current.files == []
+
+
+@pytest.mark.parametrize("status", ["completed", "failed", "cancelled"])
+async def test_history_failure_rolls_back_terminal_transition_and_files(
+    db_session: AsyncSession, tmp_path: Path, status: str
+) -> None:
+    download = await DownloadRepository(db_session).create(
+        url="https://example.test/atomic-history"
+    )
+    download_id = download.id
+    await DownloadRepository(db_session).update_status(download_id, "downloading")
+    media = tmp_path / f"{download_id}_media.mp4"
+    media.write_bytes(b"media")
+    outputs = DownloadOutputs(str(media)) if status == "completed" else None
+
+    def reject_history(
+        connection: object,
+        cursor: object,
+        statement: str,
+        parameters: object,
+        context: object,
+        executemany: bool,
+    ) -> None:
+        if statement.lower().startswith("insert into download_history"):
+            raise RuntimeError("synthetic history insert failure")
+
+    event.listen(engine.sync_engine, "before_cursor_execute", reject_history)
+    try:
+        with pytest.raises(RuntimeError, match="history insert failure"):
+            await download_tasks._update_download_status(
+                download_id, status, outputs=outputs, publish_sse=False
+            )
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", reject_history)
+    async with async_session_maker() as session:
+        current = await DownloadRepository(session).get_by_id(download_id)
+        assert (
+            current is not None
+            and current.status == "downloading"
+            and current.files == []
+        )
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(DownloadHistory)
+                .where(DownloadHistory.download_id == download_id)
+            )
+            == 0
+        )
+    assert await download_tasks._update_download_status(
+        download_id, status, outputs=outputs, publish_sse=False
+    )
+    assert not await download_tasks._update_download_status(
+        download_id, status, outputs=outputs, publish_sse=False
+    )
+    async with async_session_maker() as session:
+        records = list(
+            await session.scalars(
+                select(DownloadHistory).where(
+                    DownloadHistory.download_id == download_id
+                )
+            )
+        )
+        assert len(records) == 1 and records[0].status == status
+        assert records[0].duration is not None and records[0].duration >= 0
 
 
 async def test_cancellation_removes_all_unregistered_outputs(

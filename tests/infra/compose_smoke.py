@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.request
 import uuid
 from pathlib import Path
@@ -24,7 +26,7 @@ from app.worker import app
 @app.task(name="hermes.upgrade_probe")
 def upgrade_probe():
     Path("/app/data/probe-started").write_text("started")
-    time.sleep(40)
+    time.sleep(60)
     Path("/app/data/probe-completed").write_text("completed")
 """
 
@@ -35,6 +37,62 @@ class InterruptedMigration(Upgrade):
         if arguments[0] == "migrate":
             raise UpgradeError("Injected failure after real migrations")
         return result
+
+
+def cancel_during_drain(
+    workspace: Path,
+    stack: str,
+    override: Path,
+    environment: dict[str, str],
+    project: str,
+) -> None:
+    records = workspace / ".hermes-upgrades"
+    before = set(records.glob("*/state.json"))
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            str(ROOT / "scripts/upgrade.py"),
+            "1.2.3",
+            "--file",
+            str(workspace / stack),
+            "--file",
+            str(override),
+            "--env-file",
+            str(workspace / ".env"),
+            "--skip-pull",
+        ],
+        env={**environment, "COMPOSE_PROJECT_NAME": project},
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        deadline = time.monotonic() + 120
+        while time.monotonic() < deadline:
+            current = set(records.glob("*/state.json")) - before
+            if current:
+                state_file = next(iter(current))
+                if json.loads(state_file.read_text())["phase"] == "draining":
+                    process.send_signal(signal.SIGTERM)
+                    output, error = process.communicate(timeout=120)
+                    assert process.returncode == 1, (output, error)
+                    state = json.loads(state_file.read_text())
+                    assert state["phase"] == "aborted-before-migration", (
+                        state,
+                        output,
+                        error,
+                    )
+                    assert "snapshot" not in state
+                    assert not (workspace / "data/data/.upgrade-maintenance").exists()
+                    return
+            if process.poll() is not None:
+                raise AssertionError(process.communicate())
+            time.sleep(0.2)
+        raise AssertionError("Upgrade did not reach the drain checkpoint")
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.communicate()
 
 
 def run(*args: str, capture: bool = False, input_text: str | None = None) -> str:
@@ -247,6 +305,9 @@ assert result.get("dry_run") is True, result
                         "-c",
                         "from app.worker import app; app.send_task('hermes.upgrade_probe', queue='hermes.default')",
                     )
+                    cancel_during_drain(
+                        workspace, stack, override, environment, project
+                    )
                     # The helper runs in the same disposable Compose project.
                     previous_project = os.environ.get("COMPOSE_PROJECT_NAME")
                     os.environ["COMPOSE_PROJECT_NAME"] = project
@@ -279,6 +340,9 @@ assert result.get("dry_run") is True, result
                                 "Failure injection did not stop the upgrade"
                             )
                         assert interrupted.state_file is not None
+                        # A copied recovery command runs in a fresh shell, where
+                        # the original inline project variable is no longer set.
+                        os.environ["COMPOSE_PROJECT_NAME"] = "wrong-recovery-project"
                         recover(interrupted.state_file, restore=True)
                         assert (
                             workspace / "data/downloads/smoke.txt"

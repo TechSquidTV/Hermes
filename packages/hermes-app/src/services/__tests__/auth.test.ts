@@ -4,6 +4,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { authService } from '../auth'
+import { apiClient } from '../api/client'
 import { TokenStorage } from '@/utils/tokenStorage'
 
 // Mock fetch
@@ -14,6 +15,42 @@ vi.mock('@/utils/tokenStorage')
 
 const mockFetch = vi.mocked(fetch)
 const mockTokenStorage = vi.mocked(TokenStorage)
+
+describe('password session revocation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockTokenStorage.getVersion.mockReturnValue(1)
+  })
+
+  it('clears the initiating session after a successful password change', async () => {
+    const request = vi.spyOn(apiClient, 'request').mockResolvedValue(undefined)
+    try {
+      await authService.changePassword('OldPassword123', 'NewPassword456')
+      expect(mockTokenStorage.clearTokens).toHaveBeenCalledOnce()
+    } finally { request.mockRestore() }
+  })
+
+  it('preserves credentials when the password change fails', async () => {
+    const request = vi.spyOn(apiClient, 'request').mockRejectedValue(new Error('Incorrect password'))
+    try {
+      await expect(authService.changePassword('wrong', 'NewPassword456')).rejects.toThrow('Incorrect password')
+      expect(mockTokenStorage.clearTokens).not.toHaveBeenCalled()
+    } finally { request.mockRestore() }
+  })
+
+  it('does not sign out a different session established during the request', async () => {
+    let finish = () => {}
+    const pending = new Promise<void>(resolve => { finish = resolve })
+    const request = vi.spyOn(apiClient, 'request').mockReturnValue(pending)
+    try {
+      const changing = authService.changePassword('OldPassword123', 'NewPassword456')
+      mockTokenStorage.getVersion.mockReturnValue(2)
+      finish()
+      await expect(changing).rejects.toHaveProperty('name', 'SessionChangedError')
+      expect(mockTokenStorage.clearTokens).not.toHaveBeenCalled()
+    } finally { request.mockRestore() }
+  })
+})
 
 describe('AuthService', () => {
   beforeEach(() => {

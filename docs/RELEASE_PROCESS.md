@@ -509,6 +509,20 @@ zero vulnerabilities as of 2026-11-06.
 
 ### Startup and worker recovery upgrade
 
+Password changes revoke all of the user's access, refresh and live-event
+credentials in the same database commit. **Sign in again after this release:**
+older tokens without the password binding are rejected. No additional database
+revision is required for this binding.
+
+Terminal download transitions now commit history alongside status and file
+registration. Failed history writes roll back the terminal transition and its
+file records, and duplicate deliveries cannot append duplicate history.
+
+Managed upgrades retain the resolved Compose project identity for recovery in a
+fresh shell. Pre-migration interruptions can resume the original services without
+restoring a database; recovery after a completed restore resumes startup rather
+than applying the snapshot twice. See the [upgrade guide](UPGRADING.md).
+
 **Migration required:** use `python3 scripts/upgrade.py X.Y.Z` with the target
 release's prebuilt Compose files. It drains work, backs up the database, runs
 migrations and verifies matching API/worker/scheduler images. Native deployments

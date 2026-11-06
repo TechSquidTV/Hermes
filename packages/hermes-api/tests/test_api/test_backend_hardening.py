@@ -13,7 +13,6 @@ if TYPE_CHECKING:
 
     from app.db.models import User
 
-
 import asyncio
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, Mock
@@ -23,7 +22,12 @@ from pydantic import ValidationError
 from sqlalchemy import select
 
 from app.core.config import Settings, settings
-from app.core.security import create_access_token, create_refresh_token, verify_token
+from app.core.security import (
+    create_access_token,
+    create_refresh_token,
+    user_token_claims,
+    verify_token,
+)
 from app.db.base import async_session_maker
 from app.db.models import User
 from app.db.repositories import ApiKeyRepository, DownloadRepository
@@ -36,7 +40,7 @@ async def test_refresh_tokens_cannot_authenticate_and_access_tokens_cannot_refre
     client: AsyncClient, test_user: User
 ) -> None:
     app.dependency_overrides.clear()
-    data = {"sub": test_user.username, "user_id": test_user.id}
+    data = user_token_claims(test_user)
     refresh = create_refresh_token(data)
     response = await client.get(
         "/api/v1/auth/me", headers={"Authorization": f"Bearer {refresh}"}
@@ -93,7 +97,7 @@ async def test_concurrent_refresh_has_only_one_successor(
     client: AsyncClient, test_user: User
 ) -> None:
     app.dependency_overrides.clear()
-    refresh = create_refresh_token({"sub": test_user.username, "user_id": test_user.id})
+    refresh = create_refresh_token(user_token_claims(test_user))
     responses = await asyncio.gather(
         *(
             client.post("/api/v1/auth/refresh", json={"refreshToken": refresh})
@@ -371,7 +375,7 @@ async def test_malformed_session_claims_are_rejected(
     client: AsyncClient, test_user: User, claim: str
 ) -> None:
     app.dependency_overrides.clear()
-    claims: dict[str, object] = {"sub": test_user.username, "user_id": test_user.id}
+    claims: dict[str, object] = dict(user_token_claims(test_user))
     claims[claim] = ["invalid"]
     token = create_access_token(claims)
     assert verify_token(token) is None

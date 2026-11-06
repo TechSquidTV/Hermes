@@ -22,8 +22,10 @@ from app.core.security import (
     ApiKeyPermission,
     create_api_key,
     create_token_pair,
+    credential_matches,
     get_password_hash,
     hash_api_key,
+    user_token_claims,
     verify_password,
     verify_token,
 )
@@ -127,9 +129,7 @@ async def login(
     await repos["users"].update_last_login(user.id)
 
     # Create tokens
-    access_token, refresh_token = create_token_pair(
-        {"sub": str(user.username), "user_id": str(user.id)}
-    )
+    access_token, refresh_token = create_token_pair(user_token_claims(user))
 
     return AuthResponse(
         access_token=access_token,
@@ -208,9 +208,7 @@ async def signup(
         )
 
     # Create tokens
-    access_token, refresh_token = create_token_pair(
-        {"sub": str(user.username), "user_id": str(user.id)}
-    )
+    access_token, refresh_token = create_token_pair(user_token_claims(user))
 
     return AuthResponse(
         access_token=access_token,
@@ -293,7 +291,11 @@ async def refresh_token(
     ].is_blacklisted(payload["sid"]):
         raise HTTPException(status_code=401, detail="Refresh token has been revoked")
     user = await repos["users"].get_by_id(user_id)
-    if not user or not user.is_active:
+    if (
+        not user
+        or not user.is_active
+        or not credential_matches(user, payload["credential"])
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found or inactive",
@@ -317,7 +319,12 @@ async def refresh_token(
         ) from error
 
     access_token, refresh_token = create_token_pair(
-        {"sub": username, "user_id": user_id, "sid": payload["sid"]}
+        {
+            "sub": username,
+            "user_id": user_id,
+            "sid": payload["sid"],
+            "credential": payload["credential"],
+        }
     )
 
     return TokenResponse(
@@ -486,8 +493,24 @@ async def change_password(
         )
 
     # Hash and update new password
-    user.password_hash = get_password_hash(password_data.new_password)
-    await repos["users"].update(user)
+    from sqlalchemy import update
+    from sqlalchemy.engine import CursorResult
+
+    from app.db.models import User
+
+    result = await db_session.execute(
+        update(User)
+        .where(User.id == user.id, User.password_hash == user.password_hash)
+        .values(password_hash=get_password_hash(password_data.new_password))
+        .execution_options(synchronize_session=False)
+    )
+    assert isinstance(result, CursorResult)
+    if result.rowcount != 1:
+        await db_session.rollback()
+        raise HTTPException(
+            status_code=409, detail="Password changed concurrently; sign in again"
+        )
+    await db_session.commit()
 
     logger.info(f"Password changed successfully for user {current_user['username']}")
 

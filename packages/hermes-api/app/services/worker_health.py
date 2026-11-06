@@ -1,7 +1,6 @@
 """Detect abandoned downloads independently of the worker's task queue."""
 
 import asyncio
-import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timedelta, timezone
@@ -13,9 +12,9 @@ from sqlalchemy.engine import CursorResult
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.db.base import async_session_maker
-from app.db.models import Download, DownloadHistory
+from app.db.models import Download
+from app.db.repositories import terminal_history
 from app.services.redis_progress import redis_progress_service
-from app.utils.dates import as_utc
 from app.utils.download_progress import build_download_progress_payload
 
 logger = get_logger(__name__)
@@ -83,22 +82,7 @@ async def recover_abandoned_downloads() -> list[str]:
             )
         )
         for download in abandoned:
-            started = download.started_at or download.created_at
-            session.add(
-                DownloadHistory(
-                    id=str(uuid.uuid4()),
-                    download_id=download.id,
-                    url=download.url,
-                    status="failed",
-                    started_at=started,
-                    completed_at=now,
-                    duration=(now - as_utc(started)).total_seconds(),
-                    error_message=ABANDONED_MESSAGE,
-                    extractor=download.extractor,
-                    video_id=download.video_id,
-                    format_used=download.format_spec,
-                )
-            )
+            session.add(terminal_history(download))
         await session.commit()
     ids = [download.id for download in abandoned]
     for download_id in ids:

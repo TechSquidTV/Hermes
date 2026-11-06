@@ -29,6 +29,29 @@ from app.utils.dates import as_utc
 from app.utils.files import resolve_download_path
 from app.utils.media import DEFAULT_FORMAT_SPEC
 
+TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
+
+
+def terminal_history(download: Download) -> DownloadHistory:
+    """Build the history row in the same transaction as its terminal transition."""
+    if download.status not in TERMINAL_STATUSES or download.completed_at is None:
+        raise ValueError("History requires a terminal download and completion time")
+    started = download.started_at or download.created_at
+    return DownloadHistory(
+        id=str(uuid.uuid4()),
+        download_id=download.id,
+        url=download.url,
+        status=download.status,
+        started_at=started,
+        completed_at=download.completed_at,
+        duration=(as_utc(download.completed_at) - as_utc(started)).total_seconds(),
+        file_size=download.file_size,
+        error_message=download.error_message,
+        extractor=download.extractor,
+        video_id=download.video_id,
+        format_used=download.format_spec,
+    )
+
 
 class BaseRepository:
     """Base repository with common database operations."""
@@ -103,8 +126,7 @@ class DownloadRepository(BaseRepository):
             await self.session.rollback()
             return None
 
-        terminal_statuses = {"completed", "failed", "cancelled"}
-        if download.status in terminal_statuses:
+        if download.status in TERMINAL_STATUSES:
             await self.session.rollback()
             if require_transition:
                 return None
@@ -124,7 +146,7 @@ class DownloadRepository(BaseRepository):
                 values[name] = value
         if status == "downloading" and not download.started_at:
             values["started_at"] = datetime.now(timezone.utc)
-        elif status in terminal_statuses and not download.completed_at:
+        elif status in TERMINAL_STATUSES and not download.completed_at:
             values["completed_at"] = datetime.now(timezone.utc)
         values.update(
             {key: value for key, value in kwargs.items() if hasattr(Download, key)}
@@ -142,6 +164,9 @@ class DownloadRepository(BaseRepository):
             if expected_status is not None or require_transition:
                 return None
         else:
+            await self.session.refresh(download)
+            if status in TERMINAL_STATUSES:
+                self.session.add(terminal_history(download))
             await self.commit()
         await self.session.refresh(download)
         return download

@@ -6,16 +6,35 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+from scripts.upgrade import Upgrade  # noqa: E402
+
 STACKS = ("docker-compose.yml", "docker-compose.example.yml", "docker-compose.dev.yml")
 
 
 @unittest.skipUnless(shutil.which("docker"), "Docker Compose CLI is required")
 class ComposeConfigurationTests(unittest.TestCase):
+    def test_explicit_project_survives_a_different_shell_environment(self) -> None:
+        files, environment = [
+            self.project / "docker-compose.example.yml"
+        ], self.project / ".env"
+        with patch.dict(os.environ, {"COMPOSE_PROJECT_NAME": "original-install"}):
+            initial = Upgrade(files, environment, "1.2.3", 1)
+            project = json.loads(initial.compose("config", "--format", "json"))["name"]
+        with patch.dict(os.environ, {"COMPOSE_PROJECT_NAME": "different-shell"}):
+            restored = Upgrade(files, environment, "1.2.3", 1, project=project)
+            self.assertEqual(
+                json.loads(restored.compose("config", "--format", "json"))["name"],
+                "original-install",
+            )
+
     def test_redis_never_evicts_broker_queues(self) -> None:
         for stack in STACKS:
             with self.subTest(stack=stack):

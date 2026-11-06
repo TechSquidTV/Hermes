@@ -59,10 +59,15 @@ class AuthService {
   }
 
   async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    const action = this.action
+    const version = TokenStorage.getVersion()
     await apiClient.request('/auth/change-password', {
       method: 'POST',
       body: JSON.stringify({ currentPassword, newPassword }),
     })
+    if (action !== this.action || version !== TokenStorage.getVersion())
+      throw new DOMException('Session changed', 'SessionChangedError')
+    TokenStorage.clearTokens()
   }
 }
 

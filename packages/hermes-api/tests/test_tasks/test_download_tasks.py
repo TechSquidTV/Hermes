@@ -179,7 +179,6 @@ async def test_download_video_task_success_updates_metadata_and_cleans_up(
     yt_service.download_video.side_effect = fake_download_video
 
     update_status = AsyncMock()
-    create_history = AsyncMock()
     trigger_webhooks = AsyncMock()
     redis_progress_service = AsyncMock()
     redis_progress_service.revoke_user_sse_tokens.return_value = 2
@@ -187,7 +186,6 @@ async def test_download_video_task_success_updates_metadata_and_cleans_up(
     with (
         patch.object(download_tasks, "yt_service", yt_service),
         patch.object(download_tasks, "_update_download_status", update_status),
-        patch.object(download_tasks, "_create_download_history", create_history),
         patch.object(download_tasks, "_trigger_webhooks", trigger_webhooks),
         patch.object(download_tasks, "redis_progress_service", redis_progress_service),
     ):
@@ -219,6 +217,7 @@ async def test_download_video_task_success_updates_metadata_and_cleans_up(
         title='Dangerous: "Title"?',
         thumbnail_url="https://example.test/thumb.jpg",
         extractor="ExampleSite",
+        video_id=None,
         description="An example video",
         duration=123,
         result={
@@ -245,12 +244,6 @@ async def test_download_video_task_success_updates_metadata_and_cleans_up(
         "description": "An example video",
     }
 
-    create_history.assert_awaited_once()
-    assert create_history.await_args is not None
-    assert create_history.await_args.kwargs["download_id"] == "download-123"
-    assert create_history.await_args.kwargs["status"] == "completed"
-    assert create_history.await_args.kwargs["file_size"] == 5
-
     assert trigger_webhooks.await_args_list[0] == call(
         "download_started", "download-123", {"url": "https://example.test/watch"}
     )
@@ -276,7 +269,6 @@ async def test_download_video_task_extract_failure_marks_failed_and_cleans_up() 
     yt_service.extract_info.return_value = None
 
     update_status = AsyncMock()
-    create_history = AsyncMock()
     trigger_webhooks = AsyncMock()
     redis_progress_service = AsyncMock()
     redis_progress_service.revoke_user_sse_tokens.return_value = 0
@@ -284,7 +276,6 @@ async def test_download_video_task_extract_failure_marks_failed_and_cleans_up() 
     with (
         patch.object(download_tasks, "yt_service", yt_service),
         patch.object(download_tasks, "_update_download_status", update_status),
-        patch.object(download_tasks, "_create_download_history", create_history),
         patch.object(download_tasks, "_trigger_webhooks", trigger_webhooks),
         patch.object(download_tasks, "redis_progress_service", redis_progress_service),
     ):
@@ -307,13 +298,6 @@ async def test_download_video_task_extract_failure_marks_failed_and_cleans_up() 
         == "Download failed; see server logs for details"
     )
 
-    create_history.assert_awaited_once()
-    assert create_history.await_args is not None
-    assert create_history.await_args.kwargs["status"] == "failed"
-    assert (
-        create_history.await_args.kwargs["error_message"]
-        == "Download failed; see server logs for details"
-    )
     assert trigger_webhooks.await_args_list[-1] == call(
         "download_failed",
         "download-123",
@@ -360,7 +344,6 @@ async def test_download_video_task_uses_output_template_and_forwarded_options(
     yt_service.download_video.side_effect = fake_download_video
 
     update_status = AsyncMock()
-    create_history = AsyncMock()
     trigger_webhooks = AsyncMock()
     redis_progress_service = AsyncMock()
     redis_progress_service.revoke_user_sse_tokens.return_value = 0
@@ -368,7 +351,6 @@ async def test_download_video_task_uses_output_template_and_forwarded_options(
     with (
         patch.object(download_tasks, "yt_service", yt_service),
         patch.object(download_tasks, "_update_download_status", update_status),
-        patch.object(download_tasks, "_create_download_history", create_history),
         patch.object(download_tasks, "_trigger_webhooks", trigger_webhooks),
         patch.object(download_tasks, "redis_progress_service", redis_progress_service),
     ):
@@ -403,14 +385,12 @@ async def test_download_video_task_failure_preserves_error_and_cleans_up(
         )
 
     update_status = AsyncMock()
-    create_history = AsyncMock()
     trigger_webhooks = AsyncMock()
     redis_progress_service = AsyncMock()
 
     with (
         patch.object(download_tasks, "yt_service", yt_service),
         patch.object(download_tasks, "_update_download_status", update_status),
-        patch.object(download_tasks, "_create_download_history", create_history),
         patch.object(download_tasks, "_trigger_webhooks", trigger_webhooks),
         patch.object(download_tasks, "redis_progress_service", redis_progress_service),
     ):
@@ -429,12 +409,6 @@ async def test_download_video_task_failure_preserves_error_and_cleans_up(
     assert failed_call.args == ("download-123", "failed")
     assert (
         failed_call.kwargs["error_message"]
-        == "Download failed; see server logs for details"
-    )
-    assert create_history.await_args is not None
-    assert create_history.await_args.kwargs["status"] == "failed"
-    assert (
-        create_history.await_args.kwargs["error_message"]
         == "Download failed; see server logs for details"
     )
     assert trigger_webhooks.await_args_list[-1] == call(
@@ -502,7 +476,6 @@ async def test_download_progress_hook_normalizes_progress_and_keeps_metadata(
     yt_service.download_video.side_effect = fake_download_video
 
     update_status = AsyncMock()
-    create_history = AsyncMock()
     trigger_webhooks = AsyncMock()
     redis_progress_service = Mock()
     redis_progress_service.publish_stats_update = AsyncMock()
@@ -512,7 +485,6 @@ async def test_download_progress_hook_normalizes_progress_and_keeps_metadata(
     with (
         patch.object(download_tasks, "yt_service", yt_service),
         patch.object(download_tasks, "_update_download_status", update_status),
-        patch.object(download_tasks, "_create_download_history", create_history),
         patch.object(download_tasks, "_trigger_webhooks", trigger_webhooks),
         patch.object(download_tasks, "redis_progress_service", redis_progress_service),
         patch.object(

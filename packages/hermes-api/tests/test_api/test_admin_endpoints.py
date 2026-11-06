@@ -9,11 +9,12 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from app.db.models import User
 
-
 from unittest.mock import patch
 
 import pytest
 from httpx import AsyncClient
+
+from app.core.security import user_token_claims
 
 
 class TestAdminSettings:
@@ -89,9 +90,7 @@ class TestAdminSettings:
         from app.core.security import create_access_token
 
         # Create token directly in test to avoid fixture ordering issues
-        token = create_access_token(
-            data={"sub": test_user.username, "user_id": test_user.id}
-        )
+        token = create_access_token(data=user_token_claims(test_user))
 
         response = await client.put(
             "/api/v1/admin/settings/signup",
@@ -138,9 +137,7 @@ class TestAdminConfig:
         from app.core.security import create_access_token
 
         # Create token directly in test to avoid fixture ordering issues
-        token = create_access_token(
-            data={"sub": test_user.username, "user_id": test_user.id}
-        )
+        token = create_access_token(data=user_token_claims(test_user))
 
         response = await client.get(
             "/api/v1/admin/config",
@@ -173,9 +170,7 @@ class TestAdminConfig:
         from app.core.security import create_access_token
 
         # Create token directly in test to avoid fixture ordering issues
-        token = create_access_token(
-            data={"sub": test_user.username, "user_id": test_user.id}
-        )
+        token = create_access_token(data=user_token_claims(test_user))
 
         response = await client.put(
             "/api/v1/admin/config",

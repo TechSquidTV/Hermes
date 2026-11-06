@@ -14,7 +14,6 @@ from app.core.config import settings
 from app.core.logging import get_logger
 from app.db.base import async_session_maker
 from app.db.repositories import (
-    DownloadHistoryRepository,
     DownloadRepository,
     WebhookRepository,
 )
@@ -274,26 +273,6 @@ async def _update_download_status(
     return True
 
 
-async def _create_download_history(
-    download_id: str,
-    url: str,
-    status: str,
-    started_at: datetime,
-    completed_at: datetime,
-    **kwargs: object,
-) -> None:
-    """Helper function to create download history record."""
-    async with async_session_maker() as session:
-        await DownloadHistoryRepository(session).create(
-            download_id=download_id,
-            url=url,
-            status=status,
-            started_at=started_at,
-            completed_at=completed_at,
-            **kwargs,
-        )
-
-
 async def _trigger_webhooks(event: str, download_id: str, data: Dict[str, Any]) -> None:
     """Helper function to trigger webhooks for an event."""
     try:
@@ -356,6 +335,7 @@ async def _execute_download_video(
             "downloading",
             started_at=started_at,
             last_heartbeat_at=started_at,
+            format_spec=format_spec,
             claim_pending=True,
         ):
             return {
@@ -403,6 +383,7 @@ async def _execute_download_video(
             title=video_title,
             thumbnail_url=thumbnail_url,
             extractor=extractor,
+            video_id=video_info.get("id"),
             description=description,
             duration=duration,
             result=result_data,  # Include result for SSE
@@ -621,19 +602,6 @@ async def _execute_download_video(
                 "error": "Download is no longer active",
             }
 
-        # Create history record
-        await _create_download_history(
-            download_id=download_id,
-            url=url,
-            status="completed",
-            started_at=started_at,
-            completed_at=completed_at,
-            file_size=file_size,
-            extractor=extractor,
-            video_id=video_info.get("id"),
-            format_used=format_spec,
-        )
-
         # Trigger download completed webhook
         await _trigger_webhooks(
             "download_completed",
@@ -699,6 +667,8 @@ async def _execute_download_video(
             "failed",
             completed_at=completed_at,
             error_message=error_message,
+            extractor=video_info.get("extractor") if video_info else None,
+            video_id=video_info.get("id") if video_info else None,
         )
         if not failed:
             return {
@@ -715,18 +685,6 @@ async def _execute_download_video(
                     "Failed to remove interrupted download outputs",
                     download_id=download_id,
                 )
-
-        await _create_download_history(
-            download_id=download_id,
-            url=url,
-            status="failed",
-            started_at=started_at,
-            completed_at=completed_at,
-            error_message=error_message,
-            extractor=video_info.get("extractor") if video_info else None,
-            video_id=video_info.get("id") if video_info else None,
-            format_used=format_spec,
-        )
 
         await _trigger_webhooks(
             "download_failed", download_id, {"url": url, "error": error_message}

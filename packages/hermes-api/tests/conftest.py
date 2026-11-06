@@ -11,7 +11,6 @@ if TYPE_CHECKING:
     from app.db.models import User
     from app.utils.urls import SocketInfo
 
-
 import os
 from tempfile import TemporaryDirectory
 from typing import AsyncGenerator
@@ -171,11 +170,9 @@ async def test_admin_user(db_session: AsyncSession) -> User:
 @pytest.fixture
 def auth_token(test_user: User) -> str:
     """Create an authentication token for a test user."""
-    from app.core.security import create_access_token
+    from app.core.security import create_access_token, user_token_claims
 
-    token = create_access_token(
-        data={"sub": test_user.username, "user_id": test_user.id}
-    )
+    token = create_access_token(data=user_token_claims(test_user))
 
     return token
 
@@ -183,11 +180,9 @@ def auth_token(test_user: User) -> str:
 @pytest.fixture
 def auth_token2(test_user2: User) -> str:
     """Create an authentication token for the second test user."""
-    from app.core.security import create_access_token
+    from app.core.security import create_access_token, user_token_claims
 
-    token = create_access_token(
-        data={"sub": test_user2.username, "user_id": test_user2.id}
-    )
+    token = create_access_token(data=user_token_claims(test_user2))
 
     return token
 
@@ -195,11 +190,9 @@ def auth_token2(test_user2: User) -> str:
 @pytest.fixture
 def admin_auth_token(test_admin_user: User) -> str:
     """Create an authentication token for the admin test user."""
-    from app.core.security import create_access_token
+    from app.core.security import create_access_token, user_token_claims
 
-    token = create_access_token(
-        data={"sub": test_admin_user.username, "user_id": test_admin_user.id}
-    )
+    token = create_access_token(data=user_token_claims(test_admin_user))
 
     return token
 

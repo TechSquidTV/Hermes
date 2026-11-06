@@ -26,7 +26,7 @@ export function ChangePassword() {
     mutationFn: () => authService.changePassword(current, password),
     onSuccess: () => {
       close()
-      toast.success('Password changed')
+      toast.success('Password changed. Sign in again.')
     },
   })
   function close() {
@@ -68,7 +68,7 @@ export function ChangePassword() {
         <DialogHeader>
           <DialogTitle>Change password</DialogTitle>
           <DialogDescription>
-            Enter your current password and choose a new password.
+            Choose a new password. This signs you out on all devices.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">

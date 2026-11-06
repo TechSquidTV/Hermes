@@ -16,7 +16,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.endpoints.cleanup import cleanup_downloads
 from app.api.v1.endpoints.users import UserUpdateAdmin, update_user_admin_status
 from app.core.config import settings
-from app.core.security import AuthPrincipal, hash_api_key, validate_sse_token
+from app.core.security import (
+    AuthPrincipal,
+    credential_id,
+    hash_api_key,
+    validate_sse_token,
+)
 from app.db.base import async_session_maker
 from app.db.models import Download, User
 from app.db.repositories import ApiKeyRepository, TokenBlacklistRepository
@@ -139,6 +144,7 @@ async def test_sse_rechecks_account_and_logout(
         "scope": "downloads",
         "user_id": test_user.id,
         "credential_kind": "user",
+        "credential_id": credential_id(test_user),
         "session_id": "sid",
         "token_id": "jti",
         "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
