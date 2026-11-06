@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from 'react';
-import { AnimatePresence, type Transition, motion } from 'framer-motion';
+import { AnimatePresence, type Transition, motion } from 'motion/react';
 
 import { cn } from '@/lib/utils';
 

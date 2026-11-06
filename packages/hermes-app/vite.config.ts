@@ -22,10 +22,10 @@ export default defineConfig(() => {
       alias: {
         '@': path.resolve(import.meta.dirname, './src'),
       },
-      dedupe: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime', 'framer-motion'],
+      dedupe: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime', 'motion'],
     },
     optimizeDeps: {
-      include: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime', 'framer-motion'],
+      include: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime', 'motion/react'],
       needsInterop: ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
       extensions: ['.js', '.jsx', '.ts', '.tsx', '.mjs'],
     },
@@ -51,7 +51,12 @@ export default defineConfig(() => {
               return 'vendor-tanstack'
             }
 
-            if (id.includes('framer-motion') || id.includes('motion-dom')) {
+            if (
+              id.includes('/motion/') ||
+              id.includes('/motion-dom/') ||
+              id.includes('/motion-utils/') ||
+              id.includes('/framer-motion/')
+            ) {
               return 'vendor-motion'
             }
 
