@@ -441,16 +441,20 @@ HERMES_DATABASE_ECHO=true
 
 ### API Performance
 
-- **Adjust rate limiting** based on your needs:
+- **Adjust authentication budgets** for login, signup, and refresh. These limits
+  apply per client IP and endpoint; they do not limit download API traffic:
   ```env
-  HERMES_RATE_LIMIT_PER_MINUTE=120  # Increase for more traffic
+  HERMES_MAX_LOGIN_ATTEMPTS=10
+  HERMES_LOGIN_ATTEMPT_WINDOW_MINUTES=15
   ```
 
 - **Monitor database query performance**:
   ```env
   HERMES_DATABASE_ECHO=true  # Enable query logging (dev only)
   ```
-  **Note:** Hermes uses SQLite for simplicity. For high-traffic production deployments, consider implementing database connection pooling or migrating to PostgreSQL (requires code changes).
+  **Note:** SQLite is the default. PostgreSQL support and connection pooling are
+  built in; follow [PostgreSQL deployment guidance](POSTGRESQL.md) to opt in.
+  Changing the database URL does not transfer existing SQLite data.
 
 - **Configure Redis maxmemory** policy:
   ```yaml

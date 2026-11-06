@@ -2,6 +2,7 @@
 Cleanup endpoint.
 """
 
+from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List
@@ -17,7 +18,13 @@ from app.core.security import ApiKeyPermission, AuthPrincipal, require_api_permi
 from app.db.models import Download
 from app.db.session import get_database_session
 from app.models.pydantic.cleanup import CleanupRequest, CleanupResponse
-from app.services.file_cleanup import active_download_prefixes, cleanup_candidates
+from app.services.file_cleanup import (
+    active_download_prefixes,
+    cleanup_candidates,
+    download_artifacts,
+    remove_download_artifacts,
+    temporary_cleanup_candidates,
+)
 
 router = APIRouter(prefix="/cleanup", tags=["cleanup"])
 logger = get_logger(__name__)
@@ -56,29 +63,39 @@ async def cleanup_downloads(
     errors: List[str] = []
 
     download_dir = Path(settings.download_dir)
-    temp_dir = Path(settings.temp_dir)
     active_prefixes = await active_download_prefixes(db_session)
 
-    directories = []
-    if request.older_than_days:
-        directories.append((download_dir, request.older_than_days * 24))
-    if request.delete_temp_files:
-        directories.append((temp_dir, request.temp_max_age_hours))
-    for directory, age_hours in directories:
-        for file_path in cleanup_candidates(directory, age_hours, active_prefixes):
-            if files_deleted + files_previewed >= request.max_files_to_delete:
-                break
-            try:
-                file_size = file_path.stat().st_size
-                if request.dry_run:
-                    files_previewed += 1
-                else:
-                    file_path.unlink()
-                    files_deleted += 1
-                space_freed += file_size
-            except OSError:
-                logger.exception("File cleanup failed")
-                errors.append("File cleanup failed")
+    async def candidates() -> AsyncIterator[Path]:
+        if request.older_than_days:
+            for path in cleanup_candidates(
+                download_dir, request.older_than_days * 24, active_prefixes
+            ):
+                yield path
+        if request.delete_temp_files:
+            async for path in temporary_cleanup_candidates(
+                db_session, request.temp_max_age_hours
+            ):
+                yield path
+
+    seen: set[Path] = set()
+    async for file_path in candidates():
+        if files_deleted + files_previewed >= request.max_files_to_delete:
+            break
+        resolved = file_path.resolve()
+        if resolved in seen:
+            continue
+        try:
+            file_size = file_path.stat().st_size
+            if request.dry_run:
+                files_previewed += 1
+            else:
+                file_path.unlink()
+                files_deleted += 1
+            space_freed += file_size
+            seen.add(resolved)
+        except OSError:
+            logger.exception("File cleanup failed")
+            errors.append("File cleanup failed")
 
     if request.delete_failed_downloads:
         remaining = request.max_files_to_delete - files_deleted - files_previewed
@@ -91,7 +108,40 @@ async def cleanup_downloads(
                     .limit(remaining)
                 )
             ).all()
+            artifacts_by_id = download_artifacts([download.id for download in failed])
             for download in failed:
+                budget = (
+                    request.max_files_to_delete
+                    - files_deleted
+                    - files_previewed
+                    - records_deleted
+                    - records_previewed
+                )
+                if budget <= 0:
+                    break
+                try:
+                    artifacts = remove_download_artifacts(
+                        download.id,
+                        limit=budget,
+                        dry_run=request.dry_run,
+                        paths=artifacts_by_id[download.id],
+                        excluded_paths=(
+                            {str(path) for path in seen} if request.dry_run else ()
+                        ),
+                    )
+                except OSError:
+                    logger.exception("Failed artifact cleanup")
+                    errors.append("Failed artifact cleanup")
+                    continue
+                space_freed += artifacts.bytes_freed
+                if request.dry_run:
+                    files_previewed += artifacts.files
+                else:
+                    files_deleted += artifacts.files
+                if artifacts.failed:
+                    errors.append("Failed artifact cleanup")
+                if not artifacts.complete or artifacts.files >= budget:
+                    continue
                 if request.dry_run:
                     records_previewed += 1
                 else:

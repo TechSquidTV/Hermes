@@ -3,7 +3,6 @@ import { Checkbox } from '@/components/animate-ui/components/radix/checkbox'
 import {
   Download,
   Loader2,
-  RefreshCw,
   Trash2,
   X
 } from 'lucide-react'
@@ -75,11 +74,6 @@ export const QueueCard = memo(function QueueCard({ download, isSelectable = fals
       variant: 'destructive',
       onConfirm: () => deleteMutation.mutate(filePath),
     })
-  }
-
-  // Retry download handler (placeholder for now)
-  const handleRetryDownload = () => {
-    toast.info('Retry functionality coming soon!')
   }
 
   // Get status-based label
@@ -225,19 +219,6 @@ export const QueueCard = memo(function QueueCard({ download, isSelectable = fals
                 )}
               </Button>
             </>
-          )}
-
-          {download.status === 'failed' && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              title="Retry Download"
-                aria-label="Retry Download"
-              onClick={handleRetryDownload}
-            >
-              <RefreshCw className="h-4 w-4" />
-            </Button>
           )}
 
           {(isActiveDownloadStatus(download.status)) && (

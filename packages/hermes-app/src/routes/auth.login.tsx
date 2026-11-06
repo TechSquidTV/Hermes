@@ -69,14 +69,6 @@ function LoginPage() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Password</Label>
-                <Button
-                  type="button"
-                  variant="link"
-                  className="px-0 font-normal text-xs"
-                  onClick={() => toast.info('Password reset coming soon!')}
-                >
-                  Forgot password?
-                </Button>
               </div>
               <Input
                 id="password"

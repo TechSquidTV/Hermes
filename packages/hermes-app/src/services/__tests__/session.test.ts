@@ -158,3 +158,76 @@ it('forwards cancellation and bounds requests with a timeout', async () => {
     expect(TokenStorage.getRefreshToken()).toBe('refresh')
   } finally { vi.useRealTimers(); vi.unstubAllGlobals() }
 })
+
+function sessionAccess(sid: string): string {
+  return `header.${btoa(JSON.stringify({ exp: Date.now() / 1000 + 900, sid }))}.signature`
+}
+
+it('serializes independent tabs and reuses the rotation completed under the browser lock', async () => {
+  localStorage.clear()
+  TokenStorage.setTokens({ accessToken: sessionAccess('family'), refreshToken: 'old-refresh' })
+  let tail = Promise.resolve()
+  const request = <T,>(_name: string, _options: LockOptions, callback: () => Promise<T>) => {
+    const result = tail.then(callback)
+    tail = result.then(() => {}, () => {})
+    return result
+  }
+  vi.stubGlobal('navigator', { locks: { request } })
+  const tokens = { accessToken: sessionAccess('family'), refreshToken: 'new-refresh', tokenType: 'bearer' }
+  const exchange = deferred<Response>()
+  const fetchMock = vi.fn<typeof fetch>().mockReturnValue(exchange.promise)
+  vi.stubGlobal('fetch', fetchMock)
+  try {
+    vi.resetModules()
+    const firstTab = await import('../session')
+    vi.resetModules()
+    const secondTab = await import('../session')
+    const first = firstTab.refreshSession()
+    const second = secondTab.refreshSession()
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    exchange.resolve(new Response(JSON.stringify(tokens)))
+    expect(await Promise.all([first, second])).toEqual([tokens, tokens])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(TokenStorage.getRefreshToken()).toBe('new-refresh')
+  } finally { vi.unstubAllGlobals(); localStorage.clear() }
+})
+
+it('uses another tab\'s same-session credentials after a late refresh rejection', async () => {
+  localStorage.clear()
+  TokenStorage.setTokens({ accessToken: sessionAccess('family'), refreshToken: 'old-refresh' })
+  vi.stubGlobal('navigator', {})
+  const winningAccess = sessionAccess('family')
+  const exchange = deferred<Response>()
+  const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (url, options) => {
+    if (url === '/api/v1/auth/refresh') return exchange.promise
+    return new Headers(options?.headers).get('Authorization') === 'Bearer ' + winningAccess && TokenStorage.getRefreshToken() === 'new-refresh'
+      ? new Response('{"result":"ok"}')
+      : new Response('{}', { status: 401 })
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  try {
+    const request = apiClient.request<{ result: string }>('/auth/me')
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    localStorage.setItem('hermes_access_token', winningAccess)
+    localStorage.setItem('hermes_refresh_token', 'new-refresh')
+    exchange.resolve(new Response('{"detail":"Refresh token has been revoked"}', { status: 401 }))
+    expect(await request).toEqual({ result: 'ok' })
+    expect(TokenStorage.getRefreshToken()).toBe('new-refresh')
+  } finally { vi.unstubAllGlobals(); localStorage.clear() }
+})
+
+it('does not adopt a different account even before its storage event arrives', async () => {
+  localStorage.clear()
+  TokenStorage.setTokens({ accessToken: sessionAccess('family-a'), refreshToken: 'old-refresh' })
+  const exchange = deferred<Response>()
+  vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockReturnValue(exchange.promise))
+  try {
+    const refresh = refreshSession()
+    const rejected = expect(refresh).rejects.toThrow('Session changed')
+    localStorage.setItem('hermes_access_token', sessionAccess('family-b'))
+    localStorage.setItem('hermes_refresh_token', 'other-account-refresh')
+    exchange.resolve(new Response('{}', { status: 401 }))
+    await rejected
+    expect(TokenStorage.getRefreshToken()).toBe('other-account-refresh')
+  } finally { vi.unstubAllGlobals(); localStorage.clear() }
+})
