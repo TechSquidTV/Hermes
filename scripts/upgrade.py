@@ -86,6 +86,7 @@ def report(message: str, *, error: bool = False) -> None:
     try:
         print(message, file=sys.stderr if error else sys.stdout, flush=True)
     except OSError:
+        # A closed pipe or terminal must not trigger deployment cleanup.
         pass
 
 
