@@ -68,7 +68,21 @@ class FakeUpgrade(Upgrade):
 
     def preflight(self, pull: bool) -> dict[str, str]:
         self.project = "test-project"
-        return {name: f"hermes-{name}:1.1.0" for name in SERVICES}
+        images = {name: f"hermes-{name}:1.1.0" for name in SERVICES}
+        self.configuration = {
+            "name": self.project,
+            "services": {
+                name: {
+                    "image": image,
+                    "environment": {
+                        "HERMES_DATABASE_URL": "sqlite+aiosqlite:////app/data/original.sqlite",
+                        "HERMES_SECRET_KEY": "literal$$dollar",
+                    },
+                }
+                for name, image in images.items()
+            },
+        }
+        return images
 
 
 def inspect_output(arguments: list[str], **kwargs: object) -> str:
@@ -100,6 +114,84 @@ class UpgradeLifecycleTests(unittest.TestCase):
         self.docker = patch("scripts.upgrade.run", side_effect=inspect_output)
         self.docker.start()
         self.addCleanup(self.docker.stop)
+
+    def test_broken_output_cannot_roll_back_a_successful_upgrade(self) -> None:
+        class Disconnected(io.StringIO):
+            def write(self, value: str) -> int:
+                raise BrokenPipeError("Terminal disconnected")
+
+        upgrade = FakeUpgrade(self.directory)
+        with patch("sys.stdout", Disconnected()):
+            upgrade.apply()
+        self.assertEqual(upgrade.state["phase"], "complete")
+        self.assertEqual(
+            [
+                action
+                for action in upgrade.actions
+                if action[:2] == ("helper", "maintenance")
+            ],
+            [("helper", "maintenance", "on"), ("helper", "maintenance", "off")],
+        )
+        self.assertEqual(sum(action[0] == "stop" for action in upgrade.actions), 2)
+
+    def test_broken_error_output_preserves_the_original_failure(self) -> None:
+        class Disconnected(io.StringIO):
+            def write(self, value: str) -> int:
+                raise OSError("Terminal disconnected")
+
+        upgrade = FakeUpgrade(self.directory, failure="migrate")
+        with patch("sys.stderr", Disconnected()), self.assertRaisesRegex(
+            UpgradeError, "migrate failure"
+        ):
+            upgrade.apply()
+        self.assertEqual(upgrade.state["phase"], "migrating")
+
+    def test_recovery_uses_private_resolved_configuration_before_restoring(
+        self,
+    ) -> None:
+        upgrade = FakeUpgrade(self.directory, failure="migrate")
+        with self.assertRaises(UpgradeError):
+            upgrade.apply()
+        assert upgrade.state_file is not None
+        config = Path(str(upgrade.state["compose_file"]))
+        self.assertEqual(config.stat().st_mode & 0o777, 0o600)
+        upgrade.env_file.write_text("HERMES_DATABASE_URL=wrong-database\n")
+        upgrade.files[0].write_text("invalid mutable compose file")
+        commands: list[list[str]] = []
+
+        def docker(arguments: list[str], **keywords: object) -> str:
+            commands.append(arguments)
+            if arguments[:2] == ["docker", "compose"]:
+                self.assertEqual(arguments[arguments.index("--file") + 1], str(config))
+                if "restore" in arguments:
+                    saved = json.loads(config.read_text())
+                    self.assertEqual(
+                        saved["services"]["api"]["environment"]["HERMES_DATABASE_URL"],
+                        "sqlite+aiosqlite:////app/data/original.sqlite",
+                    )
+                    self.assertEqual(
+                        saved["services"]["api"]["environment"]["HERMES_SECRET_KEY"],
+                        "literal$$dollar",
+                    )
+            return ""
+
+        with patch("scripts.upgrade.run", side_effect=docker), patch.dict(
+            os.environ, {"HERMES_DATABASE_URL": "another-wrong-database"}
+        ):
+            recover(upgrade.state_file, restore=True)
+        self.assertTrue(any("restore" in arguments for arguments in commands))
+
+    def test_recovery_refuses_missing_configuration_before_running_docker(self) -> None:
+        upgrade = FakeUpgrade(self.directory, failure="migrate")
+        with self.assertRaises(UpgradeError):
+            upgrade.apply()
+        assert upgrade.state_file is not None
+        Path(str(upgrade.state["compose_file"])).unlink()
+        with patch("scripts.upgrade.run") as docker, self.assertRaisesRegex(
+            UpgradeError, "saved resolved Compose"
+        ):
+            recover(upgrade.state_file, restore=True)
+        docker.assert_not_called()
 
     def test_success_drains_then_snapshots_before_migration_and_persists_release(
         self,

@@ -509,6 +509,23 @@ zero vulnerabilities as of 2026-11-06.
 
 ### Startup and worker recovery upgrade
 
+New releases prepend the versioned upgrade guidance from
+`.github/release-notes.md` to GitHub's generated change summaries. Review that
+template before release: it includes the migration and coordinated upgrade
+warning, exact one-command upgrade, and required sign-in. Image-publication
+recovery uses the template committed with the selected tag, when present, so
+older releases do not acquire instructions for features they never shipped.
+
+Recovery records now include a private resolved Compose snapshot. Keep it with
+the database backup; older records without the snapshot require manual recovery.
+Output disconnects cannot turn a completed upgrade into a service shutdown.
+
+Analytics summaries use exact success counts before rounding. Peak usage is the
+most frequent UTC completion hour in the selected period (earliest hour wins
+ties, midnight when empty); current storage is the regular-file size under the
+download root, independent of history and period filters. Symlinks and the
+separate temp root are excluded.
+
 Password changes revoke all of the user's access, refresh and live-event
 credentials in the same database commit. **Sign in again after this release:**
 older tokens without the password binding are rejected. No additional database

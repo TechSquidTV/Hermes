@@ -15,6 +15,28 @@ from app.db.models import DownloadHistory
 class TestTimeline:
     """Test cases for timeline endpoints."""
 
+    @pytest.mark.parametrize("successful,total", [(1, 3), (5, 6)])
+    async def test_summary_uses_exact_counts_before_rounding(
+        self, client: AsyncClient, db_session: AsyncSession, successful: int, total: int
+    ) -> None:
+        completed = datetime.now(timezone.utc) - timedelta(days=1)
+        for index in range(total):
+            db_session.add(
+                DownloadHistory(
+                    id=str(uuid.uuid4()),
+                    download_id=str(uuid.uuid4()),
+                    url="https://example.com/video",
+                    status="completed" if index < successful else "failed",
+                    started_at=completed,
+                    completed_at=completed,
+                )
+            )
+        await db_session.commit()
+        response = await client.get("/api/v1/timeline/summary")
+        assert response.status_code == 200, response.text
+        assert response.json()["totalDownloads"] == total
+        assert response.json()["successRate"] == round(successful / total, 3)
+
     @pytest.mark.asyncio
     async def test_timeline_stats_uses_camelcase_fields(
         self, client: AsyncClient, db_session: AsyncSession

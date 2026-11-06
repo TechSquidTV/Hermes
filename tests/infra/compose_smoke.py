@@ -343,7 +343,16 @@ assert result.get("dry_run") is True, result
                         # A copied recovery command runs in a fresh shell, where
                         # the original inline project variable is no longer set.
                         os.environ["COMPOSE_PROJECT_NAME"] = "wrong-recovery-project"
-                        recover(interrupted.state_file, restore=True)
+                        os.environ["HERMES_DATABASE_URL"] = (
+                            "sqlite+aiosqlite:////app/data/wrong-recovery.sqlite"
+                        )
+                        try:
+                            recover(interrupted.state_file, restore=True)
+                        finally:
+                            os.environ.pop("HERMES_DATABASE_URL", None)
+                        assert not (
+                            workspace / "data/data/wrong-recovery.sqlite"
+                        ).exists()
                         assert (
                             workspace / "data/downloads/smoke.txt"
                         ).read_text() == "persistent media"

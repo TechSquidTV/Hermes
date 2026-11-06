@@ -43,5 +43,11 @@ class ApiStatistics(CamelCaseModel):
     error_breakdown: List[ErrorBreakdown] = Field(
         default_factory=list, description="Error type breakdown"
     )
-    peak_hour: int = Field(0, description="Peak usage hour (0-23)")
-    total_storage_used: int = Field(0, description="Total storage used in bytes")
+    peak_hour: int = Field(
+        0,
+        description="Peak UTC completion hour (0-23); earliest hour wins ties, 0 when history is empty",
+    )
+    total_storage_used: int = Field(
+        0,
+        description="Current regular-file bytes under download storage, independent of the selected period; excludes symlinks and temp storage",
+    )

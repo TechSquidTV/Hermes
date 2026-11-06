@@ -4,6 +4,7 @@ Storage management service.
 Provides disk usage information and cleanup recommendations.
 """
 
+import asyncio
 import shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -40,7 +41,7 @@ class StorageService:
             stat = shutil.disk_usage(download_dir)
 
             # Calculate directory sizes
-            downloads_size = await StorageService._get_directory_size(download_dir)
+            downloads_size = await StorageService.get_downloads_size()
             temp_size = await StorageService._get_directory_size(temp_dir)
 
             # Get cleanup recommendations
@@ -65,20 +66,26 @@ class StorageService:
             raise
 
     @staticmethod
+    async def get_downloads_size() -> int:
+        """Measure current download storage, independently of history filters."""
+        return await StorageService._get_directory_size(Path(settings.download_dir))
+
+    @staticmethod
     async def _get_directory_size(directory: Path) -> int:
         """Calculate total size of directory."""
-        total_size = 0
-        try:
+
+        def measure() -> int:
+            total_size = 0
             for item in directory.rglob("*"):
-                if item.is_file():
-                    total_size += item.stat().st_size
-        except Exception as e:
-            logger.warning(
-                "Error calculating directory size",
-                directory=str(directory),
-                error=str(e),
-            )
-        return total_size
+                try:
+                    if not item.is_symlink() and item.is_file():
+                        total_size += item.stat().st_size
+                except FileNotFoundError:
+                    # Files can disappear during concurrent cleanup.
+                    continue
+            return total_size
+
+        return await asyncio.to_thread(measure)
 
     @staticmethod
     async def _get_recommendations(
