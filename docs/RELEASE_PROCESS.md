@@ -356,7 +356,7 @@ The version status feature will automatically:
    docker build -f packages/hermes-app/Dockerfile .
    docker build -f packages/hermes-api/Dockerfile packages/hermes-api
    ```
-3. Fix any issues and re-run the release workflow
+3. If no release tags were pushed, fix the issue and rerun Release. If tags already exist, use the recovery procedure below.
 
 ### Published Release Has No Docker Images
 
@@ -404,3 +404,55 @@ If you have questions about the release process:
 ---
 
 **Happy Releasing! 🎉**
+
+
+## Recovering a partial image publication
+
+Release and Publish Release Images share the `hermes-release-publication`
+concurrency group. They run serially, without cancelling an in-progress publisher.
+A container-registry outage can still interrupt publication between the app and
+API images. Never deploy a version until both image manifests are present.
+
+If Release has already pushed its version commit and all three tags but an image
+push failed:
+
+1. Leave the version commit and tags intact. Verify `vX.Y.Z`, `hermes-app-vX.Y.Z`
+   and `hermes-api-vX.Y.Z` point to the same commit and its package versions match.
+2. Repair the build or registry access problem. For source changes, cut a new
+   version; do not move existing release tags.
+3. For a transient failure with unchanged source, dispatch **Publish Release
+   Images** from `main`, supplying the existing `vX.Y.Z` tag. Do this before
+   starting a newer release; recovery publishes the version and mutable aliases.
+4. The recovery workflow reruns validation and republishes both images. After
+   both succeed it creates a missing GitHub Release, or preserves the existing one.
+5. Verify both architectures in both manifests, then deploy the same exact
+   `HERMES_IMAGE_TAG` across the whole stack.
+
+Do not rerun the version-bumping Release workflow to repair an already-tagged
+version. Do not delete or retag a version that may already be deployed.
+
+## Upgrade notes for the next release
+
+Back up the database, `.env`, media and scheduler state. Stop old workers before
+migrating and rebuild/recreate the API, worker and scheduler together. Use one
+migration process with the downloads filesystem mounted. The managed-path
+migration needs an online database and real filesystem paths; SQL-only upgrades
+are unsupported. The PostgreSQL counter migration follows that revision in a
+single chain. The seeded SQLite upgrade test uses a schema snapshot created by
+original 0.6.0 migrations and verifies account, policy and media preservation.
+
+SQLite stays the default. PostgreSQL is an explicit opt-in using
+`postgresql+asyncpg`; changing the URL does not transfer SQLite data. Follow
+[PostgreSQL deployment guidance](POSTGRESQL.md), including supported worker pools.
+
+`PUT /api/v1/admin/config` now rejects unsupported runtime updates with HTTP 501.
+Change deployment environment settings and restart affected processes. Its GET
+response exposes actual startup settings rather than former placeholder fields.
+Signup policy keeps its dedicated endpoint. See [configuration guidance](CONFIGURATION.md).
+
+Previously issued SSE tokens lack credential binding and are rejected after this
+upgrade. Clients automatically request new tokens. Streams recheck authorization
+at least once per second and close after logout, account disable, key revocation
+or token expiry. Manual temporary cleanup defaults to files older than 24 hours,
+protects active task outputs and skips symlinks. Failed-record cleanup now honors
+preview mode and the shared deletion limit, reporting record counts separately.

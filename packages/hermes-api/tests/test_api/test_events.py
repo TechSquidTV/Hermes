@@ -13,7 +13,8 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from collections.abc import Awaitable, Callable
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 import pytest_asyncio
@@ -368,7 +369,9 @@ class TestSSEStreamingFunctionality:
         from app.services import event_service
 
         async def mock_event_stream(
-            channels: list[str], filters: dict[str, object] | None = None
+            channels: list[str],
+            filters: dict[str, object] | None = None,
+            authorize: Callable[[], Awaitable[None]] | None = None,
         ) -> AsyncGenerator[dict[str, object], None]:
             # Return a simple connected event
             yield {
@@ -587,7 +590,9 @@ class TestSSEStreamingFunctionality:
             from app.services import event_service
 
             async def mock_stream(
-                channels: list[str], filters: dict[str, object] | None
+                channels: list[str],
+                filters: dict[str, object] | None,
+                authorize: Callable[[], Awaitable[None]] | None = None,
             ) -> AsyncGenerator[dict[str, object], None]:
                 assert channels == ["hermes:download:updates"]
                 assert filters == {"download_id": "test-123"}
@@ -636,7 +641,9 @@ class TestSSEStreamingFunctionality:
             from app.services import event_service
 
             async def mock_stream(
-                channels: list[str], filters: dict[str, object] | None = None
+                channels: list[str],
+                filters: dict[str, object] | None = None,
+                authorize: Callable[[], Awaitable[None]] | None = None,
             ) -> AsyncGenerator[dict[str, object], None]:
                 assert channels == ["hermes:queue:updates"]
                 yield {
@@ -868,6 +875,9 @@ async def test_shared_download_scope_cannot_subscribe_to_other_channels() -> Non
         await event_stream(
             channels="hermes:queue:updates,hermes:system:notifications",
             download_id=None,
+            token="sse_shared",
             token_data={"scope": "downloads", "user_id": "reader"},
         )
-    stream.assert_called_once_with(channels=["hermes:download:updates"], filters=None)
+    stream.assert_called_once_with(
+        channels=["hermes:download:updates"], filters=None, authorize=ANY
+    )

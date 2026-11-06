@@ -2,19 +2,22 @@
 Cleanup endpoint.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List
 
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_repositories_from_session
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.security import ApiKeyPermission, AuthPrincipal, require_api_permission
+from app.db.models import Download
 from app.db.session import get_database_session
 from app.models.pydantic.cleanup import CleanupRequest, CleanupResponse
+from app.services.file_cleanup import active_download_prefixes, cleanup_candidates
 
 router = APIRouter(prefix="/cleanup", tags=["cleanup"])
 logger = get_logger(__name__)
@@ -48,77 +51,69 @@ async def cleanup_downloads(
     files_deleted = 0
     space_freed = 0
     files_previewed = 0
+    records_deleted = 0
+    records_previewed = 0
     errors: List[str] = []
 
     download_dir = Path(settings.download_dir)
     temp_dir = Path(settings.temp_dir)
+    active_prefixes = await active_download_prefixes(db_session)
 
-    # Cleanup old files
+    directories = []
     if request.older_than_days:
-        cutoff_time = datetime.now(timezone.utc) - timedelta(
-            days=request.older_than_days
-        )
-
-        for file_path in download_dir.rglob("*"):
-            if not file_path.is_file():
-                continue
-
-            if files_deleted + files_previewed >= request.max_files_to_delete:
-                break
-
-            try:
-                mtime = datetime.fromtimestamp(
-                    file_path.stat().st_mtime, tz=timezone.utc
-                )
-                if mtime < cutoff_time:
-                    file_size = file_path.stat().st_size
-
-                    if request.dry_run:
-                        files_previewed += 1
-                        space_freed += file_size
-                    else:
-                        file_path.unlink()
-                        files_deleted += 1
-                        space_freed += file_size
-
-            except Exception as e:
-                logger.error("File cleanup failed", error=str(e))
-                errors.append("File cleanup failed")
-
-    # Cleanup temp files
+        directories.append((download_dir, request.older_than_days * 24))
     if request.delete_temp_files:
-        for file_path in temp_dir.rglob("*"):
-            if not file_path.is_file():
-                continue
-
+        directories.append((temp_dir, request.temp_max_age_hours))
+    for directory, age_hours in directories:
+        for file_path in cleanup_candidates(directory, age_hours, active_prefixes):
             if files_deleted + files_previewed >= request.max_files_to_delete:
                 break
-
             try:
                 file_size = file_path.stat().st_size
-
                 if request.dry_run:
                     files_previewed += 1
-                    space_freed += file_size
                 else:
                     file_path.unlink()
                     files_deleted += 1
-                    space_freed += file_size
+                space_freed += file_size
+            except OSError:
+                logger.exception("File cleanup failed")
+                errors.append("File cleanup failed")
 
-            except Exception as e:
-                logger.error("Temp file cleanup failed", error=str(e))
-                errors.append("Temp file cleanup failed")
+    if request.delete_failed_downloads:
+        remaining = request.max_files_to_delete - files_deleted - files_previewed
+        if remaining > 0:
+            failed = (
+                await db_session.scalars(
+                    select(Download)
+                    .where(Download.status == "failed")
+                    .order_by(Download.id)
+                    .limit(remaining)
+                )
+            ).all()
+            for download in failed:
+                if request.dry_run:
+                    records_previewed += 1
+                else:
+                    await db_session.delete(download)
+                    records_deleted += 1
+            if not request.dry_run:
+                await db_session.commit()
 
     logger.info(
         "Cleanup operation completed",
         dry_run=request.dry_run,
         files_deleted=files_deleted,
+        records_deleted=records_deleted,
+        records_previewed=records_previewed,
         files_previewed=files_previewed,
         space_freed=space_freed,
     )
 
     return CleanupResponse(
         files_deleted=files_deleted,
+        records_deleted=records_deleted,
+        records_previewed=records_previewed,
         space_freed=space_freed,
         files_previewed=files_previewed,
         errors=errors,

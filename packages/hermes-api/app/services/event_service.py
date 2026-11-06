@@ -5,6 +5,7 @@ Event service for managing SSE connections and message distribution.
 import asyncio
 import json
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from typing import Any, AsyncGenerator, Dict, Optional
 
@@ -23,7 +24,10 @@ class EventService:
         self.max_connections: int = settings.sse_max_connections
 
     async def event_stream(
-        self, channels: list[str], filters: Optional[Dict[str, Any]] = None
+        self,
+        channels: list[str],
+        filters: Optional[Dict[str, Any]] = None,
+        authorize: Callable[[], Awaitable[None]] | None = None,
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Generate SSE event stream.
@@ -63,6 +67,8 @@ class EventService:
         )
 
         try:
+            if authorize:
+                await authorize()
             # Send initial connection event
             yield {
                 "event": "connected",
@@ -78,7 +84,7 @@ class EventService:
             last_heartbeat = asyncio.get_event_loop().time()
 
             # Subscribe to Redis channels
-            async for event in redis_progress_service.subscribe_to_channels(channels):
+            async for event in self._events(channels, authorize):
                 # Send heartbeat if interval has elapsed
                 current_time = asyncio.get_event_loop().time()
                 if current_time - last_heartbeat >= settings.sse_heartbeat_interval:
@@ -119,6 +125,34 @@ class EventService:
                 connection_id=connection_id,
                 active_connections=self.active_connections,
             )
+
+    async def _events(
+        self, channels: list[str], authorize: Callable[[], Awaitable[None]] | None
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        events = redis_progress_service.subscribe_to_channels(channels)
+        pending: asyncio.Task[Dict[str, Any]] | None = None
+        last_check = asyncio.get_running_loop().time()
+        try:
+            while True:
+                if pending is None:
+                    pending = asyncio.create_task(anext(events))
+                done, _ = await asyncio.wait({pending}, timeout=1.0)
+                now = asyncio.get_running_loop().time()
+                if authorize and now - last_check >= 1.0:
+                    await authorize()
+                    last_check = now
+                if done:
+                    try:
+                        event = pending.result()
+                    except StopAsyncIteration:
+                        return
+                    pending = None
+                    yield event
+        finally:
+            if pending is not None:
+                pending.cancel()
+                await asyncio.gather(pending, return_exceptions=True)
+            await events.aclose()
 
     def _matches_filters(self, event: Dict[str, Any], filters: Dict[str, Any]) -> bool:
         """

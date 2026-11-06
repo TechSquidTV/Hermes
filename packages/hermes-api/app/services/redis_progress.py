@@ -451,7 +451,7 @@ class RedisProgressService:
                 token_data = json.loads(data)
 
                 # Check if token belongs to user
-                if token_data.get("user_id") != user_id:
+                if user_id != "*" and token_data.get("user_id") != user_id:
                     continue
 
                 # Check scope prefix if specified

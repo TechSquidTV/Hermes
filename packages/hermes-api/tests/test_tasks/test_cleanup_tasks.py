@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
+from app.core.config import settings
 from app.tasks.cleanup_tasks import (
     _cleanup_download_files,
     _cleanup_temp_files,
@@ -48,7 +49,7 @@ class TestCleanupTempFiles:
             old_file_size = os.path.getsize(old_file)
 
             # Mock the environment variable to point to our temp dir
-            with patch.dict(os.environ, {"HERMES_TEMP_DIR": tmpdir}):
+            with patch.object(settings, "temp_dir", tmpdir):
                 result = await _cleanup_temp_files(max_age_hours=24)
 
             # Old file should be deleted, new file should remain
@@ -60,7 +61,7 @@ class TestCleanupTempFiles:
     @pytest.mark.asyncio
     async def test_cleanup_temp_files_no_directory(self) -> None:
         """Test cleanup when temp directory doesn't exist."""
-        with patch.dict(os.environ, {"HERMES_TEMP_DIR": "/nonexistent/directory"}):
+        with patch.object(settings, "temp_dir", "/nonexistent/directory"):
             result = await _cleanup_temp_files(max_age_hours=24)
 
         assert result["deleted_files"] == 0
@@ -70,7 +71,7 @@ class TestCleanupTempFiles:
     async def test_cleanup_temp_files_empty_directory(self) -> None:
         """Test cleanup with empty temp directory."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch.dict(os.environ, {"HERMES_TEMP_DIR": tmpdir}):
+            with patch.object(settings, "temp_dir", tmpdir):
                 result = await _cleanup_temp_files(max_age_hours=24)
 
             assert result["deleted_files"] == 0
@@ -90,7 +91,7 @@ class TestCleanupTempFiles:
                 new_time = datetime.now(timezone.utc).timestamp() - 3600
                 os.utime(file_path, (new_time, new_time))
 
-            with patch.dict(os.environ, {"HERMES_TEMP_DIR": tmpdir}):
+            with patch.object(settings, "temp_dir", tmpdir):
                 result = await _cleanup_temp_files(max_age_hours=24)
 
             # No files should be deleted
@@ -114,7 +115,7 @@ class TestCleanupTempFiles:
             file_size = os.path.getsize(old_file)
 
             # Cleanup files older than 1 hour
-            with patch.dict(os.environ, {"HERMES_TEMP_DIR": tmpdir}):
+            with patch.object(settings, "temp_dir", tmpdir):
                 result = await _cleanup_temp_files(max_age_hours=1)
 
             assert result["deleted_files"] == 1
@@ -132,7 +133,7 @@ class TestCleanupTempFiles:
             old_time = datetime.now(timezone.utc).timestamp() - (25 * 3600)
             os.utime(test_file, (old_time, old_time))
 
-            with patch.dict(os.environ, {"HERMES_TEMP_DIR": tmpdir}):
+            with patch.object(settings, "temp_dir", tmpdir):
                 result = cleanup_temp_files(max_age_hours=24)
 
             assert result["deleted_files"] == 1

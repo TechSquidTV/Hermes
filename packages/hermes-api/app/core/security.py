@@ -473,7 +473,7 @@ def require_api_permission(
 # =============================================================================
 
 
-async def validate_sse_token(token: str, required_scope: str) -> dict[str, Any]:
+async def validate_sse_token(token: str, required_scope: str | None) -> dict[str, Any]:
     """
     Validate ephemeral SSE token.
 
@@ -515,10 +515,15 @@ async def validate_sse_token(token: str, required_scope: str) -> dict[str, Any]:
                 )
         except (ValueError, TypeError) as e:
             logger.error("Invalid expires_at format", error=str(e))
+            raise HTTPException(
+                status_code=401, detail="Invalid SSE token expiry"
+            ) from e
+    else:
+        raise HTTPException(status_code=401, detail="Missing SSE token expiry")
 
     # Check scope
     token_scope = token_data.get("scope", "")
-    if not _scope_matches(token_scope, required_scope):
+    if required_scope is not None and not _scope_matches(token_scope, required_scope):
         logger.warning(
             "Insufficient SSE token scope",
             token_scope=token_scope,
@@ -529,6 +534,7 @@ async def validate_sse_token(token: str, required_scope: str) -> dict[str, Any]:
             detail=f"Insufficient scope: {required_scope} required",
         )
 
+    await _validate_sse_origin(token_data)
     logger.info(
         "Valid SSE token",
         token_prefix=token[:12],
@@ -536,6 +542,50 @@ async def validate_sse_token(token: str, required_scope: str) -> dict[str, Any]:
         user_id=token_data.get("user_id"),
     )
     return token_data
+
+
+async def _validate_sse_origin(data: dict[str, Any]) -> None:
+    """Recheck the credential that issued the token using a fresh transaction."""
+    from app.db.base import async_session_maker
+
+    denied = HTTPException(status_code=401, detail="SSE authorization revoked")
+    kind = data.get("credential_kind")
+    if kind == "configured_api_key":
+        if data.get("credential_subject") not in {
+            f"configured_api_key:{hash_api_key(key)[:12]}" for key in settings.api_keys
+        }:
+            raise denied
+        return
+    async with async_session_maker() as session:
+        owner = await UserRepository(session).get_by_id(data.get("user_id", ""))
+        if owner is None or not owner.is_active:
+            raise denied
+        if kind == "user":
+            sid, jti = data.get("session_id"), data.get("token_id")
+            if not isinstance(sid, str) or not isinstance(jti, str):
+                raise denied
+            blacklist = TokenBlacklistRepository(session)
+            if await blacklist.is_blacklisted(sid) or await blacklist.is_blacklisted(
+                jti
+            ):
+                raise denied
+        elif kind == "db_api_key":
+            key = await ApiKeyRepository(session).get_by_id(data.get("api_key_id", ""))
+            if (
+                key is None
+                or key.user_id != owner.id
+                or not key.is_active
+                or (
+                    key.expires_at
+                    and as_utc(key.expires_at) <= datetime.now(timezone.utc)
+                )
+                or not ({"read", "admin"} & set(key.permissions or []))
+            ):
+                raise denied
+            if "read" not in (key.permissions or []) and not owner.is_admin:
+                raise denied
+        else:
+            raise denied
 
 
 def _scope_matches(token_scope: str, required_scope: str) -> bool:
@@ -603,14 +653,5 @@ async def get_current_sse_token(
         )
 
     # Basic validation - specific scope validation done by endpoint
-    from app.services.redis_progress import redis_progress_service
 
-    token_data = await redis_progress_service.get_sse_token(token)
-    if not token_data:
-        logger.warning("Invalid or expired SSE token", token_prefix=token[:6])
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired SSE token",
-        )
-
-    return token_data
+    return await validate_sse_token(token, None)

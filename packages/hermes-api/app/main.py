@@ -56,14 +56,14 @@ async def initialize_admin_user() -> None:
 
     from app.core.security import get_password_hash
     from app.db.base import async_session_maker
-    from app.db.registration import lock_user_registration
+    from app.db.registration import lock_user_changes
     from app.db.repositories import UserRepository
     from app.models.pydantic.password import Password
 
     # Get database session using the session factory directly
     async with async_session_maker() as db:
         try:
-            await lock_user_registration(db)
+            await lock_user_changes(db)
             # Check if any users exist
             user_repository = UserRepository(db)
             user_count = await user_repository.count()

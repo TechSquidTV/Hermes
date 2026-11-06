@@ -17,6 +17,10 @@ on:
         required: false
         type: string
 
+concurrency:
+  group: hermes-release-publication
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_admin_user
 from app.core.logging import get_logger
 from app.core.security import get_password_hash
+from app.db.registration import lock_user_changes
 from app.db.repositories import UserRepository
 from app.db.session import get_database_session
 from app.models.auth import AuthenticatedUser
@@ -19,6 +20,18 @@ from app.models.pydantic.password import Password
 
 router = APIRouter(prefix="/users", tags=["users"])
 logger = get_logger(__name__)
+
+
+async def _admin_change_repository(
+    session: AsyncSession, admin: AuthenticatedUser
+) -> UserRepository:
+    await lock_user_changes(session)
+    session.expire_all()
+    repository = UserRepository(session)
+    actor = await repository.get_by_id(admin["id"])
+    if actor is None or not actor.is_active or not actor.is_admin:
+        raise HTTPException(status_code=403, detail="Active admin access required")
+    return repository
 
 
 class UserListResponse(CamelCaseModel):
@@ -101,7 +114,7 @@ async def create_user_as_admin(
     This endpoint allows administrators to create user accounts
     even when public signup is disabled.
     """
-    user_repo = UserRepository(db_session)
+    user_repo = await _admin_change_repository(db_session, current_admin)
 
     # Check if username already exists
     existing_user = await user_repo.get_by_username(user_data.username)
@@ -163,7 +176,7 @@ async def update_user_admin_status(
 
     **Security Check**: Cannot demote yourself if you're the last admin.
     """
-    user_repo = UserRepository(db_session)
+    user_repo = await _admin_change_repository(db_session, current_admin)
 
     # Get target user
     user = await user_repo.get_by_id(user_id)
@@ -174,14 +187,14 @@ async def update_user_admin_status(
         )
 
     # If demoting an admin, check if they're the last admin
-    if user.is_admin and not update_data.is_admin:
+    if user.is_admin and user.is_active and not update_data.is_admin:
         # Count current admins
         from sqlalchemy import func, select
 
         from app.db.models import User
 
         result = await db_session.execute(
-            select(func.count(User.id)).where(User.is_admin)
+            select(func.count(User.id)).where(User.is_admin, User.is_active)
         )
         admin_count = result.scalar_one()
 
@@ -230,7 +243,7 @@ async def update_user_active_status(
     Allows administrators to enable or disable user accounts.
     Deactivated users cannot log in.
     """
-    user_repo = UserRepository(db_session)
+    user_repo = await _admin_change_repository(db_session, current_admin)
 
     # Get target user
     user = await user_repo.get_by_id(user_id)
@@ -246,6 +259,19 @@ async def update_user_active_status(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot deactivate your own account",
         )
+
+    if user.is_admin and user.is_active and not update_data.is_active:
+        from sqlalchemy import func, select
+
+        from app.db.models import User
+
+        count = await db_session.scalar(
+            select(func.count(User.id)).where(User.is_admin, User.is_active)
+        )
+        if count is None or count <= 1:
+            raise HTTPException(
+                status_code=400, detail="Cannot deactivate the last active admin"
+            )
 
     # Update active status
     user.is_active = update_data.is_active
@@ -285,7 +311,7 @@ async def delete_user(
     Permanently deletes a user account and all associated data.
     Cannot delete your own account.
     """
-    user_repo = UserRepository(db_session)
+    user_repo = await _admin_change_repository(db_session, current_admin)
 
     # Get target user
     user = await user_repo.get_by_id(user_id)
@@ -303,13 +329,13 @@ async def delete_user(
         )
 
     # If deleting an admin, check if they're the last admin
-    if user.is_admin:
+    if user.is_admin and user.is_active:
         from sqlalchemy import func, select
 
         from app.db.models import User
 
         result = await db_session.execute(
-            select(func.count(User.id)).where(User.is_admin)
+            select(func.count(User.id)).where(User.is_admin, User.is_active)
         )
         admin_count = result.scalar_one()
 

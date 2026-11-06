@@ -1602,6 +1602,12 @@ export interface components {
              */
             deleteTempFiles: boolean;
             /**
+             * Tempmaxagehours
+             * @description Minimum age of temporary files eligible for cleanup
+             * @default 24
+             */
+            tempMaxAgeHours: number;
+            /**
              * Maxfilestodelete
              * @description Maximum number of files to delete
              * @default 100
@@ -1624,6 +1630,18 @@ export interface components {
              * @description Number of files actually deleted
              */
             filesDeleted: number;
+            /**
+             * Recordsdeleted
+             * @description Failed download records deleted
+             * @default 0
+             */
+            recordsDeleted: number;
+            /**
+             * Recordspreviewed
+             * @description Failed download records eligible for deletion
+             * @default 0
+             */
+            recordsPreviewed: number;
             /**
              * Spacefreed
              * @description Total space freed in bytes
@@ -6357,12 +6375,12 @@ export interface operations {
     event_stream_api_v1_events_stream_get: {
         parameters: {
             query?: {
+                /** @description SSE token from query parameter */
+                token?: string | null;
                 /** @description Comma-separated list of channels (download:updates,queue:updates,system:notifications) */
                 channels?: string | null;
                 /** @description Filter to specific download ID */
                 download_id?: string | null;
-                /** @description SSE token from query parameter */
-                token?: string | null;
             };
             header?: never;
             path?: never;

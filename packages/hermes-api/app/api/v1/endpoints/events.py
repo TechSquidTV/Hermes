@@ -32,8 +32,25 @@ router = APIRouter()
 logger = get_logger(__name__)
 
 
+def _authorized_stream(
+    token: str,
+    scope: str,
+    channels: list[str],
+    filters: dict[str, object] | None = None,
+) -> EventSourceResponse:
+    async def authorize() -> None:
+        await validate_sse_token(token, scope)
+
+    return EventSourceResponse(
+        event_service.event_stream(
+            channels=channels, filters=filters, authorize=authorize
+        )
+    )
+
+
 @router.get("/stream")
 async def event_stream(
+    token: Optional[str] = Query(None),
     channels: Optional[str] = Query(
         None,
         description="Comma-separated list of channels (download:updates,queue:updates,system:notifications)",
@@ -97,7 +114,7 @@ async def event_stream(
         ]
 
     # Build filters
-    filters = {}
+    filters: dict[str, object] = {}
     if download_id:
         filters["download_id"] = download_id
 
@@ -141,11 +158,9 @@ async def event_stream(
         )
 
     # Create event stream
-    return EventSourceResponse(
-        event_service.event_stream(
-            channels=channel_list, filters=filters if filters else None
-        )
-    )
+    if not token:
+        raise HTTPException(status_code=401, detail="SSE token required")
+    return _authorized_stream(token, token_scope, channel_list, filters or None)
 
 
 @router.get("/downloads/{download_id}")
@@ -204,10 +219,11 @@ async def download_events(
         user_id=token_data.get("user_id"),
     )
 
-    return EventSourceResponse(
-        event_service.event_stream(
-            channels=["hermes:download:updates"], filters={"download_id": download_id}
-        )
+    return _authorized_stream(
+        token,
+        f"download:{download_id}",
+        ["hermes:download:updates"],
+        {"download_id": download_id},
     )
 
 
@@ -261,9 +277,7 @@ async def queue_events(
         user_id=token_data.get("user_id"),
     )
 
-    return EventSourceResponse(
-        event_service.event_stream(channels=["hermes:queue:updates"])
-    )
+    return _authorized_stream(token, "queue", ["hermes:queue:updates"])
 
 
 @router.get("/stats")
@@ -316,9 +330,7 @@ async def stats_events(
         user_id=token_data.get("user_id"),
     )
 
-    return EventSourceResponse(
-        event_service.event_stream(channels=["hermes:stats:updates"])
-    )
+    return _authorized_stream(token, "stats", ["hermes:stats:updates"])
 
 
 @router.post("/token", response_model=SSETokenResponse)
@@ -424,6 +436,15 @@ async def create_sse_token(
     await redis_progress_service.store_sse_token(
         token=sse_token.token,
         data={
+            "credential_kind": (
+                "user"
+                if principal.kind == "user"
+                else "db_api_key" if principal.api_key_id else "configured_api_key"
+            ),
+            "credential_subject": principal.subject,
+            "session_id": principal.session_id,
+            "token_id": principal.token_id,
+            "api_key_id": principal.api_key_id,
             "scope": sse_token.scope,
             "user_id": sse_token.user_id,
             "expires_at": sse_token.expires_at.isoformat(),
