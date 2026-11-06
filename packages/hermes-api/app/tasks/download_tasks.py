@@ -173,6 +173,7 @@ async def _update_download_status(
     result: dict[str, Any] | None = None,
     message: str | None = None,
     outputs: DownloadOutputs | None = None,
+    claim_pending: bool = False,
     **kwargs: object,
 ) -> bool:
     """
@@ -205,6 +206,7 @@ async def _update_download_status(
             total_bytes=total_bytes,
             download_speed=download_speed,
             eta=eta,
+            expected_status="pending" if claim_pending else None,
             **kwargs,
         )
 
@@ -323,7 +325,7 @@ async def _download_video_task(
         output_directory = resolve_download_path(output_path or settings.download_dir)
         # A cancelled/finished task may still be delivered after broker retries.
         if not await _update_download_status(
-            download_id, "downloading", started_at=started_at
+            download_id, "downloading", started_at=started_at, claim_pending=True
         ):
             return {
                 "success": False,

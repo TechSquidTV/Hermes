@@ -212,6 +212,12 @@ jobs:
 
           echo "Pushed commit and tags to main"
 
+      - name: Determine eligible release aliases
+        id: aliases
+        env:
+          VERSION: ${{ steps.new_version.outputs.version }}
+        run: python3 .github/scripts/release_aliases.py "$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4.4.1
 
@@ -227,11 +233,12 @@ jobs:
         uses: docker/metadata-action@v6.2.0
         with:
           images: ghcr.io/${{ github.repository_owner }}/hermes-app
+          flavor: latest=false
           tags: |
             type=semver,pattern={{version}},value=${{ steps.new_version.outputs.version }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ steps.new_version.outputs.version }}
-            type=semver,pattern={{major}},value=${{ steps.new_version.outputs.version }}
-            type=raw,value=latest
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.new_version.outputs.version }},enable=${{ steps.aliases.outputs.minor == 'true' }}
+            type=semver,pattern={{major}},value=${{ steps.new_version.outputs.version }},enable=${{ steps.aliases.outputs.major == 'true' }}
+            type=raw,value=latest,enable=${{ steps.aliases.outputs.latest == 'true' }}
           labels: |
             org.opencontainers.image.revision=${{ steps.release_commit.outputs.sha }}
 
@@ -254,11 +261,12 @@ jobs:
         uses: docker/metadata-action@v6.2.0
         with:
           images: ghcr.io/${{ github.repository_owner }}/hermes-api
+          flavor: latest=false
           tags: |
             type=semver,pattern={{version}},value=${{ steps.new_version.outputs.version }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ steps.new_version.outputs.version }}
-            type=semver,pattern={{major}},value=${{ steps.new_version.outputs.version }}
-            type=raw,value=latest
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.new_version.outputs.version }},enable=${{ steps.aliases.outputs.minor == 'true' }}
+            type=semver,pattern={{major}},value=${{ steps.new_version.outputs.version }},enable=${{ steps.aliases.outputs.major == 'true' }}
+            type=raw,value=latest,enable=${{ steps.aliases.outputs.latest == 'true' }}
           labels: |
             org.opencontainers.image.revision=${{ steps.release_commit.outputs.sha }}
 

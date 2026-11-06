@@ -1502,6 +1502,11 @@ export interface components {
              * @description List of individual download IDs
              */
             downloads: string[];
+            /**
+             * Faileddownloads
+             * @description IDs that could not be queued; retry only these items
+             */
+            failedDownloads: string[];
         };
         /**
          * CancelResponse

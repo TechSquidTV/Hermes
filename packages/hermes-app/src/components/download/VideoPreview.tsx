@@ -164,8 +164,10 @@ export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewPr
             response.downloads.forEach((downloadId) => taskTracker.addTask(downloadId))
           }
           
-          successfulBatches++
-          successfulVideoCount += batch.length
+          const failedCount = response.failedDownloads.length
+          if (failedCount > 0) toast.error(`${failedCount} downloads could not be queued. Retry the failed items shown in the queue.`)
+          if (failedCount < batch.length) successfulBatches++
+          successfulVideoCount += batch.length - failedCount
           
           // Small delay between batches to avoid overwhelming the server
           if (i < batches.length - 1) {
@@ -191,11 +193,10 @@ export function VideoPreview({ info, onDownload, isDownloading }: VideoPreviewPr
           `Successfully queued ${successfulVideoCount} video${successfulVideoCount !== 1 ? 's' : ''} ` +
           `in ${successfulBatches} batch${successfulBatches !== 1 ? 'es' : ''}`
         )
-        
-        invalidateQueueQueries(queryClient)
       } else {
-        toast.error('Failed to queue any batches. Please check the console for details.')
+        toast.error('No downloads could be queued. Failed items are shown in the queue.')
       }
+      invalidateQueueQueries(queryClient)
       
     } catch (error: unknown) {
       debug.error('Playlist download error:', error)

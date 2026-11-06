@@ -203,6 +203,10 @@ class BatchDownloadResponse(CamelCaseModel):
     )
     status: str = Field(..., description="Current batch status")
     downloads: List[str] = Field(..., description="List of individual download IDs")
+    failed_downloads: List[str] = Field(
+        ...,
+        description="IDs that could not be queued; retry only these items",
+    )
 
 
 class DownloadQueue(CamelCaseModel):

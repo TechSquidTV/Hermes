@@ -2,12 +2,12 @@
 Queue management endpoints.
 """
 
-import os
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.dependencies import get_repositories_from_session
 from app.core.logging import get_logger
@@ -20,7 +20,7 @@ from app.models.pydantic.download import (
     DownloadStatus,
 )
 from app.models.status import DownloadState
-from app.utils.files import relative_download_path
+from app.utils.files import relative_download_path, resolve_download_path
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -152,13 +152,27 @@ async def cleanup_orphaned_downloads(
     """
     repos = get_repositories_from_session(db_session)
 
-    # Get all downloads
-    all_downloads = await repos["downloads"].get_all(limit=10000)
     orphaned_downloads = []
-
-    for download in all_downloads:
-        if download.output_path and not os.path.exists(download.output_path):
-            orphaned_downloads.append(download)
+    last_id = ""
+    while True:
+        downloads = (
+            await db_session.scalars(
+                select(Download)
+                .options(selectinload(Download.files))
+                .where(
+                    Download.id > last_id,
+                    Download.status.in_(["completed", "failed", "cancelled"]),
+                )
+                .order_by(Download.id)
+                .limit(100)
+            )
+        ).all()
+        if not downloads:
+            break
+        for download in downloads:
+            if _is_orphaned(download):
+                orphaned_downloads.append(download)
+        last_id = downloads[-1].id
 
     if dry_run:
         return CleanupOrphanedResponse(
@@ -180,7 +194,10 @@ async def cleanup_orphaned_downloads(
     # Actually delete orphaned records
     deleted_count = 0
     for download in orphaned_downloads:
-        await repos["downloads"].delete(download.id)
+        current = await repos["downloads"].get_by_id(download.id)
+        if current is None or not _is_orphaned(current):
+            continue
+        await repos["downloads"].delete(current.id)
         logger.info(f"Cleaned up orphaned download record: {download.id}")
         deleted_count += 1
 
@@ -190,3 +207,20 @@ async def cleanup_orphaned_downloads(
         deleted_count=deleted_count,
         dry_run=False,
     )
+
+
+def _is_orphaned(download: Download) -> bool:
+    if download.status not in {"completed", "failed", "cancelled"}:
+        return False
+    paths = {file.filepath for file in download.files}
+    if download.output_path:
+        paths.add(download.output_path)
+    if not paths:
+        return False
+    for path in paths:
+        try:
+            if resolve_download_path(path).is_file():
+                return False
+        except (OSError, ValueError, RuntimeError):
+            continue
+    return True
