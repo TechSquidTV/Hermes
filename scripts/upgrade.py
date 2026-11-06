@@ -249,6 +249,8 @@ class Upgrade:
 
     def abort_before_migration(self) -> None:
         self.save(phase="aborting")
+        # Keep publishers stopped if consumers or maintenance cannot be restored.
+        # The durable aborting phase lets recovery retry these steps safely.
         running = self.compose("ps", "--status", "running", "--services").split()
         if "celery_worker" in running and self.queues:
             self.worker("resume")

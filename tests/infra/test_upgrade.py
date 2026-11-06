@@ -147,6 +147,43 @@ class UpgradeLifecycleTests(unittest.TestCase):
         self.assertNotIn(("helper", "migrate"), upgrade.actions)
         self.assertIn(("start", *SERVICES), upgrade.actions)
 
+    def test_failed_abort_cleanup_keeps_publishers_stopped_and_can_be_retried(
+        self,
+    ) -> None:
+        for failure in ("resume", "maintenance"):
+            with self.subTest(failure=failure):
+                upgrade = FakeUpgrade(self.directory, failure="backup")
+                with self.assertRaises(UpgradeError):
+                    upgrade.apply()
+                assert upgrade.state_file is not None
+                commands: list[list[str]] = []
+                cleanup_failed = False
+
+                def docker(arguments: list[str], **keywords: object) -> str:
+                    nonlocal cleanup_failed
+                    commands.append(arguments)
+                    if "ps" in arguments:
+                        return "celery_worker"
+                    if failure in arguments and not cleanup_failed:
+                        cleanup_failed = True
+                        raise UpgradeError("Injected cleanup failure")
+                    return ""
+
+                with patch("scripts.upgrade.run", side_effect=docker):
+                    with self.assertRaisesRegex(UpgradeError, "cleanup failure"):
+                        recover(upgrade.state_file, restore=False)
+                    self.assertFalse(any("start" in args for args in commands))
+                    self.assertEqual(
+                        json.loads(upgrade.state_file.read_text())["phase"],
+                        "aborting",
+                    )
+                    recover(upgrade.state_file, restore=False)
+                self.assertTrue(any("start" in args for args in commands))
+                self.assertEqual(
+                    json.loads(upgrade.state_file.read_text())["phase"],
+                    "aborted-before-migration",
+                )
+
     def test_migration_and_startup_failures_leave_recovery_record_and_no_image_rollback(
         self,
     ) -> None:
