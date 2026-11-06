@@ -162,6 +162,16 @@ def main() -> None:
                 )
                 address = compose("port", "app", "80", capture=True).strip()
                 base = f"http://{address}"
+                for route in ("/", "/index.html", "/build-id.txt", "/config.js"):
+                    with urllib.request.urlopen(
+                        f"{base}{route}", timeout=15
+                    ) as response:
+                        assert response.headers["X-Frame-Options"] == "SAMEORIGIN"
+                        assert response.headers["X-Content-Type-Options"] == "nosniff"
+                        if route != "/config.js":
+                            assert "no-store" in response.headers["Cache-Control"]
+                        if route == "/build-id.txt":
+                            uuid.UUID(response.read().decode().strip())
                 with urllib.request.urlopen(
                     f"{base}/api/v1/health/detailed", timeout=15
                 ) as response:
