@@ -13,7 +13,7 @@ function isCurrentSession(session: AccountSession | null | undefined): session i
 function assertCurrentSession(
   session: AccountSession | null | undefined
 ): asserts session is AccountSession {
-  if (!isCurrentSession(session)) throw new DOMException('Session changed', 'AbortError')
+  if (!isCurrentSession(session)) throw new DOMException('Session changed', 'SessionChangedError')
 }
 
 /** Keep mutation results, notifications, and awaiting callers inside their initiating session. */

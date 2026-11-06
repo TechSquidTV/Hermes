@@ -114,7 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await queryClient.cancelQueries({ queryKey: USER_KEY })
       const current = queryClient.getQueryData<User>(userKey(version))
       if (!current || current.id !== userId || version !== TokenStorage.getVersion()) {
-        throw new DOMException('Session changed', 'AbortError')
+        throw new DOMException('Session changed', 'SessionChangedError')
       }
       const updated = await authService.updateProfile({
         preferences: { ...current.preferences, ...preferences },

@@ -96,7 +96,7 @@ describe('session state', () => {
     act(() => {
       if (transition === 'switch') localStorage.setItem('hermes_access_token', 'B-access')
       else localStorage.clear()
-      window.dispatchEvent(new StorageEvent('storage', { key: null }))
+      window.dispatchEvent(Object.assign(new Event('storage'), { key: null }))
     })
     await waitFor(() => expect(result.current.user?.id ?? null).toBe(transition === 'switch' ? 'two' : null))
     expect(client.getMutationCache().getAll()).toHaveLength(0)
@@ -137,7 +137,7 @@ describe('session state', () => {
     vi.mocked(authService.getCurrentUser).mockResolvedValue({ ...user, id: 'two' })
     act(() => {
       localStorage.setItem('hermes_access_token', 'B-access')
-      window.dispatchEvent(new StorageEvent('storage', { key: 'hermes_session_change' }))
+      window.dispatchEvent(Object.assign(new Event('storage'), { key: 'hermes_session_change' }))
     })
     await waitFor(() => expect(result.current.auth.user?.id).toBe('two'))
     const invalidate = vi.spyOn(client, 'invalidateQueries')
@@ -148,7 +148,7 @@ describe('session state', () => {
       await pending
     })
     expect(publish).not.toHaveBeenCalled()
-    expect(rejected).toHaveBeenCalledWith(expect.objectContaining({ name: 'AbortError' }))
+    expect(rejected).toHaveBeenCalledWith(expect.objectContaining({ name: 'SessionChangedError' }))
     expect(toast.success).not.toHaveBeenCalled()
     expect(toast.error).not.toHaveBeenCalled()
     expect(invalidate).not.toHaveBeenCalled()
@@ -169,8 +169,8 @@ describe('session state', () => {
     act(() => {
       localStorage.setItem('hermes_access_token', 'rotated-access')
       localStorage.setItem('hermes_refresh_token', 'rotated-refresh')
-      window.dispatchEvent(new StorageEvent('storage', { key: 'hermes_access_token' }))
-      window.dispatchEvent(new StorageEvent('storage', { key: 'hermes_refresh_token' }))
+      window.dispatchEvent(Object.assign(new Event('storage'), { key: 'hermes_access_token' }))
+      window.dispatchEvent(Object.assign(new Event('storage'), { key: 'hermes_refresh_token' }))
     })
     expect(TokenStorage.getVersion()).toBe(version)
     expect(client.getQueryData(['settings', 'api-keys', 'one'])).toBe(cached)
@@ -191,13 +191,13 @@ describe('session state', () => {
     act(() => {
       pending = create({ name: 'private A metadata', permissions: ['read'] }).then(() => {}).catch(rejected)
       localStorage.setItem('hermes_access_token', 'B-access')
-      window.dispatchEvent(new StorageEvent('storage', { key: 'hermes_session_change' }))
+      window.dispatchEvent(Object.assign(new Event('storage'), { key: 'hermes_session_change' }))
     })
     await act(async () => { await pending })
     await waitFor(() => expect(result.current.auth.user?.id).toBe('two'))
     expect(apiClient.createApiKey).not.toHaveBeenCalled()
-    expect(rejected).toHaveBeenCalledWith(expect.objectContaining({ name: 'AbortError' }))
-    await expect(create({ name: 'stale UI', permissions: ['read'] })).rejects.toMatchObject({ name: 'AbortError' })
+    expect(rejected).toHaveBeenCalledWith(expect.objectContaining({ name: 'SessionChangedError' }))
+    await expect(create({ name: 'stale UI', permissions: ['read'] })).rejects.toMatchObject({ name: 'SessionChangedError' })
     expect(apiClient.createApiKey).not.toHaveBeenCalled()
     expect(toast.error).not.toHaveBeenCalled()
   })
@@ -222,7 +222,7 @@ describe('session state', () => {
     act(() => {
       localStorage.setItem('hermes_access_token', 'B-access')
       localStorage.setItem('hermes_refresh_token', 'B-refresh')
-      window.dispatchEvent(new StorageEvent('storage', { key: 'hermes_session_change' }))
+      window.dispatchEvent(Object.assign(new Event('storage'), { key: 'hermes_session_change' }))
     })
     expect(client.getQueryData(key)).toBeUndefined()
     expect(client.getQueryData(['admin', 'users'])).toBeUndefined()
@@ -247,7 +247,7 @@ describe('session state', () => {
     vi.mocked(authService.getCurrentUser).mockResolvedValue({ ...user, id: 'two' })
     act(() => {
       localStorage.setItem('hermes_access_token', 'B-access')
-      window.dispatchEvent(new StorageEvent('storage', { key: 'hermes_session_change' }))
+      window.dispatchEvent(Object.assign(new Event('storage'), { key: 'hermes_session_change' }))
     })
     expect(signal?.aborted).toBe(true)
     await waitFor(() => expect(result.current.auth.user?.id).toBe('two'))
@@ -264,7 +264,7 @@ describe('session state', () => {
     client.setQueryData(['settings', 'api-keys', 'one'], ['private A metadata'])
     act(() => {
       localStorage.clear()
-      window.dispatchEvent(new StorageEvent('storage', { key: null }))
+      window.dispatchEvent(Object.assign(new Event('storage'), { key: null }))
     })
     expect(result.current.isAuthenticated).toBe(false)
     expect(client.getQueryCache().getAll()).toHaveLength(1)

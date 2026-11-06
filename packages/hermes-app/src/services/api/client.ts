@@ -100,7 +100,7 @@ class ApiClient {
     if (response.status !== 401 || skipAuth) return checkResponse(response)
 
     if (version !== TokenStorage.getVersion())
-      throw new DOMException('Session changed', 'AbortError')
+      throw new DOMException('Session changed', 'SessionChangedError')
     const currentToken = TokenStorage.getAccessToken()
     if (!currentToken || headers.get('Authorization') === `Bearer ${currentToken}`) {
       await renew()

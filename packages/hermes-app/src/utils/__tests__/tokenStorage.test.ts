@@ -94,7 +94,7 @@ describe('TokenStorage', () => {
   it('notifies when another tab changes the session', () => {
     const listener = vi.fn()
     const unsubscribe = TokenStorage.subscribe(listener)
-    window.dispatchEvent(new StorageEvent('storage', { key: 'hermes_session_change' }))
+    window.dispatchEvent(Object.assign(new Event('storage'), { key: 'hermes_session_change' }))
     expect(listener).toHaveBeenCalledOnce()
     unsubscribe()
   })

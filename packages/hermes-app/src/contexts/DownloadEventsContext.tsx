@@ -52,6 +52,12 @@ export function DownloadEventsProvider({
     const previous = queryClient.getQueryData<DownloadStatus>(key)
     const status = normalizeDownloadEvent(data, previous)
     if (status) {
+      // Downloads never leave a terminal state; delayed progress must not undo
+      // the authoritative snapshot obtained after reconnecting.
+      if (previous && !isActiveDownloadStatus(previous.status)) return
+      if (previous?.status === 'processing' && status.status === 'downloading') return
+      if (previous?.status === status.status &&
+          (status.progress?.percentage ?? 0) < (previous.progress?.percentage ?? 0)) return
       // Cancel an older HTTP snapshot before applying the live event. Cancellation
       // reverts synchronously, so later events cannot be overwritten by that fetch.
       void queryClient.cancelQueries({ queryKey: key, exact: true })
