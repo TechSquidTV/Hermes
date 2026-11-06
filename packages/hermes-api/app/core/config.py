@@ -126,6 +126,7 @@ class Settings(BaseSettings):
     download_dir: str = Field(default="./downloads")
     temp_dir: str = Field(default="./temp")
     download_retention_days: int | None = Field(default=None, ge=1)
+    download_stale_after_seconds: int = Field(default=300, ge=60)
 
     # API Keys
     api_keys: list[str] = Field(default_factory=list)

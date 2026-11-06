@@ -123,10 +123,11 @@ jobs:
 
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
-        uses: codecov/test-results-action@v1.2.1
+        uses: codecov/codecov-action@v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./packages/hermes-app/junit.xml
+          report_type: test_results
 
   # Backend validation
   backend-checks:
@@ -206,10 +207,11 @@ jobs:
 
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
-        uses: codecov/test-results-action@v1.2.1
+        uses: codecov/codecov-action@v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./packages/hermes-api/junit.xml
+          report_type: test_results
 
   compose-smoke:
     needs: detect-changes

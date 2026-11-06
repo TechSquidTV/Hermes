@@ -69,7 +69,8 @@ backup/restore exercise if transferring an existing installation.
 ## Real PostgreSQL validation
 
 The migration chain includes the already-published managed-path revision
-`e7f31a92c604`, then the PostgreSQL counter revision `f2a84c6d901b`.
+`e7f31a92c604`, then the PostgreSQL counter revision `f2a84c6d901b` and the
+worker heartbeat revision `a7c4e19d82b6`.
 Run the complete upgrade online with the download filesystem mounted; the
 managed-path step intentionally rejects SQL-only generation. Counter SQL can be
 inspected separately with `alembic upgrade e7f31a92c604:f2a84c6d901b --sql`.

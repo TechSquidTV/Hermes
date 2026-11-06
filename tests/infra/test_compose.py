@@ -16,6 +16,15 @@ STACKS = ("docker-compose.yml", "docker-compose.example.yml", "docker-compose.de
 
 @unittest.skipUnless(shutil.which("docker"), "Docker Compose CLI is required")
 class ComposeConfigurationTests(unittest.TestCase):
+    def test_redis_never_evicts_broker_queues(self) -> None:
+        for stack in STACKS:
+            with self.subTest(stack=stack):
+                result = self.compose(stack)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                command = json.loads(result.stdout)["services"]["redis"]["command"]
+                policy_index = command.index("--maxmemory-policy")
+                self.assertEqual(command[policy_index + 1], "noeviction")
+
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory(prefix="hermes-compose-config-")
         self.addCleanup(self.temporary.cleanup)

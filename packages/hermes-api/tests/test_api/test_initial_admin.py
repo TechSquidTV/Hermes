@@ -119,7 +119,7 @@ class TestInitialAdminCreation:
         assert new_count == 0
 
     @pytest.mark.asyncio
-    async def test_initial_admin_not_created_with_partial_credentials(
+    async def test_initial_admin_rejects_partial_credentials(
         self, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Test that initial admin is NOT created if only partial credentials provided."""
@@ -140,7 +140,8 @@ class TestInitialAdminCreation:
         # Call the initialization function
         from app.main import initialize_admin_user
 
-        await initialize_admin_user()
+        with pytest.raises(RuntimeError, match="Initial administrator setup failed"):
+            await initialize_admin_user()
 
         # Verify no users were created (missing email)
         new_count = await user_repo.count()

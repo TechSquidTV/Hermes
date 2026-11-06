@@ -200,7 +200,9 @@ def test_counter_migration_matches_model_columns_and_has_one_head() -> None:
     from alembic.script import ScriptDirectory
 
     scripts = ScriptDirectory.from_config(Config(str(API_ROOT / "alembic.ini")))
-    assert scripts.get_heads() == ["f2a84c6d901b"]
+    assert scripts.get_heads() == ["a7c4e19d82b6"]
+    heartbeat = scripts.get_revision("a7c4e19d82b6")
+    assert heartbeat is not None and heartbeat.down_revision == "f2a84c6d901b"
     revision = scripts.get_revision("f2a84c6d901b")
     assert revision is not None
     assert revision.down_revision == "e7f31a92c604"

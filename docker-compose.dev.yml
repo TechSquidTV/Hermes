@@ -124,7 +124,7 @@ services:
       timeout: 3s
       retries: 3
       start_period: 5s
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy noeviction
 
 networks:
   hermes-network:

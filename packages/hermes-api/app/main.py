@@ -47,7 +47,7 @@ async def initialize_admin_user() -> None:
     username = settings.initial_admin_username
     email = settings.initial_admin_email
     password = settings.initial_admin_password
-    if not username or not email or not password:
+    if not any((username, email, password)):
         logger.info("No initial admin credentials configured, skipping admin creation")
         return
 
@@ -74,8 +74,13 @@ async def initialize_admin_user() -> None:
                 )
                 return
 
+            if not username or not email or not password:
+                raise ValueError(
+                    "All three initial administrator settings are required"
+                )
+
             TypeAdapter(Password).validate_python(password)
-            TypeAdapter(EmailStr).validate_python(email)
+            email = TypeAdapter(EmailStr).validate_python(email)
             # Create admin user
             await user_repository.create(
                 username=username,
@@ -93,10 +98,13 @@ async def initialize_admin_user() -> None:
                 },
             )
 
-        except Exception as e:
-            logger.error(f"Failed to create initial admin user: {e}")
+        except Exception:
+            # ValidationError includes input values, including the seed password.
+            logger.error("Initial administrator setup failed; verify configuration")
             await db.rollback()
-            raise
+            raise RuntimeError(
+                "Initial administrator setup failed; verify configuration"
+            ) from None
 
 
 @asynccontextmanager
@@ -146,13 +154,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Don't raise - allow server to start with fallback to env vars
 
     # Initialize admin user if configured
-    try:
-        await initialize_admin_user()
-    except Exception as e:
-        logger.error(f"Failed to initialize admin user: {e}")
-        # Don't raise - allow server to start even if admin creation fails
+    await initialize_admin_user()
 
-    yield
+    from app.services.worker_health import download_monitor
+
+    async with download_monitor():
+        yield
 
     # Shutdown
     logger.info("Shutting down Hermes API server...")
