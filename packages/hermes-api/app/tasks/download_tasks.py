@@ -6,8 +6,8 @@ import asyncio
 import os
 import re
 import time
+from contextlib import AsyncExitStack
 from datetime import datetime, timezone
-from threading import Event
 from typing import Any, Dict, TypedDict
 
 from app.core.config import settings
@@ -322,14 +322,14 @@ async def _download_video_task(
     output_template: str | None = None,
     **kwargs: object,
 ) -> Dict[str, Any]:
-    async with download_heartbeat(download_id) as stopped:
+    async with AsyncExitStack() as resources:
         return await _execute_download_video(
             download_id,
             url,
             format_spec,
             output_path,
             output_template,
-            stopped=stopped,
+            resources=resources,
             **kwargs,
         )
 
@@ -341,7 +341,7 @@ async def _execute_download_video(
     output_path: str | None,
     output_template: str | None,
     *,
-    stopped: Event,
+    resources: AsyncExitStack,
     **kwargs: object,
 ) -> Dict[str, Any]:
     """Core download logic."""
@@ -363,6 +363,8 @@ async def _execute_download_video(
                 "download_id": download_id,
                 "error": "Download is no longer active",
             }
+
+        stopped = await resources.enter_async_context(download_heartbeat(download_id))
 
         # Trigger download started webhook
         await _trigger_webhooks("download_started", download_id, {"url": url})

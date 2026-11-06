@@ -4,7 +4,7 @@ import asyncio
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from sqlalchemy import func, select
@@ -192,3 +192,23 @@ async def test_api_monitor_stops_its_background_work_on_shutdown(
     calls = recover.await_count
     await asyncio.sleep(0.03)
     assert recover.await_count == calls
+
+
+async def test_duplicate_delivery_never_starts_a_heartbeat_for_another_claim(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    old = datetime.now(timezone.utc) - timedelta(minutes=10)
+    record = await DownloadRepository(db_session).create(
+        "https://example.test/video",
+        status="downloading",
+        last_heartbeat_at=old,
+    )
+    download_id, url = record.id, record.url
+    heartbeat = Mock()
+    monkeypatch.setattr(download_tasks, "download_heartbeat", heartbeat)
+    assert (await download_tasks._download_video_task(download_id, url))[
+        "success"
+    ] is False
+    heartbeat.assert_not_called()
+    assert await worker_health.recover_abandoned_downloads() == [download_id]
