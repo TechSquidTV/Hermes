@@ -1,10 +1,11 @@
 #!/bin/bash
 set -e
 
-echo "Running database migrations..."
-# Use alembic directly from venv since deps are already installed
-# This avoids uv run re-installing dev dependencies
-alembic upgrade head
+if [ "${1:-}" = "celery" ]; then
+    echo "Checking worker database schema..."
+    python -m app.manage check-schema
+fi
 
-echo "Starting Hermes API..."
+# API startup owns migrations; workers never change the schema during rollout.
+echo "Starting Hermes backend..."
 exec "$@"

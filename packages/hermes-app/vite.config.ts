@@ -2,15 +2,24 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import path from 'path'
+import { randomUUID } from 'node:crypto'
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 export default defineConfig(() => {
+  const buildId = randomUUID()
   const apiTarget = process.env.HERMES_DEV_API_TARGET || 'http://localhost:8000'
   const apiTargetOriginPattern = new RegExp(`^${escapeRegExp(new URL(apiTarget).origin)}(?=/|$)`)
 
   return {
+    define: { __HERMES_BUILD_ID__: JSON.stringify(buildId) },
     plugins: [
+      {
+        name: 'hermes-build-id',
+        generateBundle() {
+          this.emitFile({ type: 'asset', fileName: 'build-id.txt', source: buildId })
+        }
+      },
       tanstackRouter({
         // Disable auto-generation in Docker due to cross-device link issues
         // Routes should be generated locally before building

@@ -6,12 +6,13 @@ import time
 from datetime import datetime, timezone
 
 import redis.asyncio as redis
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 from sqlalchemy import text
 
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.db.base import engine
+from app.db.migrations import check_schema
 from app.models.pydantic.response import (
     DetailedHealthResponse,
     HealthDependency,
@@ -31,6 +32,31 @@ async def get_health() -> HealthResponse:
         version=settings.api_version,
         environment="development" if settings.debug else "production",
     )
+
+
+@router.get(
+    "/ready",
+    response_model=DetailedHealthResponse,
+    responses={
+        503: {"model": DetailedHealthResponse, "description": "Release is not ready"}
+    },
+)
+async def get_readiness(response: Response) -> DetailedHealthResponse:
+    """Readiness requires dependencies and the exact schema for this release."""
+    health = await get_detailed_health()
+    try:
+        await check_schema()
+        health.dependencies["schema"] = HealthDependency(
+            status="healthy", message="Database schema matches release"
+        )
+    except Exception:
+        health.status = "unhealthy"
+        health.dependencies["schema"] = HealthDependency(
+            status="error", message="Database migration required"
+        )
+    if health.status != "healthy":
+        response.status_code = 503
+    return health
 
 
 @router.get("/detailed", response_model=DetailedHealthResponse)

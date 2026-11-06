@@ -11,6 +11,7 @@ from app.core.config import settings
 # Import your app's base and models
 from app.db import models  # noqa: F401
 from app.db.base import Base
+from app.db.migrations import adopt_native_schema, migration_connection
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -22,7 +23,7 @@ config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # add your model's MetaData object here
 # for 'autogenerate' support
@@ -59,6 +60,7 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
+    adopt_native_schema(connection)
     context.configure(connection=connection, target_metadata=target_metadata)
 
     with context.begin_transaction():
@@ -76,10 +78,12 @@ async def run_async_migrations() -> None:
         poolclass=pool.NullPool,
     )
 
-    async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
-
-    await connectable.dispose()
+    try:
+        async with migration_connection(connectable) as connection:
+            async with connection.begin():
+                await connection.run_sync(do_run_migrations)
+    finally:
+        await connectable.dispose()
 
 
 def run_migrations_online() -> None:

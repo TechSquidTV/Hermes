@@ -42,6 +42,7 @@ target-version = ['py311']
 [tool.isort]
 profile = "black"
 line_length = 88
+known_third_party = ["alembic"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -69,6 +70,9 @@ select = ["E", "F", "I"]
 ignore = [
     "E501",  # Line too long (handled by black)
 ]
+
+[tool.ruff.lint.isort]
+known-third-party = ["alembic"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -6,12 +6,35 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import urllib.request
 import uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+
+from scripts.upgrade import Upgrade, UpgradeError, recover  # noqa: E402
+
+PROBE_WORKER = """
+import time
+from pathlib import Path
+from app.worker import app
+@app.task(name="hermes.upgrade_probe")
+def upgrade_probe():
+    Path("/app/data/probe-started").write_text("started")
+    time.sleep(40)
+    Path("/app/data/probe-completed").write_text("completed")
+"""
+
+
+class InterruptedMigration(Upgrade):
+    def helper(self, *arguments: str) -> str:
+        result = super().helper(*arguments)
+        if arguments[0] == "migrate":
+            raise UpgradeError("Injected failure after real migrations")
+        return result
 
 
 def run(*args: str, capture: bool = False, input_text: str | None = None) -> str:
@@ -23,9 +46,7 @@ def run(*args: str, capture: bool = False, input_text: str | None = None) -> str
 
 def main() -> None:
     project = f"hermes-smoke-{uuid.uuid4().hex[:10]}"
-    images = {
-        name: f"ghcr.io/techsquidtv/hermes-{name}:{project}" for name in ("app", "api")
-    }
+    images = {name: f"hermes-smoke-{project}/{name}:1.2.3" for name in ("app", "api")}
     run(
         "docker",
         "build",
@@ -44,6 +65,8 @@ def main() -> None:
         str(ROOT / "packages/hermes-api/Dockerfile"),
         "-t",
         images["api"],
+        "--build-arg",
+        "HERMES_BUILD_VERSION=1.2.3",
         str(ROOT / "packages/hermes-api"),
     )
 
@@ -78,7 +101,12 @@ def main() -> None:
                 )
             if service == "app":
                 lines.extend(["    ports: !override", '      - "127.0.0.1::80"'])
+            if service == "celery_worker":
+                lines.append(
+                    "    command: celery -A data.upgrade_probe worker --loglevel=info --concurrency=1 --hostname=hermes-worker@%h --queues=hermes.downloads,hermes.cleanup,hermes.default"
+                )
         override.write_text("\n".join(lines) + "\n")
+        (workspace / "data/data/upgrade_probe.py").write_text(PROBE_WORKER)
 
         # Compose runs entirely from this directory, including env_file and bind mounts.
         # The operator's .env, containers, ports and data are never used.
@@ -200,6 +228,56 @@ assert result.get("dry_run") is True, result
                     workspace / "data/downloads/smoke.txt"
                 ).read_text() == "persistent media"
                 assert (workspace / "data/data/hermes.db").is_file()
+                if stack == "docker-compose.example.yml":
+                    compose(
+                        "exec",
+                        "-T",
+                        "api",
+                        "python",
+                        "-c",
+                        "from app.worker import app; app.send_task('hermes.upgrade_probe', queue='hermes.default')",
+                    )
+                    # The helper runs in the same disposable Compose project.
+                    previous_project = os.environ.get("COMPOSE_PROJECT_NAME")
+                    os.environ["COMPOSE_PROJECT_NAME"] = project
+                    try:
+                        upgrade = Upgrade(
+                            [workspace / stack, override],
+                            workspace / ".env",
+                            "1.2.3",
+                            180,
+                        )
+                        upgrade.apply(pull=False)
+                        assert (
+                            workspace / "data/data/probe-completed"
+                        ).read_text() == "completed"
+                        assert (
+                            workspace / "data/downloads/smoke.txt"
+                        ).read_text() == "persistent media"
+                        interrupted = InterruptedMigration(
+                            [workspace / stack, override],
+                            workspace / ".env",
+                            "1.2.3",
+                            180,
+                        )
+                        try:
+                            interrupted.apply(pull=False)
+                        except UpgradeError as error:
+                            assert "Injected failure" in str(error)
+                        else:
+                            raise AssertionError(
+                                "Failure injection did not stop the upgrade"
+                            )
+                        assert interrupted.state_file is not None
+                        recover(interrupted.state_file, restore=True)
+                        assert (
+                            workspace / "data/downloads/smoke.txt"
+                        ).read_text() == "persistent media"
+                    finally:
+                        if previous_project is None:
+                            os.environ.pop("COMPOSE_PROJECT_NAME", None)
+                        else:
+                            os.environ["COMPOSE_PROJECT_NAME"] = previous_project
             except BaseException:
                 compose("logs", "--no-color", "--tail", "100")
                 raise

@@ -30,8 +30,9 @@ that service being healthy. Keep the database port private to that network.
 
 ## Schema and startup
 
-Back up the database before upgrading. The image entrypoint runs `alembic upgrade
-head` and exits if migrations fail. For native installs, run from
+Back up the database before upgrading. API startup runs locked migrations and
+exits if they fail; worker/scheduler entrypoints verify the schema without
+changing it. For native installs, run from
 `packages/hermes-api` with `HERMES_SECRET_KEY` and `HERMES_DATABASE_URL` set:
 
 ```sh
@@ -40,9 +41,10 @@ uv run --locked alembic upgrade head
 uv run --locked uvicorn app.main:app
 ```
 
-Run migrations once before rolling out multiple API replicas; do not run
-concurrent Alembic upgrades. Startup's `create_all` supports fresh development
-databases but cannot upgrade an existing schema. Workers/scheduler must use the
+Use the [managed upgrade flow](UPGRADING.md) for the bundled prebuilt stack.
+API startup and online Alembic commands share a database migration lock. Native
+startup applies migrations too; recognized unversioned native schemas are
+validated before baselining. Workers/scheduler must use the
 same migrated database. Each process uses at most 10 pooled connections plus 20
 overflow connections; budget the server connection limit for all processes.
 Celery task wrappers dispose database connections before their temporary event

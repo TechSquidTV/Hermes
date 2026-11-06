@@ -49,6 +49,11 @@ with its `dry_run` option before enabling scheduled deletion. See the
 
 ## Compose scheduler and release upgrade
 
+Use the [one-command upgrade and recovery flow](UPGRADING.md) for prebuilt
+deployments. It coordinates worker draining, consistent backups, migrations and
+matching component versions. Direct `pull`/`up` remains appropriate for initial
+installation; it does not provide an upgrade backup or drain work.
+
 The bundled source, prebuilt, and development stacks now include `celery_beat`.
 It schedules temporary-file cleanup every 30 minutes and expired-token blacklist
 cleanup hourly. Media deletion stays opt-in through
@@ -243,12 +248,11 @@ The version status appears in the bottom-left of the sidebar and provides:
 ### Database Backups
 
 ```bash
-# SQLite backup
-cp data/data/hermes.db data/data/hermes.db.backup
-
-# Create timestamped backup
-cp data/data/hermes.db \
-   data/data/hermes.db.backup.$(date +%Y%m%d_%H%M%S)
+# Consistent SQLite snapshot or PostgreSQL dump; safe while the stack is running.
+# Use a new directory for each backup, and copy snapshots to separate storage.
+docker compose -f docker-compose.example.yml run --rm --no-deps \
+  --entrypoint python api -m app.manage backup \
+  /app/data/backups/manual-$(date +%Y%m%d_%H%M%S)
 ```
 
 ### File Backups
@@ -268,21 +272,26 @@ cp docker-compose.yml docker-compose.yml.backup
 #!/bin/bash
 # backup.sh
 
+set -eu
 BACKUP_DIR="/data/backups"
 DATE=$(date +%Y%m%d_%H%M%S)
 
 # Database backup
-cp data/data/hermes.db $BACKUP_DIR/db_backup_$DATE.sqlite
+docker compose -f docker-compose.example.yml run --rm --no-deps \
+  --entrypoint python api -m app.manage backup \
+  "/app/data/backups/scheduled-$DATE"
 
 # Downloads backup (incremental)
-rsync -a --delete data/downloads/ $BACKUP_DIR/downloads_backup_$DATE/
+mkdir -p "$BACKUP_DIR"
+rsync -a data/downloads/ "$BACKUP_DIR/downloads_backup_$DATE/"
 
 # Configuration backup
 cp .env $BACKUP_DIR/
 cp docker-compose.yml $BACKUP_DIR/
 
 # Cleanup old backups (keep 7 days)
-find $BACKUP_DIR -name "*" -type f -mtime +7 -delete
+# Keep pre-upgrade snapshots and recovery records until the release is accepted.
+# Apply a retention policy to scheduled backups only after testing restoration.
 ```
 
 ---

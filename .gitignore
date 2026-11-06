@@ -24,6 +24,10 @@ pids
 *.pid
 *.seed
 *.pid.lock
+.hermes-upgrades/
+.hermes-upgrade.lock
+__pycache__/
+*.pyc
 
 # Coverage directory used by tools like istanbul
 coverage/
