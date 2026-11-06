@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSSEToken } from './useSSEToken'
+import { TokenStorage } from '@/utils/tokenStorage'
 import { apiClient } from '@/services/api/client'
 import type { components } from '@/types/api.generated'
 
@@ -92,4 +93,22 @@ describe('SSE token recovery', () => {
     rerender({ scope: 'stats' })
     expect(result.current.token).toBeNull()
   })
+})
+
+it('discards an in-flight token from a previous login and never reuses it after logout', async () => {
+  let finish!: (value: components['schemas']['SSETokenResponse']) => void
+  vi.mocked(apiClient.createSSEToken)
+    .mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    .mockResolvedValue(token('new-session', 600))
+  const { result, rerender } = renderHook(({ enabled }) => useSSEToken('downloads', 600, enabled), { initialProps: { enabled: true } })
+  await advance()
+  act(() => TokenStorage.clearTokens())
+  rerender({ enabled: false })
+  await act(async () => finish(token('stale-session', 600)))
+  expect(result.current.token).toBeNull()
+  act(() => TokenStorage.setTokens({ accessToken: 'new', refreshToken: 'new' }))
+  rerender({ enabled: true })
+  expect(result.current.token).toBeNull()
+  await advance()
+  expect(result.current.token).toBe('new-session')
 })

@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DownloadEventsProvider } from '@/contexts/DownloadEventsContext'
+import { TokenStorage } from '@/utils/tokenStorage'
 import { apiClient } from '@/services/api/client'
 import type { components } from '@/types/api.generated'
 import { useDownloadProgressSSE } from './useDownloadProgressSSE'
@@ -154,8 +155,77 @@ describe('shared download progress', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(10_000)
     })
-    expect(apiClient.getDownloadStatus).toHaveBeenCalledTimes(2)
+    expect(apiClient.getDownloadStatus).toHaveBeenCalledTimes(3)
   })
+
+  it.each(['completed', 'failed', 'cancelled'] as const)(
+    'reconciles a missed %s event on reconnect before the polling interval',
+    async (status) => {
+      vi.useFakeTimers()
+      const { wrapper } = setup()
+      const { result } = renderHook(() => useDownloadProgressSSE('a'), { wrapper })
+      await act(async () => { await vi.advanceTimersByTimeAsync(10) })
+      await act(async () => {
+        Source.instances[0]!.onopen?.()
+        await vi.advanceTimersByTimeAsync(10)
+      })
+      act(() => Source.instances[0]!.onerror?.())
+      vi.mocked(apiClient.getDownloadStatus).mockResolvedValue({
+        ...snapshot('a'), status, currentFilename: status === 'completed' ? 'a.mp4' : null,
+      })
+      await act(async () => { await vi.advanceTimersByTimeAsync(1000) })
+      expect(Source.instances).toHaveLength(2)
+      await act(async () => {
+        Source.instances[1]!.onopen?.()
+        await vi.advanceTimersByTimeAsync(10)
+      })
+      expect(result.current.data?.status).toBe(status)
+      await act(async () => { await vi.advanceTimersByTimeAsync(60_000) })
+      expect(result.current.data?.status).toBe(status)
+      expect(apiClient.getDownloadStatus).toHaveBeenCalledTimes(3)
+    }
+  )
+
+  it('reconciles once per active query on initial open, excluding terminal and inactive downloads', async () => {
+    const { client, wrapper } = setup()
+    client.setQueryData(['download', 'progress', 'inactive'], snapshot('inactive'))
+    client.setQueryData(['download', 'progress', 'done'], { ...snapshot('done'), status: 'completed' })
+    vi.mocked(apiClient.getDownloadStatus).mockImplementation(async (id) => ({
+      ...snapshot(id), status: id === 'done' ? 'completed' : 'downloading',
+    }))
+    const { result } = renderHook(() => [
+      useDownloadProgressSSE('a'), useDownloadProgressSSE('a'), useDownloadProgressSSE('done'),
+      useDownloadProgressSSE('disabled', false),
+    ], { wrapper })
+    await waitFor(() => expect(result.current[0]?.data).not.toBeNull())
+    vi.mocked(apiClient.getDownloadStatus).mockClear()
+    act(() => Source.instances[0]!.onopen?.())
+    await waitFor(() => expect(apiClient.getDownloadStatus).toHaveBeenCalledOnce())
+    expect(apiClient.getDownloadStatus).toHaveBeenCalledWith('a', expect.any(AbortSignal))
+  })
+
+  it.each(['snapshot-first', 'event-first'] as const)(
+    'keeps newer live data when reconnect snapshot resolves %s',
+    async (order) => {
+      const { wrapper } = setup()
+      const { result } = renderHook(() => useDownloadProgressSSE('a'), { wrapper })
+      await waitFor(() => expect(result.current.data?.status).toBe('downloading'))
+      let finish!: (value: components['schemas']['DownloadStatus']) => void
+      vi.mocked(apiClient.getDownloadStatus).mockImplementation(() => new Promise((resolve) => {
+        finish = resolve
+      }))
+      act(() => Source.instances[0]!.onopen?.())
+      await waitFor(() => expect(finish).toBeTypeOf('function'))
+      if (order === 'snapshot-first') await act(async () => finish(snapshot('a')))
+      act(() => Source.instances[0]!.emit({
+        download_id: 'a', status: 'completed', output_path: 'a.mp4',
+      }))
+      await waitFor(() => expect(result.current.data?.status).toBe('completed'))
+      if (order === 'event-first') await act(async () => finish(snapshot('a')))
+      expect(result.current.data?.status).toBe('completed')
+      expect(result.current.data?.currentFilename).toBe('a.mp4')
+    }
+  )
 
   it('keeps completed downloads from polling after a disconnected snapshot', async () => {
     vi.useFakeTimers()
@@ -169,5 +239,37 @@ describe('shared download progress', () => {
       await vi.advanceTimersByTimeAsync(10_000)
     })
     expect(apiClient.getDownloadStatus).toHaveBeenCalledOnce()
+  })
+})
+
+describe('session isolation and event ordering', () => {
+  it.each(['local', 'cross-tab'] as const)('replaces the stream on a %s account switch and rejects old events', async (transition) => {
+    vi.mocked(apiClient.createSSEToken)
+      .mockResolvedValueOnce({ token: 'account-a', expiresAt: new Date(Date.now() + 600_000).toISOString(), scope: 'downloads', permissions: ['read'], ttl: 600 })
+      .mockResolvedValueOnce({ token: 'account-b', expiresAt: new Date(Date.now() + 600_000).toISOString(), scope: 'downloads', permissions: ['read'], ttl: 600 })
+    const { wrapper, client } = setup()
+    renderHook(() => useDownloadProgressSSE('a'), { wrapper })
+    await waitFor(() => expect(Source.instances).toHaveLength(1))
+    const old = Source.instances[0]!
+    const oldSignal = vi.mocked(apiClient.createSSEToken).mock.calls[0]?.[1]
+    act(() => {
+      if (transition === 'local') TokenStorage.setTokens({ accessToken: 'b', refreshToken: 'b' })
+      else window.dispatchEvent(Object.assign(new Event('storage'), { key: 'hermes_session_change' }))
+    })
+    await waitFor(() => expect(Source.instances).toHaveLength(2))
+    expect(old.close).toHaveBeenCalled()
+    expect(oldSignal?.aborted).toBe(true)
+    expect(Source.instances[1]?.url).toContain('account-b')
+    act(() => old.emit({ download_id: 'private-a', status: 'completed' }))
+    expect(client.getQueryData(['download', 'progress', 'private-a'])).toBeUndefined()
+  })
+
+  it('does not regress a completed HTTP snapshot when delayed progress arrives', async () => {
+    vi.mocked(apiClient.getDownloadStatus).mockResolvedValue({ ...snapshot('a'), status: 'completed' })
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useDownloadProgressSSE('a'), { wrapper })
+    await waitFor(() => expect(result.current.data?.status).toBe('completed'))
+    act(() => Source.instances[0]!.emit({ download_id: 'a', status: 'downloading', progress: { percentage: 5 } }))
+    expect(result.current.data?.status).toBe('completed')
   })
 })

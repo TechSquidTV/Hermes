@@ -5,6 +5,7 @@ import { useSSEToken } from '@/hooks/useSSEToken'
 import { getApiBaseUrl } from '@/lib/config'
 import { type DownloadEvent, normalizeDownloadEvent } from '@/lib/downloadEvents'
 import { scheduleLiveInvalidation } from '@/lib/queryClient'
+import { isActiveDownloadStatus } from '@/lib/queueData'
 import type { components } from '@/types/api.generated'
 
 type DownloadStatus = components['schemas']['DownloadStatus']
@@ -29,13 +30,34 @@ export function DownloadEventsProvider({
   const { token, error: tokenError, retry } = useSSEToken('downloads', 600, enabled)
   const url = token ? `${getApiBaseUrl()}/events/stream?token=${encodeURIComponent(token)}` : null
   const { data, isConnected, isReconnecting, reconnectAttempts, error, reconnect } =
-    useSSE<DownloadEvent>(url, OPTIONS)
+    useSSE<DownloadEvent>(url, {
+      ...OPTIONS,
+      onOpen: () => {
+        if (!enabled) return
+        // Pub/Sub cannot replay missed events. Reconcile observed, nonterminal
+        // downloads on every open, even when their cached snapshot is fresh.
+        void queryClient.refetchQueries({
+          queryKey: ['download', 'progress'],
+          type: 'active',
+          predicate: (query) => {
+            const status = query.state.data as DownloadStatus | undefined
+            return !status || isActiveDownloadStatus(status.status)
+          },
+        })
+      },
+    })
   useEffect(() => {
     if (!enabled || !data?.download_id) return
     const key = ['download', 'progress', data.download_id] as const
     const previous = queryClient.getQueryData<DownloadStatus>(key)
     const status = normalizeDownloadEvent(data, previous)
     if (status) {
+      // Downloads never leave a terminal state; delayed progress must not undo
+      // the authoritative snapshot obtained after reconnecting.
+      if (previous && !isActiveDownloadStatus(previous.status)) return
+      if (previous?.status === 'processing' && status.status === 'downloading') return
+      if (previous?.status === status.status &&
+          (status.progress?.percentage ?? 0) < (previous.progress?.percentage ?? 0)) return
       // Cancel an older HTTP snapshot before applying the live event. Cancellation
       // reverts synchronously, so later events cannot be overwritten by that fetch.
       void queryClient.cancelQueries({ queryKey: key, exact: true })

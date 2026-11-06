@@ -100,7 +100,7 @@ class ApiClient {
     if (response.status !== 401 || skipAuth) return checkResponse(response)
 
     if (version !== TokenStorage.getVersion())
-      throw new DOMException('Session changed', 'AbortError')
+      throw new DOMException('Session changed', 'SessionChangedError')
     const currentToken = TokenStorage.getAccessToken()
     if (!currentToken || headers.get('Authorization') === `Bearer ${currentToken}`) {
       await renew()
@@ -312,8 +312,8 @@ class ApiClient {
     })
   }
 
-  async getApiKeys(): Promise<ApiKeyListResponse[]> {
-    return this.request<ApiKeyListResponse[]>('/auth/api-keys')
+  async getApiKeys(signal?: AbortSignal): Promise<ApiKeyListResponse[]> {
+    return this.request<ApiKeyListResponse[]>('/auth/api-keys', { signal })
   }
 
   async revokeApiKey(apiKeyId: string): Promise<{ message: string }> {

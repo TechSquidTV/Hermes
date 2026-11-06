@@ -20,7 +20,7 @@ class AuthService {
       skipAuth: true,
       body: JSON.stringify(credentials),
     })
-    if (action !== this.action) throw new DOMException('Authentication changed', 'AbortError')
+    if (action !== this.action) throw new DOMException('Authentication changed', 'SessionChangedError')
     TokenStorage.setTokens(response)
     return response
   }

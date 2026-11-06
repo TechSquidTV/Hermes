@@ -20,7 +20,7 @@ async function exchangeRefreshToken(refreshToken: string, version: number): Prom
     )
     const tokens: TokenResponse = await response.json()
     if (TokenStorage.getRefreshToken() !== refreshToken || TokenStorage.getVersion() !== version) {
-      throw new DOMException('Session changed during token refresh', 'AbortError')
+      throw new DOMException('Session changed during token refresh', 'SessionChangedError')
     }
     TokenStorage.setTokens(tokens, false)
     return tokens
