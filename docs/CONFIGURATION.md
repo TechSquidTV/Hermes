@@ -44,7 +44,7 @@ moved; update bookmarks and clients that read the schema.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HERMES_DATABASE_URL` | `sqlite+aiosqlite:///./data/hermes.db` | Async SQLite database URL. SQLite is the supported bundled database. |
+| `HERMES_DATABASE_URL` | `sqlite+aiosqlite:///./data/hermes.db` | Async SQLite or PostgreSQL URL. SQLite is the bundled default; see [PostgreSQL](POSTGRESQL.md). |
 | `HERMES_DATABASE_ECHO` | `false` | SQL query logging. |
 | `HERMES_REDIS_URL` | `redis://localhost:6379` | Complete Redis URL, shared by Celery and application services. Compose defaults to the `redis` service. |
 
@@ -92,7 +92,7 @@ The bundled stacks run one `celery_beat` scheduler. It enqueues temporary-file
 cleanup every 30 minutes (files older than 24 hours) and expired token-blacklist
 cleanup hourly. It schedules media retention only when
 `HERMES_DOWNLOAD_RETENTION_DAYS` is set. Preview retention with the administrative
-cleanup API's `dry_run` option before enabling it. Failed file deletions keep
+cleanup API's `dryRun` JSON field before enabling it. Failed file deletions keep
 their download records. Never run multiple schedulers for the same deployment.
 
 Scheduler state persists in `/app/data/celerybeat-schedule*`. API startup repairs
@@ -120,7 +120,7 @@ reported instead of silently deleting queued work.
 | `HERMES_MAX_LOGIN_ATTEMPTS` | `5` | Requests per client, per authentication endpoint, per window. |
 | `HERMES_LOGIN_ATTEMPT_WINDOW_MINUTES` | `15` | Budget window, minimum one minute. |
 | `HERMES_TRUSTED_PROXY_HOSTS` | Empty list | Exact trusted proxy IPs or resolvable hostnames; Compose defaults to `app`. |
-| `HERMES_RATE_LIMIT_PER_MINUTE` | `60` | Configuration API value; authentication uses the explicit budgets above. |
+| `HERMES_RATE_LIMIT_PER_MINUTE` | `60` | Reserved setting; no global request limiter consumes it. Authentication uses the explicit budgets above. |
 
 Forwarded client addresses are trusted only from configured proxies.
 

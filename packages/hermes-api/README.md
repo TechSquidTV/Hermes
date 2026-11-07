@@ -1,334 +1,180 @@
 # Hermes API
 
-A production-ready video downloading API built with FastAPI, yt-dlp, and modern Python async patterns.
+FastAPI service for metadata extraction, background video downloads, queue
+management, and managed media delivery. Celery runs downloads and maintenance
+jobs; Redis supplies the broker, progress events, and authentication budgets.
+SQLite is the default database, with PostgreSQL available as an explicit opt-in.
 
-## ✨ Features
+## Run with Docker
 
-- 🎥 **Video Downloads**: Download videos from YouTube and 1000+ other sites using yt-dlp, with bundled EJS support and Node-powered JavaScript challenge solving in Docker
-- 📦 **Batch Processing**: Queue multiple downloads for background processing
-- ⚡ **Async Architecture**: Built on FastAPI with async/await throughout
-- 🔄 **Background Tasks**: Celery-powered background job processing
-- 📊 **Queue Management**: Monitor and manage download queues
-- 🗄️ **Database Tracking**: SQLAlchemy for download history and metadata
-- 🔒 **Authentication**: API key and JWT token support
-- 📝 **Auto Documentation**: Interactive Swagger UI and ReDoc
-- 🧪 **Well Tested**: Comprehensive test suite with pytest
-- 🐳 **Docker Ready**: Full Docker and Docker Compose support
-- 📊 **Structured Logging**: Production-ready logging with structlog
+Use the repository's [quick start](../../README.md#quick-start) for the complete
+stack or [contributing guide](../../docs/CONTRIBUTING.md) for hot reload. Run
+Compose from the repository root. The production stack exposes the app on port
+3000 and keeps the API internal; the development stack also exposes the API on
+port 8000.
 
-## Download format default change
+| Documentation | Production stack | Development API |
+| --- | --- | --- |
+| Swagger UI | [API docs](http://localhost:3000/api/v1/docs) | [API docs](http://localhost:8000/api/v1/docs) |
+| ReDoc | [ReDoc](http://localhost:3000/api/v1/redoc) | [ReDoc](http://localhost:8000/api/v1/redoc) |
+| OpenAPI | [Schema](http://localhost:3000/api/v1/openapi.json) | [Schema](http://localhost:8000/api/v1/openapi.json) |
 
-The default format and the UI's **Best Quality** option use
-`bestvideo*+bestaudio/best`, matching yt-dlp's normal selection. This supports
-YouTube videos that only provide separate video and audio streams. FFmpeg is
-required to merge these streams and is already bundled in the Docker image.
+These live documents describe the full request and response contracts. See
+[API conventions](docs/API_CONVENTIONS.md) for JSON field naming.
 
-**Breaking behavior change:** downloads that omit a format can select higher
-resolutions and produce larger files than the old `best` default. Explicit
-format selectors retain their yt-dlp meaning; `best` requests a pre-merged
-stream and can fail when none exists. Existing queued jobs retain their stored
-selector and should be recreated to use the new default.
+## Native development
 
-## 🚀 Quick Start
+Install Python 3.11+, uv, Redis, and FFmpeg. For yt-dlp JavaScript challenge
+solving, install a supported JavaScript runtime; Docker includes Node 26.
 
-### Using uv (Recommended)
+From `packages/hermes-api`:
 
 ```bash
-# Install uv
-curl -LsSf https://astral.sh/uv/install.sh | sh
+uv sync --locked --all-groups
+mkdir -p data downloads temp
 
-# Install dependencies
-uv sync
-
-# Install FFmpeg for merging separate video/audio streams.
-# Optional: install Node.js 20+ for yt-dlp EJS challenge solving.
-# The Docker image already includes Node 26.
-node --version
-
-# Start Redis
-redis-server &
-
-# Run the API
-uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# In another terminal, start Celery worker
-uv run celery -A app.tasks.celery_app worker --loglevel=info --concurrency=1 --hostname=hermes-worker@%h --queues=hermes.downloads,hermes.cleanup,hermes.default
+# Export the same settings in each API, worker, and scheduler terminal.
+# Set HERMES_SECRET_KEY to a generated value and reuse it across processes.
+export HERMES_SECRET_KEY=replace-with-your-generated-secret
+export HERMES_DATABASE_URL=sqlite+aiosqlite:///./data/hermes.db
+export HERMES_REDIS_URL=redis://localhost:6379/0
+export HERMES_DOWNLOAD_DIR="$PWD/downloads"
+export HERMES_TEMP_DIR="$PWD/temp"
 ```
 
-### Using Docker
+Generate the secret with
+`python3 -c "import secrets; print(secrets.token_urlsafe(32))"`. The Python app
+does not load the root `.env` automatically. See the
+[configuration guide](../../docs/CONFIGURATION.md#docker-defaults-and-native-development)
+for Docker versus native settings.
+
+Start Redis separately, then launch the API:
 
 ```bash
-docker compose up -d
+redis-server
 ```
 
-The API will be available at http://localhost:8000
+```bash
+uv run --locked uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
 
-## 📖 Documentation
+API startup applies database migrations. Once it is ready, start the worker and
+one scheduler in separate terminals with the same settings and working directory:
 
-- **API Docs**: http://localhost:8000/docs (Swagger UI)
-- **Alternative Docs**: http://localhost:8000/redoc (ReDoc)
-- **OpenAPI JSON**: http://localhost:8000/openapi.json (auto-generated)
-- **Quick Start Guide**: [QUICKSTART.md](./QUICKSTART.md)
-- **Implementation Status**: [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md)
-- **Implementation Plan**: [VideoDownloader_Implementation_Plan.md](../../docs/VideoDownloader_Implementation_Plan.md)
+```bash
+uv run --locked celery -A app.worker worker --loglevel=info --concurrency=1 --queues=hermes.downloads,hermes.cleanup,hermes.default
+```
 
-## 🎯 API Endpoints
+```bash
+uv run --locked celery -A app.worker beat --loglevel=info --schedule=./data/celerybeat-schedule
+```
 
-### Health & Info
-- `GET /health` - Basic health check
-- `GET /api/v1/health/` - Detailed health check
-- `GET /api/v1/info/` - Extract video information
+Worker and scheduler processes require the migrated schema. Do not run native
+processes alongside Compose services against the same deployment. PostgreSQL
+worker-pool requirements are covered in the [database guide](../../docs/POSTGRESQL.md).
 
-### Downloads
-- `POST /api/v1/download/` - Start a download
-- `POST /api/v1/download/batch` - Batch downloads
-- `GET /api/v1/download/{id}` - Check status
-- `POST /api/v1/download/{id}/cancel` - Cancel download
+## Authenticated usage
 
-### Management
-- `GET /api/v1/queue/` - View download queue
-- `GET /api/v1/files/` - List files
-- `DELETE /api/v1/files/` - Delete files
+Sign up through the web app, then create an API key in settings. Send that key
+as `Authorization: Bearer <key>`; user access JWTs use the same header. Metadata
+lookup requires `read` permission and download creation requires `download`.
+User administration, cleanup, and file deletion require administrator access.
+API-key management itself requires a user session.
 
-## 📝 Usage Example
+This standalone Python example uses HTTPX from the API environment. Set
+`HERMES_API_KEY` in the launching environment first:
 
 ```python
+import asyncio
+import os
+
 import httpx
 
-# Get video information
-async with httpx.AsyncClient() as client:
-    response = await client.get(
-        "http://localhost:8000/api/v1/info/",
-        params={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}
-    )
-    info = response.json()
-    print(f"Title: {info['title']}")
-    print(f"Duration: {info['duration']}s")
 
-# Start a download
-    response = await client.post(
-        "http://localhost:8000/api/v1/download/",
-        json={
-            "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-            "format": "best",
-            "download_subtitles": True
-        },
-        headers={"Authorization": "Bearer your-api-key"}
-    )
-    download = response.json()
-    print(f"Download ID: {download['download_id']}")
-    print(f"Status: {download['status']}")
+async def main() -> None:
+    async with httpx.AsyncClient(
+        base_url="http://localhost:3000/api/v1/",
+        headers={"Authorization": f"Bearer {os.environ['HERMES_API_KEY']}"},
+        timeout=30,
+    ) as client:
+        response = await client.get(
+            "info/", params={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}
+        )
+        response.raise_for_status()
+        print(response.json()["title"])
+
+        response = await client.post(
+            "download/",
+            json={
+                "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                "downloadSubtitles": True,
+            },
+        )
+        response.raise_for_status()
+        download = response.json()
+        print(download["downloadId"], download["status"], download["message"])
+
+
+asyncio.run(main())
 ```
 
-## 🛠️ Development
+Use port 8000 for native or direct development API access. A successful HTTP
+response does not guarantee broker publication: inspect the returned `status`
+and `message`. Poll `GET /api/v1/download/{id}` or use scoped SSE credentials to
+follow progress. Batch responses identify individual publication failures in
+`failedDownloads`; retry those items rather than resubmitting successful ones.
 
-### Project Structure
+## Endpoint overview
 
-```
-hermes-api/
-├── app/
-│   ├── api/v1/           # API endpoints
-│   ├── core/             # Configuration, logging, security
-│   ├── db/               # Database models and repositories
-│   ├── models/pydantic/  # Request/response models
-│   ├── services/         # Business logic
-│   ├── tasks/            # Celery background tasks
-│   └── main.py           # FastAPI application
-├── data/                 # SQLite database (mounted from host)
-├── downloads/            # Downloaded files (mounted from host)
-├── temp/                 # Temporary files (mounted from host)
-├── tests/                # Test suite
-├── docker/               # Docker configuration
-└── pyproject.toml        # Project dependencies (uv)
-```
+| Area | Selected routes |
+| --- | --- |
+| Health | `GET /api/v1/health/`, `GET /api/v1/health/ready` |
+| Metadata | `GET /api/v1/info/` |
+| Downloads | `POST /api/v1/download/`, `POST /api/v1/download/batch`, `GET /api/v1/download/{id}`, `POST /api/v1/download/{id}/cancel` |
+| Queue | `GET /api/v1/queue/` |
+| Files | `GET /api/v1/files/`, `GET /api/v1/files/download`, `DELETE /api/v1/files/` |
+| Authentication | `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout` |
+| API keys | `POST /api/v1/auth/api-keys`, `GET /api/v1/auth/api-keys`, `DELETE /api/v1/auth/api-keys/{id}` |
+| Live events | `POST /api/v1/events/token`, `GET /api/v1/events/stream` |
 
-**Note:** The `data/`, `downloads/`, and `temp/` directories are mounted from the host machine for persistence and easy access to files.
+Use Swagger UI for route parameters, permissions, and additional endpoints.
+Refresh tokens are single-use: serialize refresh requests and store both
+replacement tokens. Browser event streams use short-lived scoped SSE tokens.
 
-### Running Tests
+## Download defaults and storage
+
+The default format and the UI's **Best Quality** option use
+`bestvideo*+bestaudio/best`. FFmpeg merges separate streams and is bundled in
+Docker.
+
+**Breaking behavior change:** omitting a format can select higher resolutions
+and larger files than the old `best` default. Explicit selectors keep their
+yt-dlp meaning; `best` requests a pre-merged stream and may fail when none exists.
+Existing queued jobs retain their selector and must be recreated to use the new
+default.
+
+Output directories must stay inside `HERMES_DOWNLOAD_DIR`, shared by API and
+workers. Status and file responses use paths relative to that root. The worker
+registers media, subtitles, and thumbnails as managed deliverables; see
+[managed files](../../docs/MANAGED_FILES.md). Media retention is opt-in.
+
+## Development checks
+
+Run from `packages/hermes-api`:
 
 ```bash
-# All tests
-uv run pytest tests/ -v
-
-# With coverage
-uv run pytest tests/ --cov=app --cov-report=html
-
-# Specific test file
-uv run pytest tests/test_api/test_health.py -v
+uv run --locked pytest
+uv run --locked black --check app/ tests/
+uv run --locked isort --check-only app/ tests/
+uv run --locked ruff check app/ tests/
+uv run --locked python -m mypy --explicit-package-bases app/ tests/
 ```
 
-### Code Quality
+Mypy runs in strict mode across the application and tests. Use SQLAlchemy
+`Mapped` attributes, typed fixtures, and explicit optional values. Celery and
+Kombu imports are confined to library boundaries. Local yt-dlp contracts live
+in [typings](typings/README.md); update them when changing that integration.
 
-```bash
-# Format code
-uv run --locked black app/ tests/ typings/
-uv run --locked isort app/ tests/ typings/
-
-# Type checking
-uv run --locked python -m mypy app/ tests/
-
-# Linting
-uv run --locked ruff check app/ tests/ typings/
-```
-
-Mypy runs in strict mode for the entire application and test suite, with the
-Pydantic plugin checking model constructors. Use SQLAlchemy `Mapped` attributes
-and explicit optional values; keep fixtures and task signatures typed. There are
-no project-wide error-code suppressions.
-
-The untyped Celery and Kombu imports are confined to library boundaries. The
-shared Celery task decorator preserves callable signatures, and the yt-dlp
-interfaces used by Hermes have local stubs in [`typings/`](typings/README.md).
-Update those contracts when upgrading yt-dlp.
-
-## 🏗️ Architecture
-
-- **FastAPI**: Async web framework with automatic OpenAPI docs
-- **yt-dlp**: Video extraction and downloading
-- **SQLAlchemy**: Async ORM for database operations
-- **Celery**: Distributed task queue for background processing
-- **Redis**: Message broker and caching
-- **Pydantic**: Data validation and settings management
-- **structlog**: Structured logging
-- **pytest**: Testing framework
-
-## 🔧 Configuration
-
-Configuration via environment variables (prefix: `HERMES_`):
-
-```bash
-HERMES_DEBUG=false
-HERMES_DATABASE_URL=sqlite+aiosqlite:///./hermes.db
-HERMES_REDIS_URL=redis://localhost:6379/0
-HERMES_SECRET_KEY=your-secret-key-here
-HERMES_DOWNLOAD_DIR=./downloads
-HERMES_TEMP_DIR=./temp
-HERMES_RATE_LIMIT_PER_MINUTE=60
-```
-
-See [QUICKSTART.md](./QUICKSTART.md) for all configuration options.
-
-## 🐳 Docker Deployment
-
-The project includes Docker and Docker Compose configurations.
-
-### Preparing Volume Directories
-
-Before running the Docker container, prepare the required directories with proper permissions. The container runs as a non-root user (default UID 1000), so mounted volumes need to be writable:
-
-```bash
-# Create required directories
-mkdir -p ./data ./downloads ./temp
-
-# Set ownership for container user (default UID 1000)
-sudo chown -R 1000:1000 ./data ./downloads ./temp
-
-# Or match your current host user (useful for development)
-sudo chown -R $(id -u):$(id -g) ./data ./downloads ./temp
-
-# Or use permissive permissions (less secure)
-chmod -R 777 ./data ./downloads ./temp
-```
-
-**Note:** To use your host user's UID/GID with the second option, you can customize the Docker image at build time using `--build-arg USER_UID=$(id -u) --build-arg USER_GID=$(id -g)` if needed.
-
-**Volume Mounts:**
-- `/app/data` - SQLite database and persistent data
-- `/app/downloads` - Downloaded video files
-- `/app/temp` - Temporary files during download
-
-### Running with Docker
-
-```bash
-# Development
-docker compose up -d
-
-# Production build
-docker build -f docker/Dockerfile -t hermes-api:latest .
-
-# Run production container
-docker run -d \
-  -p 8000:8000 \
-  -e HERMES_SECRET_KEY=your-secret-key \
-  -e HERMES_DATABASE_URL=sqlite+aiosqlite:///./data/hermes.db \
-  -v $(pwd)/downloads:/app/downloads \
-  -v $(pwd)/temp:/app/temp \
-  -v $(pwd)/data:/app/data \
-  hermes-api:latest
-```
-
-### Docker Compose Example
-
-```yaml
-services:
-  hermes-api:
-    image: ghcr.io/techsquidtv/hermes-api:latest
-    environment:
-      - HERMES_SECRET_KEY=${HERMES_SECRET_KEY}
-      - HERMES_DATABASE_URL=sqlite+aiosqlite:///./data/hermes.db
-      - HERMES_REDIS_URL=redis://redis:6379
-      - HERMES_ALLOWED_ORIGINS=https://your-domain.com
-    volumes:
-      - ./services/hermes/downloads:/app/downloads
-      - ./services/hermes/temp:/app/temp
-      - ./services/hermes/data:/app/data
-    depends_on:
-      - redis
-```
-
-## 📊 Current Status
-
-✅ **Phase 1-6 Complete** - Foundation fully implemented
-
-- Core API functionality
-- Database layer
-- Background task processing
-- Security & authentication
-- Testing infrastructure
-- Documentation
-
-See [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md) for detailed status.
-
-## 🗺️ Roadmap
-
-### Next Up
-- [ ] Expand test coverage
-- [ ] Webhook system implementation
-- [ ] Storage management features
-- [ ] Analytics & metrics
-- [ ] Cloud storage integration
-
-### Future
-- [ ] WebSocket support for real-time updates
-- [ ] Advanced playlist handling
-- [ ] Scheduled downloads
-- [ ] User management system
-- [ ] Rate limiting per user
-- [ ] Multi-tenancy support
-
-## 🤝 Contributing
-
-Contributions are welcome! Please:
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
-## 📄 License
-
-See LICENSE file for details.
-
-## 🙏 Acknowledgments
-
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) - The amazing video downloader
-- [FastAPI](https://fastapi.tiangolo.com/) - Modern Python web framework
-- [Celery](https://docs.celeryq.dev/) - Distributed task queue
-
----
-
-Built with ❤️ using FastAPI and yt-dlp
-
-## PostgreSQL and SQLite
-
-Both are supported database backends. See [database deployment and validation](../../docs/POSTGRESQL.md) for connection URLs, migrations, TLS, and real PostgreSQL integration tests.
+See [testing](tests/README.md), [configuration](../../docs/CONFIGURATION.md),
+[deployment](../../docs/DEPLOYMENT.md), and [upgrades](../../docs/UPGRADING.md).
+Hermes is licensed under [AGPL-3.0](../../LICENSE).

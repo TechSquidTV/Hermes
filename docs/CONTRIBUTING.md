@@ -1,312 +1,159 @@
-# 🤝 Contributing to Hermes
+# Contributing to Hermes
 
-Thank you for considering contributing to Hermes! We welcome contributions from developers of all skill levels. This guide will help you get started and ensure your contributions meet our quality standards.
+Start work from current `main` and open pull requests back to `main`. Releases
+are manually dispatched after the combined changes are validated. Both packages
+share one version; see the [release process](RELEASE_PROCESS.md).
 
-## 🎯 Quick Start
+## Prerequisites
 
-1. **Clone and setup**
-   ```bash
-   git clone https://github.com/techsquidtv/hermes.git
-   cd hermes
+- Docker with Compose 2.24.4+ for the bundled development stack.
+- Node.js 22.22.2+ (22.x), 24.15+ (24.x), or 26+; Docker and CI use Node 26.
+- pnpm 12.18.0, pinned in the root `package.json` through Corepack.
+- Python 3.11+ and uv for native backend work; Docker and CI use Python 3.15.
+- FFmpeg for native downloads and audio-conversion tests. Native yt-dlp challenge
+  solving also needs a supported JavaScript runtime; the Docker image includes Node.
 
-   # Install dependencies
-   pnpm install
+## Set up the repository
 
-   # Set up environment
-   cp .env.example .env
-   # Edit .env and set HERMES_SECRET_KEY (use pnpm security:generate-key)
-   ```
+```bash
+git clone https://github.com/TechSquidTV/Hermes.git hermes
+cd hermes
 
-2. **Start development**
-   ```bash
-   pnpm dev
-   ```
+# Install the repository's pinned Corepack version and enable pnpm.
+npm install --global "corepack@$(node -p 'require("./package.json").devDependencies.corepack')"
+corepack enable pnpm
+pnpm install --frozen-lockfile
 
-3. **Access the app**
-   - Web App: http://localhost:5173
-   - API: http://localhost:8000
-   - API Docs: http://localhost:5173/api/v1/docs
+cp .env.example .env
+# Generate a secret, then set HERMES_SECRET_KEY in .env.
+python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 
-## 🌳 Branch Strategy
+mkdir -p data/downloads data/temp data/data
+sudo chown -R 1000:1000 data
+```
 
-Create work branches from current `main` and open pull requests back to `main`.
-Every PR must pass the required CI checks before merging. Production releases
-are manually dispatched from `main` after the combined changes are validated.
+For a different host owner, set `USER_UID` and `USER_GID` in `.env`, match the
+directory ownership to them, and rebuild all backend services together. See
+[configuration](CONFIGURATION.md) for environment settings.
+
+## Development with Docker
+
+Run these commands from the repository root:
+
+```bash
+pnpm dev          # Build and start the hot-reload stack.
+pnpm dev:logs     # Follow logs.
+pnpm dev:down     # Stop the stack.
+```
+
+| Service | Development URL |
+| --- | --- |
+| App | [localhost:5173](http://localhost:5173) |
+| API docs through Vite | [Swagger UI](http://localhost:5173/api/v1/docs) |
+| Direct API | [Readiness check](http://localhost:8000/api/v1/health/ready) |
+| Redis | `localhost:6379` |
+
+Vite proxies `/api/*` to the API. The API, worker, and scheduler share the same
+database and mounted storage. Only one scheduler should run for a deployment.
+Stop this stack before starting native processes on the same ports or database.
+
+## Native development
+
+### Backend
+
+Follow the [API setup](../packages/hermes-api/README.md#native-development) to
+install dependencies, configure local paths, and start the API, worker, and
+scheduler. Native processes need settings exported in each terminal; the root
+`.env` is not automatically loaded by the Python app.
+
+### Frontend
+
+With a native API listening on port 8000, run from the repository root:
+
+```bash
+pnpm dev:frontend
+```
+
+Vite defaults to proxying `/api` to `http://localhost:8000`. Set
+`HERMES_DEV_API_TARGET` in the launching environment for a different upstream.
+Keep the browser-facing `VITE_API_BASE_URL=/api/v1` for same-origin requests.
+See the [frontend guide](../packages/hermes-app/README.md).
+
+## Checks and tests
+
+Install backend development dependencies before running native checks:
+
+```bash
+cd packages/hermes-api
+uv sync --locked --all-groups
+```
+
+Run the following from the repository root:
+
+| Command | Purpose |
+| --- | --- |
+| `pnpm pre-check` | API and frontend checks, both test suites, and all three Docker builds |
+| `pnpm pre-check:api` | Backend formatting, lint, mypy, and pytest |
+| `pnpm pre-check:app` | Frontend lint, build, types, and Vitest |
+| `pnpm format` | Apply frontend lint fixes and Python Black/isort formatting |
+| `pnpm lint` | Frontend and backend lint |
+| `pnpm type-check` | Frontend TypeScript checks |
+| `pnpm test:all` | Frontend and backend tests |
+| `pnpm generate:types` | Export OpenAPI from the Python app and regenerate frontend types |
+
+Use checks appropriate to the change. Before releasing, run `pnpm pre-check`
+against the combined source. CI selects jobs by changed paths and requires the
+`pr-checks-complete` summary check. Package documentation changes also match
+their package's CI paths.
+
+The backend uses strict mypy, Black, isort, and Ruff. The frontend uses strict
+TypeScript and ESLint. Reuse existing models and helpers, and use generated API
+schemas instead of duplicating request and response types. Animation imports
+use `motion/react`. TypeScript stays below version 7 until the ESLint and OpenAPI
+tooling supports its compiler API.
+
+See the [API test guide](../packages/hermes-api/tests/README.md),
+[SDK guide](../packages/hermes-app/SDK_GUIDE.md), and
+[dependency maintenance guide](DEPENDENCY_MAINTENANCE.md) for focused workflows.
+
+## Pull request workflow
 
 ```bash
 git switch main
 git pull --ff-only origin main
-git switch -c fix/describe-the-change
+git switch -c docs/describe-the-change
+
+# Make changes and run the relevant checks, then stage the intended files.
+git add README.md
+git commit -m "docs(readme): clarify setup instructions"
+git push -u origin docs/describe-the-change
 ```
 
-An optional `develop` branch and preview-image workflow remain available for
-future staging use, but that branch does not currently exist on the remote and
-is not required for contributions. Test unreleased changes with source builds.
-
-## 🐳 Development Workflow
-
-### Essential Commands
-
-```bash
-# Start development (recommended)
-pnpm dev
-
-# Stop development
-pnpm dev:down
-
-# View logs
-pnpm dev:logs
-
-# Frontend-only development (hot reload)
-pnpm dev:frontend
-
-# API-only development
-pnpm dev:api
-
-# Clean everything (nuclear option)
-pnpm clean:all
-```
-
-### Ports
-- **Web App**: http://localhost:3000 (Docker) or http://localhost:5173 (dev server)
-- **API**: http://localhost:8000
-- **API Docs**: http://localhost:5173/api/v1/docs
-
-### Alternative: Manual Setup
-For advanced users who need to work outside Docker:
-
-```bash
-# Frontend only
-pnpm install && pnpm dev
-
-# Backend only
-cd packages/hermes-api && uv sync --dev && uv run uvicorn app.main:app --reload
-```
-
-## 📋 Code Quality Standards
-
-We maintain high standards through automated tooling. **Before submitting PRs:**
-
-```bash
-# Run all quality checks
-pnpm pre-check
-
-# Or run individual checks
-pnpm format          # Fix formatting
-pnpm lint            # Check linting
-pnpm type-check      # Type checking
-pnpm test:all        # All tests
-```
-
-**Quality Gates:**
-- ✅ All tests pass
-- ✅ TypeScript/mypy checks pass
-- ✅ Code formatting (black, isort, prettier)
-- ✅ Linting (ESLint, ruff) passes
-- ✅ Docker builds successfully
-
-## 🔄 CI/CD Pipeline
-
-See [Dependency maintenance](./DEPENDENCY_MAINTENANCE.md) for automated update
-schedules, lockfile requirements, and how to check Renovate runs.
-
-The main automated workflows are:
-
-### 1. PR Checks (`.github/workflows/pr-checks.yml`)
-Runs on all PRs to `main` and `develop`:
-- Frontend: Type checking, linting, build, tests
-- Backend: Formatting, linting, type checking, tests with coverage
-- Both: Locked dependency installs and affected Docker image builds
-- Both run in parallel
-- **PRs are blocked if checks fail**
-
-### 2. Develop Builds (`.github/workflows/develop.yml`)
-Runs on pushes to `develop`:
-- Runs full pre-check validation
-- Builds and pushes Docker images tagged as `develop`
-- Creates staging images for testing
-- **Automatic** - no manual trigger needed
-
-### 3. Production Release (`.github/workflows/release.yml`)
-Manual workflow from `main` branch:
-- Bumps version in all packages
-- Runs full pre-check validation
-- Builds and pushes Docker images with version tags + `latest`
-- **Manual trigger only** - protected workflow
-
-**Local Testing:**
-```bash
-pnpm pre-check    # Run everything locally before PR
-pnpm test:all     # Just tests
-pnpm lint         # Just linting
-```
-
-All GitHub Actions must pass before merging.
-
-## 🧪 Testing
-
-### Running Tests
-
-```bash
-# All tests (frontend + backend)
-pnpm test:all
-
-# Frontend only
-pnpm test:hermes-app
-
-# Backend only
-pnpm test:api
-
-# Backend with coverage report
-cd packages/hermes-api && uv run pytest --cov=app --cov-report=html
-```
-
-### Writing Tests
-
-**Frontend:** Use Vitest + React Testing Library in `__tests__/` folders
-**Backend:** Use pytest + httpx in `tests/` folders
-
-**Add tests for:**
-- New features (happy path + edge cases)
-- Bug fixes (regression tests)
-- API changes (request/response validation)
-
-## 📝 Contribution Process
-
-### 1. Choose an Issue
-- Check [existing issues](https://github.com/techsquidtv/hermes/issues)
-- Comment on issues you're interested in
-- Create new issues for new ideas
-
-### 2. Create Feature Branch
-```bash
-# First, ensure you're starting from main
-git checkout main
-git pull --ff-only origin main
-
-# Create your feature branch
-git checkout -b feature/amazing-new-feature
-# or fix/bug-description
-# or docs/update-readme
-```
-
-### 3. Make Changes
-- Follow existing code patterns
-- Add tests for new features
-- Update docs if needed
-- Test with `pnpm dev`
-
-### 4. Quality Check
-```bash
-pnpm pre-check    # All checks (lint, types, tests, build)
-pnpm format      # Auto-fix formatting
-```
-
-### 5. Commit & Push
-```bash
-# Clear commit messages
-git commit -m "feat: add new feature"
-git commit -m "fix: resolve issue"
-git commit -m "docs: update guide"
-
-git push origin feature/amazing-new-feature
-```
-
-### 6. Create Pull Request
-- **Target**: Open PR against `main`
-- Clear title and description
-- Link related issues
-- Add screenshots for UI changes
-- Ensure all CI checks pass
-- Before release, test the combined source-built Docker images
-
-## 🏗️ Architecture Guidelines
-
-### Frontend
-- **Components**: Functional components with hooks
-- **State**: React Context (global), useState (local)
-- **Styling**: Tailwind CSS + shadcn/ui
-- **API**: Custom hooks in `src/hooks/`
-- **Routing**: TanStack Router in `src/routes/`
-
-### Backend
-- **Structure**: Feature-based (api, core, db, services, tasks)
-- **Async**: All I/O operations async
-- **Models**: Pydantic in `models/pydantic/`
-- **Database**: SQLAlchemy async sessions
-- **Tasks**: Celery for background jobs
-
-### General
-- **Error Handling**: Proper HTTP status codes
-- **Validation**: Pydantic for all I/O
-- **Logging**: Structured logging
-- **Security**: Rate limiting, JWT auth
-
-## 🔍 Code Review Process
-
-**We look for:**
-- ✅ **Tests**: New features need tests
-- ✅ **Documentation**: Update docs for new features
-- ✅ **Type Safety**: No TypeScript/mypy errors
-- ✅ **Code Style**: Follow project patterns
-- ✅ **Security**: No obvious vulnerabilities
-- ✅ **Performance**: Reasonable impact
-
-**Review Checklist:**
-- [ ] Tests added/modified
-- [ ] Documentation updated
-- [ ] All CI checks pass
-- [ ] Docker still works
-- [ ] No breaking changes
-
-## 🚨 Common Issues
-
-**Development won't start:**
-```bash
-pnpm clean:all    # Nuclear option
-pnpm dev          # Restart fresh
-```
-
-**Tests failing:**
-```bash
-pnpm test:all -- --verbose    # See detailed output
-# or for specific test
-cd packages/hermes-api && uv run pytest tests/test_specific.py::test_function -v
-```
-
-**Type errors:**
-```bash
-pnpm type-check    # Frontend
-cd packages/hermes-api && uv run mypy app/  # Backend
-```
-
-**Build issues:**
-```bash
-pnpm build        # Check frontend build
-docker compose build  # Check full stack
-```
-
-## 🎉 Recognition
-
-Contributors are recognized in README and release notes.
-
-## 📞 Getting Help
-
-- **Issues**: [GitHub Issues](https://github.com/techsquidtv/hermes/issues) for bugs/features
-- **Discussions**: [GitHub Discussions](https://github.com/techsquidtv/hermes/discussions) for questions
-- **Documentation**: Check `docs/` folder first
-
-## 🚀 Releases
-
-See **[Release Process Guide](./RELEASE_PROCESS.md)** for details.
-
-**Quick version:**
-- Semantic versioning (MAJOR.MINOR.PATCH)
-- Independent package versioning
-- Auto-published Docker images
-
----
-
-**Thank you for contributing to Hermes!** 🎥✨
-
-Your contributions help make Hermes better for everyone. We're excited to see what you build!
+Use conventional commits with a scope where useful, such as `fix(api): ...` or
+`feat(app): ...`. Keep each PR focused. Explain the problem, resulting behavior,
+and validation; link related issues and include screenshots for UI changes.
+Regenerate and commit API types when changing the API contract.
+
+Breaking changes are acceptable when called out explicitly. Include migration
+or upgrade instructions and use `!` in the commit title when appropriate. Do not
+add compatibility aliases or fallbacks for removed behavior.
+
+The optional `develop` workflow can publish preview images if that branch is
+used. It is not required for contributions; test unreleased work with source builds.
+
+## Troubleshooting
+
+- **Startup fails:** review `docker compose -f docker-compose.dev.yml logs` and
+  check the secret, storage ownership, and port conflicts before changing data.
+- **Native API cannot reach Redis:** use `redis://localhost:6379/0`, not the
+  Docker service hostname. See [native settings](CONFIGURATION.md#docker-defaults-and-native-development).
+- **Test failure:** run a focused command, for example
+  `uv run --locked pytest tests/test_api/test_health.py -v` from the API directory.
+- **Type errors after API changes:** run `pnpm generate:types` and
+  `pnpm type-check` from the root, then update affected callers.
+
+**Data-loss warning:** `pnpm clean:all` removes persistent database, download,
+and temporary files as well as Compose volumes. It is not a routine startup fix.
+
+Use the [issue tracker](https://github.com/TechSquidTV/Hermes/issues) for bugs and
+feature requests. Redact credentials and private media URLs from shared logs.
