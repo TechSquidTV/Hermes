@@ -1,172 +1,58 @@
-# API Tests
+# API tests
 
-## Running Tests
+Run commands from `packages/hermes-api` after installing dependencies with
+`uv sync --locked --all-groups`. FFmpeg is required for local media-conversion
+regressions; those fixtures do not need external video sites.
+
+## Run tests
 
 ```bash
-# Run all tests
-uv run pytest
-
-# Run specific test class
-uv run pytest tests/test_api/test_auth.py::TestApiKeyManagement
-
-# Run specific test method
-uv run pytest tests/test_api/test_auth.py::TestApiKeyManagement::test_create_api_key_success
-
-# Run with verbose output
-uv run pytest tests/test_api/test_auth.py -v
-
-# Run integration tests
-uv run pytest tests/test_integration/ -v
-
-# Run repository tests
-uv run pytest tests/test_api/test_api_keys.py -v
+uv run --locked pytest
+uv run --locked pytest tests/test_api/test_health.py -v
+uv run --locked pytest tests/test_api/test_auth.py -k api_key -v
+uv run --locked pytest tests/test_integration -v
+uv run --locked pytest --cov=app --cov-report=html --cov-report=term
 ```
 
-## Test Structure
+The project pytest configuration enables coverage by default. Add `--no-cov` for
+focused runs without coverage reporting.
 
-### Backend Tests
+## Test layout
 
-#### `test_api/test_auth.py`
-- **TestApiKeyManagement**: Tests API key CRUD operations
-  - `test_create_api_key_success`: Create API key endpoint
-  - `test_create_api_key_no_auth`: Authentication required
-  - `test_create_api_key_validation`: Input validation
-  - `test_list_api_keys_success`: List API keys endpoint
-  - `test_list_api_keys_no_auth`: Authentication required
-  - `test_revoke_api_key_success`: Revoke API key endpoint
-  - `test_revoke_api_key_not_found`: Handle missing keys
-  - `test_revoke_api_key_no_auth`: Authentication required
+| Directory | Coverage |
+| --- | --- |
+| `test_api/` | HTTP contracts, authentication, permissions, queue, files, and administration |
+| `test_integration/` | Download flows, sessions, deliverables, bootstrap, and dispatch recovery |
+| `test_db/` | Database backends, migrations, operator commands, and deployment upgrade/recovery |
+| `test_services/` | Downloader, public-network policy, events, file registration, and cleanup |
+| `test_tasks/` | Celery downloads, scheduling, worker database lifecycle, and retention |
+| `test_models/` | Pydantic request/response validation |
 
-- **TestApiKeyAuthentication**: Tests API key validation
-  - `test_api_key_authentication_success`: API keys work for auth
-  - `test_database_api_key_validation`: Database validation in endpoints
+Frontend tests live in `packages/hermes-app`, not this directory. From the
+repository root, run `pnpm test` for the frontend or `pnpm test:all` for both
+packages.
 
-- **TestApiKeySecurity**: Tests security and isolation
-  - `test_user_isolation_api_keys`: Users only see their own keys
+## Fixtures and isolation
 
-#### `test_api/test_api_keys.py` (Repository Tests)
-- **TestApiKeyRepository**: Database operations
-  - `test_create_api_key`: Database API key creation
-  - `test_get_api_key_by_hash`: Retrieve by hash
-  - `test_get_api_key_by_id`: Retrieve by ID
-  - `test_get_api_keys_by_user`: User-scoped retrieval
-  - `test_update_last_used`: Usage tracking
-  - `test_get_nonexistent_api_key`: Error handling
-  - `test_api_key_deactivation`: Status management
+[conftest.py](conftest.py) selects a temporary SQLite database by default,
+creates and drops tables per test, and supplies typed async database/client
+fixtures. No manual schema creation is needed. It does not inherit an operator's
+`HERMES_DATABASE_URL` for tests.
 
-#### `test_integration/test_api_key_flow.py`
-- **TestApiKeyIntegration**: End-to-end flows
-  - `test_api_key_full_lifecycle`: Complete create → use → revoke cycle
-  - `test_jwt_token_vs_api_key_authentication`: Dual auth systems
-  - `test_multiple_users_api_key_isolation`: Multi-user isolation
+The shared `client` fixture overrides the authentication principal with an admin
+API key. Tests of authentication itself must use the appropriate unmocked client
+or explicit dependency setup; an overridden principal does not prove that a
+credential or permission is valid. Reuse existing fixtures and isolate session,
+Redis, and network state as needed.
 
-### Frontend Tests
+For real PostgreSQL testing, follow the [database validation guide](../../../docs/POSTGRESQL.md#real-postgresql-validation).
+The explicit test variables target **empty, disposable databases** and create or
+drop schema objects. Never use them with application data, and never set both
+PostgreSQL test variables at once.
 
-#### `hooks/__tests__/useApiKeys.test.ts`
-- **useApiKeys hook tests**:
-  - API key fetching
-  - API key creation
-  - API key revocation
-  - Loading states
-  - Error handling
+## Related checks
 
-#### `services/__tests__/apiClient.test.ts`
-- **API client tests**:
-  - `createApiKey()` method
-  - `getApiKeys()` method
-  - `revokeApiKey()` method
-  - HTTP request formatting
-  - Error handling
-
-#### `components/settings/__tests__/ApiKeySettings.test.tsx`
-- **Component tests**:
-  - API keys list display
-  - Loading states
-  - Empty states
-  - Create form interactions
-  - Permission selection
-  - Copy functionality
-  - Revoke functionality
-  - Form validation
-
-## Test Coverage
-
-### ✅ What's Tested
-
-1. **API Endpoints**:
-   - POST `/auth/api-keys` - Create API keys
-   - GET `/auth/api-keys` - List API keys
-   - DELETE `/auth/api-keys/{id}` - Revoke API keys
-   - Authentication validation in protected endpoints
-
-2. **Database Operations**:
-   - API key creation with user association
-   - Hash-based retrieval
-   - User-scoped queries
-   - Usage tracking (last_used)
-   - Status management (active/inactive)
-
-3. **Security**:
-   - User isolation (users only see their own keys)
-   - Authentication requirements
-   - Input validation
-   - Permission system
-
-4. **Frontend Integration**:
-   - Hook functionality
-   - API client methods
-   - Component interactions
-   - Form handling
-   - Error states
-
-5. **Authentication Systems**:
-   - JWT token authentication
-   - Database API key authentication
-   - Mixed authentication support
-
-### 🔄 Integration Points
-
-- JWT tokens work as API keys
-- Database API keys work with download endpoints
-- Frontend properly displays and manages keys
-- All endpoints respect user permissions
-
-## Setup Requirements
-
-### Database Setup
-```bash
-# The tests expect database tables to exist
-# Database schema should be created before running tests
-# See app/db/ for current schema definitions
-```
-
-### Environment Variables
-```bash
-export HERMES_DEBUG=true
-export HERMES_DATABASE_URL="sqlite+aiosqlite:///./test_hermes.db"
-export HERMES_REDIS_URL="redis://localhost:6379/1"
-```
-
-## Missing Tests (Future)
-
-1. **Performance Tests**:
-   - Rate limiting enforcement
-   - API key expiration handling
-   - Bulk operations
-
-2. **Edge Cases**:
-   - Very long API key names
-   - Special characters in names
-   - Network timeout handling
-   - Database connection failures
-
-3. **Security Tests**:
-   - SQL injection prevention
-   - XSS prevention in frontend
-   - Token leakage prevention
-   - Audit logging
-
-4. **Database Tests**:
-   - Schema compatibility
-   - Data integrity
-   - Connection handling
+Run `pnpm pre-check:api` from the repository root for formatting, lint, strict
+mypy, and pytest. CI also verifies generated OpenAPI types, backend Docker builds,
+and infrastructure tests. See [contributing](../../../docs/CONTRIBUTING.md) for
+shared commands and [typing boundaries](../typings/README.md) for third-party stubs.

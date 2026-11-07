@@ -1,1002 +1,251 @@
-# Hermes Proxy and Deployment Guide
+# Reverse proxy deployment
 
-This comprehensive guide covers deploying Hermes in various configurations, including single domain deployments, separate subdomains, and integration with existing reverse proxies.
+The bundled app container serves the UI and proxies `/api/*` to `api:8000`.
+For most deployments, put an HTTPS reverse proxy in front of `app:80` and keep
+`VITE_API_BASE_URL=/api/v1`. The API and Redis need no public host ports.
 
-## Table of Contents
+Use the complete [source or prebuilt stack](../README.md#quick-start), including
+the worker and scheduler. Examples here are proxy configuration or Compose
+**overrides**, not replacement stacks. Keep one exact release across all Hermes
+services; do not replace backend definitions with standalone `latest` images.
+See [deployment](DEPLOYMENT.md) for storage and operational requirements.
 
-- [Overview](#overview)
-- [Architecture](#architecture)
-- [Deployment Scenarios](#deployment-scenarios)
-  - [Scenario 1: Single Domain (Default)](#scenario-1-single-domain-default)
-  - [Scenario 2: Separate Subdomains](#scenario-2-separate-subdomains)
-  - [Scenario 3: Existing Reverse Proxy](#scenario-3-existing-reverse-proxy)
-- [Runtime Configuration](#runtime-configuration)
-- [Reverse Proxy Examples](#reverse-proxy-examples)
-- [Environment Variables](#environment-variables)
-- [Troubleshooting](#troubleshooting)
-- [Complete Examples](#complete-examples)
+## Single domain
 
----
+For `https://hermes.example.com`:
 
-## Overview
+| Traffic | Destination |
+| --- | --- |
+| UI and static assets | External proxy → `app:80` |
+| `/api/v1/*`, including API docs and events | External proxy → `app:80` → `api:8000` |
 
-Hermes provides a flexible deployment architecture that supports:
-- **Default**: Single domain served by the `hermes-app` nginx container
-- **Separate Subdomains**: App and API on different domains (e.g., `app.example.com` and `api.example.com`)
-- **Custom Integration**: Easy integration with existing reverse proxies (Traefik, nginx, Apache, etc.)
+In `.env`:
 
----
-
-## Architecture
-
-```
-┌──────────────┐
-│     App      │ ← Exposed web entrypoint (nginx)
-│ serves UI +  │
-│ proxies /api │
-└──────┬───────┘
-       │
-┌──────▼─────┐   ┌─────────┐
-│    API     │   │  Redis  │
-│ (FastAPI)  │   │         │
-└────────────┘   └─────────┘
+```dotenv
+VITE_API_BASE_URL=/api/v1
+HERMES_ALLOWED_ORIGINS=https://hermes.example.com
 ```
 
-**Key Components:**
-- **App Container**: nginx serving static files with runtime configuration and same-origin `/api` proxying
-- **API Container**: FastAPI backend with SSE support
-- **Redis**: Caching and task queue
-- **Reverse Proxy**: Optional external TLS/domain layer in front of the app container
-
----
-
-## Deployment Scenarios
-
-### Scenario 1: Single Domain (Default)
-
-The simplest setup - everything served from one domain (e.g., `hermes.example.com`).
-
-#### How It Works
-- Frontend: `https://hermes.example.com/`
-- API: `https://hermes.example.com/api/v1/`
-- The app container serves the UI and proxies `/api/*` to the API container
-
-#### Quick Start
-
-```bash
-# Use the default docker-compose.yml
-docker compose up -d
-
-# Access at http://localhost:3000
-```
-
-#### Configuration
+The examples assume the proxy can resolve the Compose service names. For a
+containerized proxy, connect it to `hermes-network`, or connect `app` to the
+proxy's existing Docker network with an override:
 
 ```yaml
-# docker-compose.yml (default)
+# proxy-overrides.yml: replace proxy-network with your existing network.
 services:
   app:
-    image: ghcr.io/techsquidtv/hermes-app:latest
-    ports:
-      - "3000:80"
-    # Serves static UI and proxies /api/* to api:8000
-```
-
-**Environment Variables:**
-```env
-# .env
-VITE_API_BASE_URL=/api/v1  # Relative path (default)
-HERMES_ALLOWED_ORIGINS=http://localhost:3000,https://hermes.example.com
-```
-
-#### Customizing for Production
-
-Put your reverse proxy or load balancer in front of the app container and forward traffic to `app:80`. The app container keeps `/api/*` on the same origin.
-
-```caddy
-hermes.example.com {
-    tls admin@example.com
-    reverse_proxy app:80
-}
-```
-
----
-
-### Scenario 2: Separate Subdomains
-
-Deploy app and API on different subdomains for better separation, CDN integration, or organizational requirements.
-
-#### Use Cases
-- Different infrastructure teams manage frontend vs backend
-- CDN caching for frontend only
-- Different SSL certificate requirements
-- Geographical distribution
-
-## Runtime Configuration
-
-### How Runtime Configuration Works
-
-Hermes uses a **runtime configuration** system that allows you to configure the API URL without rebuilding the Docker image:
-
-1. **Build Time**: App is built with Vite
-2. **Container Startup**: `docker-entrypoint.sh` generates `/config.js`
-3. **Runtime**: Browser loads `/config.js` which provides the API base URL
-
-This means you can change the API URL by simply setting an environment variable and restarting the container.
-
-#### Technical Implementation
-
-The frontend uses a centralized configuration utility (`src/lib/config.ts`) that provides a single source of truth for the API base URL:
-
-```typescript
-export function getApiBaseUrl(): string {
-  return (
-    window.__RUNTIME_CONFIG__?.API_BASE_URL ||
-    import.meta.env.VITE_API_BASE_URL ||
-    '/api/v1'
-  )
-}
-```
-
-This utility is used by all services (authentication, API client, SSE connections) to ensure consistent behavior across the application.
-
-**Priority order:**
-1. Runtime config (`window.__RUNTIME_CONFIG__.API_BASE_URL`) - Set via Docker env
-2. Build-time env (`import.meta.env.VITE_API_BASE_URL`) - Development fallback
-3. Default (`/api/v1`) - Same-domain app-container proxy fallback
-
-#### Configuration Steps
-
-##### 1. Set the API Base URL
-
-```yaml
-# docker-compose.yml
-services:
-  app:
-    image: ghcr.io/techsquidtv/hermes-app:latest
-    environment:
-      # CRITICAL: Set to your API's full URL
-      - VITE_API_BASE_URL=https://api.hermes.example.com/api/v1
-    ports:
-      - "80:80"
-```
-
-##### 2. Configure CORS
-
-```env
-# .env - API must allow requests from app domain
-HERMES_ALLOWED_ORIGINS=https://hermes.example.com,https://app.hermes.example.com
-```
-
-##### 3. Deploy Both Services
-
-```yaml
-# docker-compose.yml - Separate subdomain setup
-services:
-  redis:
-    image: redis:7-alpine
-    volumes:
-      - redis_data:/data
-    command: redis-server --appendonly yes
-
-  # API - api.hermes.example.com
-  api:
-    image: ghcr.io/techsquidtv/hermes-api:latest
-    environment:
-      - HERMES_SECRET_KEY=${HERMES_SECRET_KEY}
-      - HERMES_REDIS_URL=redis://redis:6379
-      - HERMES_ALLOWED_ORIGINS=https://hermes.example.com
-    volumes:
-      - ./downloads:/app/downloads
-      - ./data:/app/data
-    ports:
-      - "8000:8000"
-    depends_on:
-      - redis
-
-  celery_worker:
-    image: ghcr.io/techsquidtv/hermes-api:latest
-    environment:
-      - HERMES_SECRET_KEY=${HERMES_SECRET_KEY}
-      - HERMES_REDIS_URL=redis://redis:6379
-    volumes:
-      - ./downloads:/app/downloads
-      - ./data:/app/data
-    depends_on:
-      - redis
-      - api
-    command: celery -A app.worker worker --loglevel=info --concurrency=1 --hostname=hermes-worker@%h --queues=hermes.downloads,hermes.cleanup,hermes.default
-
-  # App - hermes.example.com
-  app:
-    image: ghcr.io/techsquidtv/hermes-app:latest
-    environment:
-      - VITE_API_BASE_URL=https://api.hermes.example.com/api/v1
-    ports:
-      - "3000:80"
-
-volumes:
-  redis_data:
-```
-
-**DNS Configuration:**
-- `api.hermes.example.com` → Your server IP:8000
-- `hermes.example.com` → Your server IP:3000
-
-#### Local Testing
-
-Test separate hosts locally without DNS:
-
-```bash
-docker compose -f docker-compose.test-separate-hosts.yml up --build
-```
-
-Access:
-- App: `http://localhost:3001`
-- API: `http://localhost:8001/api/v1/health/`
-
----
-
-### Scenario 3: Existing Reverse Proxy
-
-Integrate Hermes with your existing infrastructure.
-
-#### Option A: Single Domain
-
-1. Connect the app container to your proxy network.
-2. Point your proxy at `app:80`.
-3. Leave `VITE_API_BASE_URL=/api/v1` so the app container proxies API requests internally.
-
-```yaml
-services:
-  app:
-    image: ghcr.io/techsquidtv/hermes-app:latest
     networks:
       - hermes-network
-      - your-proxy-network
-    # NO ports - accessed via your proxy
-
-  api:
-    image: ghcr.io/techsquidtv/hermes-api:latest
-    networks:
-      - hermes-network
-    # Internal only - app proxies /api/* to this service
+      - proxy-network
 
 networks:
-  hermes-network:
-    driver: bridge
-  your-proxy-network:
+  proxy-network:
     external: true
 ```
 
----
+Apply it alongside your base file:
 
-## Reverse Proxy Examples
+```bash
+docker compose -f docker-compose.example.yml -f proxy-overrides.yml up -d --wait
+```
+
+For a proxy running on the host, forward to the app's published port, such as
+`127.0.0.1:3000`, instead of a Docker service name. Restrict that port to trusted
+traffic when the proxy is the intended public entry point.
 
 ### Caddy
 
-#### Single Domain
-
 ```caddyfile
 hermes.example.com {
-    # Automatic HTTPS
-    tls admin@example.com
-
-    # The app container serves UI and proxies /api/* internally.
-    reverse_proxy app:80
+    reverse_proxy app:80 {
+        flush_interval -1
+    }
 }
 ```
-
-#### Separate Domains
-
-```caddyfile
-# API subdomain
-api.hermes.example.com {
-    reverse_proxy /api/v1/* api:8000
-}
-
-# App subdomain
-hermes.example.com {
-    reverse_proxy app:80
-}
-```
-
----
 
 ### nginx
 
-#### Single Domain
+The TLS certificate paths below refer to files on the external proxy. This
+configuration sends all requests through the app, including API documentation
+and event streams:
 
 ```nginx
-upstream hermes_api {
-    server api:8000;
-}
-
 server {
     listen 80;
     server_name hermes.example.com;
-    return 301 https://$server_name$request_uri;
+    return 301 https://$host$request_uri;
 }
 
 server {
-    listen 443 ssl http2;
+    listen 443 ssl;
     server_name hermes.example.com;
+    ssl_certificate /path/to/fullchain.pem;
+    ssl_certificate_key /path/to/privkey.pem;
 
-    ssl_certificate /path/to/cert.pem;
-    ssl_certificate_key /path/to/key.pem;
-
-    # Security headers
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-
-    # SSE Events - Critical configuration
-    location /api/v1/events/ {
-        proxy_pass http://hermes_api/api/v1/events/;
+    location / {
+        proxy_pass http://app:80;
         proxy_http_version 1.1;
-        proxy_set_header Connection '';
+        proxy_set_header Connection "";
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-
-        # SSE-specific settings
         proxy_buffering off;
         proxy_cache off;
         proxy_read_timeout 86400;
-        chunked_transfer_encoding off;
-    }
-
-    # API proxy
-    location /api/ {
-        proxy_pass http://hermes_api/api/;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    # Frontend app
-    location / {
-        proxy_pass http://app:80;
     }
 }
 ```
-
-#### Separate Domains
-
-```nginx
-# api.hermes.example.com
-server {
-    listen 443 ssl http2;
-    server_name api.hermes.example.com;
-
-    ssl_certificate /path/to/cert.pem;
-    ssl_certificate_key /path/to/key.pem;
-
-    location /api/v1/ {
-        proxy_pass http://api:8000/api/v1/;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    # Health check
-    location /health {
-        proxy_pass http://api:8000/health;
-    }
-}
-
-# hermes.example.com
-server {
-    listen 443 ssl http2;
-    server_name hermes.example.com;
-
-    ssl_certificate /path/to/cert.pem;
-    ssl_certificate_key /path/to/key.pem;
-
-    location / {
-        proxy_pass http://app:80/;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-```
-
----
 
 ### Traefik
 
-#### Labels Configuration
+Add labels and network access to the existing `app` service. This assumes your
+Traefik deployment already defines the `websecure` entrypoint, `letsencrypt`
+certificate resolver, and external `traefik` network:
 
 ```yaml
+# traefik-overrides.yml
 services:
-  # Direct service exposure
-  api:
-    image: ghcr.io/techsquidtv/hermes-api:latest
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.hermes-api.rule=Host(`hermes.example.com`) && PathPrefix(`/api`)"
-      - "traefik.http.routers.hermes-api.entrypoints=websecure"
-      - "traefik.http.routers.hermes-api.tls.certresolver=letsencrypt"
-      - "traefik.http.services.hermes-api.loadbalancer.server.port=8000"
-    networks:
-      - traefik
-      - hermes-network
-
   app:
-    image: ghcr.io/techsquidtv/hermes-app:latest
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.hermes-app.rule=Host(`hermes.example.com`)"
-      - "traefik.http.routers.hermes-app.entrypoints=websecure"
-      - "traefik.http.routers.hermes-app.tls.certresolver=letsencrypt"
-      - "traefik.http.services.hermes-app.loadbalancer.server.port=80"
+      - "traefik.docker.network=traefik"
+      - "traefik.http.routers.hermes.rule=Host(`hermes.example.com`)"
+      - "traefik.http.routers.hermes.entrypoints=websecure"
+      - "traefik.http.routers.hermes.tls.certresolver=letsencrypt"
+      - "traefik.http.services.hermes.loadbalancer.server.port=80"
     networks:
-      - traefik
       - hermes-network
+      - traefik
 
 networks:
   traefik:
     external: true
-  hermes-network:
-    internal: true
 ```
 
-#### Separate Domains with Traefik
+Keep API routing through the app; a second API router is unnecessary for a
+single-domain setup.
 
-```yaml
-services:
-  api:
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.hermes-api.rule=Host(`api.hermes.example.com`)"
-      - "traefik.http.routers.hermes-api.entrypoints=websecure"
-      - "traefik.http.routers.hermes-api.tls.certresolver=letsencrypt"
-      - "traefik.http.services.hermes-api.loadbalancer.server.port=8000"
+### Other proxies
 
-  app:
-    environment:
-      - VITE_API_BASE_URL=https://api.hermes.example.com/api/v1
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.hermes-app.rule=Host(`hermes.example.com`)"
-      - "traefik.http.routers.hermes-app.entrypoints=websecure"
-      - "traefik.http.routers.hermes-app.tls.certresolver=letsencrypt"
-      - "traefik.http.services.hermes-app.loadbalancer.server.port=80"
-```
+| Proxy | Upstream and requirements |
+| --- | --- |
+| nginx Proxy Manager | Create a proxy host for `hermes.example.com`, forward to `app:80`, enable a TLS certificate, and disable event-stream buffering |
+| Apache | Proxy `/` to `http://app:80/`, preserve the host, and allow unbuffered long-lived event responses |
+| Cloudflare Tunnel | Route the Hermes hostname to `http://app:80` on a reachable Docker network |
 
----
+## Separate API domain
 
-### Apache
+Use this topology when the browser must contact an independent API origin:
 
-```apache
-<VirtualHost *:80>
-    ServerName hermes.example.com
-    Redirect permanent / https://hermes.example.com/
-</VirtualHost>
+- Frontend: `https://hermes.example.com`
+- API: `https://api.hermes.example.com/api/v1`
 
-<VirtualHost *:443>
-    ServerName hermes.example.com
+DNS records for both hostnames point to the public proxy. DNS records do not
+select container ports; the proxy routes each hostname to the correct upstream.
 
-    SSLEngine on
-    SSLCertificateFile /path/to/cert.pem
-    SSLCertificateKeyFile /path/to/key.pem
+In `.env`:
 
-    # API proxy
-    ProxyPass /api/ http://api:8000/api/
-    ProxyPassReverse /api/ http://api:8000/api/
-
-    # Frontend
-    ProxyPass / http://app:80/
-    ProxyPassReverse / http://app:80/
-
-    # Security headers
-    Header always set X-Frame-Options "SAMEORIGIN"
-    Header always set X-Content-Type-Options "nosniff"
-</VirtualHost>
-```
-
----
-
-### nginx Proxy Manager
-
-1. **Add Proxy Host** in web UI
-2. **Domain**: `hermes.example.com`
-3. **Forward Hostname/IP**: `app`
-4. **Forward Port**: `80`
-5. **Add SSL Certificate** (Let's Encrypt)
-
-For separate domains:
-- Create two proxy hosts
-- Point to `app:80` and `api:8000` respectively
-
----
-
-### Cloudflare Tunnel
-
-```yaml
-# cloudflared config.yml
-tunnel: <your-tunnel-id>
-credentials-file: /path/to/credentials.json
-
-ingress:
-  - hostname: hermes.example.com
-    service: http://app:80
-  - service: http_status:404
-```
-
-For separate domains:
-
-```yaml
-ingress:
-  - hostname: api.hermes.example.com
-    service: http://api:8000
-  - hostname: hermes.example.com
-    service: http://app:80
-  - service: http_status:404
-```
-
----
-
-## Environment Variables
-
-### App Container
-
-| Variable | Description | Example | Default | Required |
-|----------|-------------|---------|---------|----------|
-| `VITE_API_BASE_URL` | API base URL | `https://api.hermes.example.com/api/v1` | `/api/v1` | No (Yes for separate subdomains) |
-
-### API Container
-
-| Variable | Description | Example | Default | Required |
-|----------|-------------|---------|---------|----------|
-| `HERMES_SECRET_KEY` | JWT secret key | `your-secure-random-key` | - | Yes |
-| `HERMES_ALLOWED_ORIGINS` | Comma-separated allowed CORS origins | `https://hermes.example.com,https://app.hermes.example.com` | `http://localhost:3000,http://localhost:5173` | Yes |
-| `HERMES_REDIS_URL` | Redis connection URL | `redis://redis:6379` | `redis://localhost:6379` | Yes |
-| `HERMES_DATABASE_URL` | Database connection URL | `sqlite+aiosqlite:///./data/hermes.db` | `sqlite+aiosqlite:///./data/hermes.db` | No |
-
-### App Container
-
-| Variable | Description | Example | Default |
-|----------|-------------|---------|---------|
-| `HERMES_PORT` | Host port mapped to the app container's port 80 | `3000` | `3000` |
-
----
-
-## Troubleshooting
-
-### Issue: "405 Method Not Allowed" on Login
-
-**Symptoms:**
-- Browser console: `POST https://hermes.example.com/api/v1/auth/login 405 (Method Not Allowed)`
-- API requests hitting wrong endpoint
-
-**Causes:**
-1. `VITE_API_BASE_URL` not set correctly
-2. External reverse proxy is not forwarding `/api/*` to the app container in single-domain deployments
-3. Separate-domain deployment is still using the default `/api/v1` URL
-
-**Solution:**
-
-1. Verify `config.js` is generated correctly:
-   ```bash
-   docker exec hermes-app cat /usr/share/nginx/html/config.js
-   ```
-
-   Should show:
-   ```javascript
-   window.__RUNTIME_CONFIG__ = {
-     API_BASE_URL: "/api/v1"
-   };
-   ```
-
-2. Check browser console for actual API URL:
-   ```
-   [ApiClient] Using API base URL: /api/v1
-   ```
-
-3. For separate API domains, set a full API URL and restart the app:
-   ```bash
-   VITE_API_BASE_URL=https://api.hermes.example.com/api/v1
-   docker compose restart app
-   ```
-
----
-
-### Issue: CORS Errors
-
-**Symptoms:**
-- `Access to XMLHttpRequest... has been blocked by CORS policy`
-
-**Solution:**
-
-1. Add app domain to API's allowed origins:
-   ```env
-   # .env
-   HERMES_ALLOWED_ORIGINS=https://hermes.example.com,https://app.hermes.example.com
-   ```
-
-2. Restart API:
-   ```bash
-   docker compose restart api
-   ```
-
-3. Verify CORS headers:
-   ```bash
-   curl -I http://localhost:3000/api/v1/health/ -H "Origin: https://hermes.example.com"
-   # Should see: access-control-allow-origin: https://hermes.example.com
-   ```
-
----
-
-### Issue: Cannot Connect to API
-
-**Symptoms:**
-- `Failed to fetch` or `net::ERR_CONNECTION_REFUSED`
-
-**Causes:**
-1. API not accessible from browser
-2. Mixed content (HTTPS app, HTTP API)
-3. Firewall blocking
-
-**Solution:**
-
-1. Test API from browser:
-   ```
-   https://hermes.example.com/api/v1/health/
-   ```
-
-   Should return:
-   ```json
-   {"status":"healthy","timestamp":"...","version":"..."}
-   ```
-
-2. Ensure both use same protocol (both HTTP or both HTTPS)
-
-3. Check firewall rules
-
----
-
-### Issue: Real-time Updates Not Working
-
-**Symptoms:**
-- Download progress not updating
-- Queue not refreshing
-
-**Note:** Hermes uses **Server-Sent Events (SSE)**, not WebSockets.
-
-**Solution:**
-
-1. Verify SSE endpoint is accessible:
-   ```bash
-   curl http://localhost:3000/api/v1/events/downloads/test-id
-   ```
-
-2. The bundled app nginx already disables buffering for `/api/v1/events/`. If you add another nginx proxy in front, make sure it also does not buffer SSE:
-   ```nginx
-   location /api/v1/events/ {
-       proxy_buffering off;
-       proxy_cache off;
-       proxy_read_timeout 86400;
-   }
-   ```
-
-3. If you use Caddy in front, ensure `flush_interval` is set:
-   ```caddy
-   handle /api/v1/events/* {
-       reverse_proxy api:8000 {
-           flush_interval -1
-       }
-   }
-   ```
-
----
-
-### Issue: Static Files Not Loading
-
-**Symptoms:**
-- 404 errors for JS/CSS files
-- Blank page
-
-**Solution:**
-
-1. Check app container is running:
-   ```bash
-   docker ps | grep hermes-app
-   ```
-
-2. Test direct access to app:
-   ```bash
-   curl http://localhost:3000/
-   ```
-
----
-
-### Issue: Config Not Updating
-
-**Symptoms:**
-- Changed `VITE_API_BASE_URL` but app uses old value
-
-**Solution:**
-
-1. Restart app container:
-   ```bash
-   docker compose restart app
-   ```
-
-2. Clear browser cache:
-   - Chrome/Edge: Ctrl+Shift+R or Cmd+Shift+R
-   - Firefox: Ctrl+F5
-
-3. Verify new config:
-   ```bash
-   curl http://localhost:3000/config.js
-   ```
-
----
-
-## Complete Examples
-
-### Example 1: Production Single Domain
-
-```yaml
-# docker-compose.yml
-services:
-  app:
-    image: ghcr.io/techsquidtv/hermes-app:latest
-    container_name: hermes-app
-    restart: unless-stopped
-    ports:
-      - "80:80"
-    environment:
-      - VITE_API_BASE_URL=/api/v1
-    networks:
-      - hermes-network
-    depends_on:
-      - api
-
-  api:
-    image: ghcr.io/techsquidtv/hermes-api:latest
-    container_name: hermes-api
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      - HERMES_REDIS_URL=redis://redis:6379
-    volumes:
-      - ./downloads:/app/downloads
-      - ./data:/app/data
-    networks:
-      - hermes-network
-    depends_on:
-      - redis
-
-  celery_worker:
-    image: ghcr.io/techsquidtv/hermes-api:latest
-    container_name: hermes-worker
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      - HERMES_REDIS_URL=redis://redis:6379
-    volumes:
-      - ./downloads:/app/downloads
-      - ./data:/app/data
-    networks:
-      - hermes-network
-    depends_on:
-      - redis
-      - api
-    command: celery -A app.worker worker --loglevel=info --concurrency=1 --hostname=hermes-worker@%h --queues=hermes.downloads,hermes.cleanup,hermes.default
-
-  redis:
-    image: redis:7-alpine
-    container_name: hermes-redis
-    restart: unless-stopped
-    volumes:
-      - redis_data:/data
-    networks:
-      - hermes-network
-    command: redis-server --appendonly yes
-
-networks:
-  hermes-network:
-    driver: bridge
-
-volumes:
-  redis_data:
-```
-
-```env
-# .env
-HERMES_SECRET_KEY=your-secure-production-key
+```dotenv
+VITE_API_BASE_URL=https://api.hermes.example.com/api/v1
 HERMES_ALLOWED_ORIGINS=https://hermes.example.com
-VITE_API_BASE_URL=/api/v1
 ```
 
-Put your HTTPS reverse proxy in front of `app:80` for production TLS:
+Allow the **frontend origin** in CORS. The API base URL must be browser-reachable
+and use HTTPS when the frontend does. Keep API paths unchanged; do not strip
+`/api/v1` at the proxy.
 
-```caddy
+Connect `api` to the proxy network as well as `hermes-network` in an override,
+while retaining the base environment, mounts, dependencies, and health checks.
+The worker, scheduler, and Redis stay on the internal network.
+
+For Caddy:
+
+```caddyfile
 hermes.example.com {
-    tls admin@example.com
     reverse_proxy app:80
+}
+
+api.hermes.example.com {
+    reverse_proxy api:8000 {
+        flush_interval -1
+    }
 }
 ```
 
----
+For nginx, use the TLS server block above for each hostname, with the API
+hostname's `proxy_pass` set to `http://api:8000`. Retain the buffering and timeout
+settings for API events. Traefik and other proxies similarly need a second
+hostname route to `api:8000`.
 
-### Example 2: Separate Subdomains with Traefik
+### Local separate-origin test
 
-```yaml
-# docker-compose.yml
-services:
-  app:
-    image: ghcr.io/techsquidtv/hermes-app:latest
-    container_name: hermes-app
-    restart: unless-stopped
-    environment:
-      - VITE_API_BASE_URL=https://api.hermes.example.com/api/v1
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.hermes-app.rule=Host(`hermes.example.com`)"
-      - "traefik.http.routers.hermes-app.entrypoints=websecure"
-      - "traefik.http.routers.hermes-app.tls.certresolver=letsencrypt"
-      - "traefik.http.services.hermes-app.loadbalancer.server.port=80"
-    networks:
-      - traefik
-      - hermes-network
-
-  api:
-    image: ghcr.io/techsquidtv/hermes-api:latest
-    container_name: hermes-api
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      - HERMES_REDIS_URL=redis://redis:6379
-    volumes:
-      - ./downloads:/app/downloads
-      - ./data:/app/data
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.hermes-api.rule=Host(`api.hermes.example.com`)"
-      - "traefik.http.routers.hermes-api.entrypoints=websecure"
-      - "traefik.http.routers.hermes-api.tls.certresolver=letsencrypt"
-      - "traefik.http.services.hermes-api.loadbalancer.server.port=8000"
-    networks:
-      - traefik
-      - hermes-network
-    depends_on:
-      - redis
-
-  celery_worker:
-    image: ghcr.io/techsquidtv/hermes-api:latest
-    container_name: hermes-worker
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      - HERMES_REDIS_URL=redis://redis:6379
-    volumes:
-      - ./downloads:/app/downloads
-      - ./data:/app/data
-    networks:
-      - hermes-network
-    depends_on:
-      - redis
-      - api
-    command: celery -A app.worker worker --loglevel=info --concurrency=1 --hostname=hermes-worker@%h --queues=hermes.downloads,hermes.cleanup,hermes.default
-
-  redis:
-    image: redis:7-alpine
-    container_name: hermes-redis
-    restart: unless-stopped
-    volumes:
-      - redis_data:/data
-    networks:
-      - hermes-network
-    command: redis-server --appendonly yes
-
-networks:
-  traefik:
-    external: true
-  hermes-network:
-    driver: bridge
-
-volumes:
-  redis_data:
-```
-
-```env
-# .env
-HERMES_SECRET_KEY=your-secure-production-key
-HERMES_ALLOWED_ORIGINS=https://hermes.example.com
-VITE_API_BASE_URL=https://api.hermes.example.com/api/v1
-```
-
----
-
-### Example 3: Local Testing Separate Hosts
-
-`docker-compose.test-separate-hosts.yml` is a small wrapper around the default source-build services. It exposes the app and API directly, sets CORS for the app origin, and points the app runtime config at the direct API origin.
+The repository includes a source-build test stack with distinct browser origins:
 
 ```bash
-docker compose -f docker-compose.test-separate-hosts.yml up --build
-
-# Access:
-# - App: http://localhost:3001
-# - API: http://localhost:8001/api/v1/health/
+docker compose -f docker-compose.test-separate-hosts.yml up --build --wait
 ```
 
----
+Prepare the secret and storage directories from the [quick start](../README.md#quick-start)
+first. Stop other Hermes stacks sharing these directories. This test stack uses
+its own environment overrides and Redis volume; it is not a production config.
+Open [the app](http://localhost:3001) and [API docs](http://localhost:8001/api/v1/docs).
+The API URL is `http://localhost:8001/api/v1`.
 
-## Verification Checklist
+## Runtime configuration
 
-After deploying, verify your setup:
+The production app entrypoint generates `/config.js` from `VITE_API_BASE_URL`
+each time its container starts. The browser's [configuration helper](../packages/hermes-app/src/lib/config.ts)
+reads that runtime value before Vite's build-time value and the `/api/v1` default.
 
-- [ ] **API Health Check**
-  ```bash
-  curl https://api.hermes.example.com/api/v1/health/
-  # or for single domain:
-  curl https://hermes.example.com/api/v1/health/
-  ```
+After changing `.env`, recreate affected services with the same base and override
+files used for deployment:
 
-- [ ] **App Loads**
-  ```bash
-  curl https://hermes.example.com/
-  # Should return HTML
-  ```
+```bash
+docker compose -f docker-compose.example.yml -f proxy-overrides.yml up -d --wait
+```
 
-- [ ] **Config.js Generated**
-  ```bash
-  curl https://hermes.example.com/config.js
-  # Should show API_BASE_URL
-  ```
+`docker compose restart` does not reload changed container environment values.
+No app image rebuild is needed for production runtime configuration. Native Vite
+builds capture the value at build time and need a rebuild. Development Compose
+uses `/api/v1` and sets the Vite upstream separately.
 
-- [ ] **Browser Console Check**
-  - Open `https://hermes.example.com`
-  - Check console for: `[ApiClient] Using API base URL: ...`
-  - Should show correct API URL
+## Forwarded addresses and events
 
-- [ ] **Login Test**
-  - Try signing up / logging in
-  - Should successfully authenticate
+Preserve the public `Host` header and supply forwarded protocol/client headers
+at the edge. `HERMES_TRUSTED_PROXY_HOSTS` controls which exact proxy IPs or
+resolvable hostnames the authentication limiter trusts for `X-Forwarded-For`.
+Compose trusts `app` by default. Include each trusted external proxy in the chain
+when client addresses must pass through it; for direct API routing, include the
+proxy reaching the API. Never trust arbitrary forwarded headers or wildcard peers.
 
-- [ ] **Real-time Updates**
-  - Start a download
-  - Progress should update in real-time
+Hermes uses server-sent events (SSE). Every proxy hop must avoid buffering or
+caching event responses and allow long-lived connections. The bundled nginx
+already configures `/api/v1/events/` this way. Browser streams use scoped,
+short-lived tokens obtained through an authenticated request; an unauthenticated
+`curl` to an event URL cannot verify the complete stream flow.
 
----
+## Verify and troubleshoot
 
-## Additional Resources
+```bash
+curl --fail https://hermes.example.com/
+curl --fail https://hermes.example.com/config.js
+curl --fail https://hermes.example.com/api/v1/health/ready
+```
 
-- [Main README](../README.md)
-- [Environment Variables Reference](../.env.example)
-- [Runtime Configuration Utility](../packages/hermes-app/src/lib/config.ts) - Centralized API URL configuration
-- [Issue Tracker](https://github.com/TechSquidTV/Hermes/issues)
-- [Docker Documentation](https://docs.docker.com/)
+For a separate API hostname, send the readiness request there. Verify the
+browser loads the intended API URL, can log in, and receives progress for a new
+download. Keep `config.js`, `index.html`, and `build-id.txt` uncached at any
+additional proxy or CDN so configuration and deployed-build detection stay current.
 
----
+| Symptom | Check |
+| --- | --- |
+| Login returns 405 or an HTML response | `/api/*` reaches the API through the app, or the separate API URL is configured correctly |
+| CORS error | API allows the exact frontend origin, including scheme and any non-default port |
+| Changed API URL has no effect | Recreate the app and inspect `/config.js`; restarting alone retains the old environment |
+| Connection refused or mixed content | API hostname resolves, proxy upstream is reachable, and both public origins use HTTPS |
+| Progress is delayed | Disable buffering/caching at every proxy hop and renew scoped SSE tokens |
+| Authentication limits group all users together | Check the trusted proxy chain and forwarded client addresses |
 
-## Getting Help
-
-If you encounter issues not covered in this guide:
-
-1. **Check logs:**
-   ```bash
-   docker compose logs app
-   docker compose logs api
-   ```
-
-2. **Verify environment:**
-   ```bash
-   docker exec hermes-app env | grep VITE
-   docker exec hermes-api env | grep HERMES
-   ```
-
-3. **Create a GitHub issue** with:
-   - Your docker-compose configuration (redact secrets)
-   - Container logs
-   - Browser console errors
-   - Network tab showing failed requests
+Review `app` and `api` logs using the same Compose file selection as deployment.
+Redact secrets from configuration and logs before opening an
+[issue](https://github.com/TechSquidTV/Hermes/issues).

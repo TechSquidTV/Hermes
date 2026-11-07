@@ -1,173 +1,94 @@
 # Hermes App
 
-Modern React/TypeScript app for the Hermes video downloader, built with Vite, TanStack Router, and shadcn/ui.
+React and TypeScript frontend for Hermes, built with Vite, TanStack Router,
+TanStack Query, Tailwind CSS, and shadcn/ui. It provides download creation,
+live progress, queue and history views, API-key settings, and user administration.
 
-## 🚀 Quick Start
+## Development
 
-### Prerequisites
+Follow the [contributing guide](../../docs/CONTRIBUTING.md) for prerequisites and
+workspace dependency installation. All commands below run from the repository
+root, so they cannot be confused with the root `pnpm dev` Docker command.
 
-- Node.js 22.22.2+ (22.x), 24.15+ (24.x), or 26+ (used in Docker and CI)
-- pnpm 12.18.0 (pinned in the root package.json; enable Corepack)
-
-### Installation
-
-```bash
-# From the project root
-npm install --global "corepack@$(node -p 'require("./package.json").devDependencies.corepack')"
-corepack enable pnpm
-pnpm install
-
-# Or from the hermes-app directory
-cd packages/hermes-app
-pnpm install
-```
-
-### Development
+For the full hot-reload stack:
 
 ```bash
-# Start development server
 pnpm dev
-
-# Type checking
-pnpm type-check
-
-# Build for production
-pnpm build
-
-# Preview production build
-pnpm preview
 ```
 
-The app will be available at http://localhost:5173
-
-## 🔧 API Integration
-
-### Type Generation
-
-Hermes uses **automatic TypeScript type generation** from the backend API's OpenAPI schema:
+For a frontend-only process with an API already running on port 8000:
 
 ```bash
-# Generate types from running API (requires API server running)
-pnpm generate:types
+pnpm dev:frontend
 ```
 
-**Development Workflow:**
-1. Backend API changes are made
-2. Run `pnpm generate:types` to export the schema directly from the Python app
-3. Generated types in `src/types/api.generated.ts` are committed
-4. Frontend gets full type safety for all API calls
+Open [localhost:5173](http://localhost:5173). Vite proxies `/api/*` to
+`http://localhost:8000`; development Compose sets the upstream to `http://api:8000`.
+Set `HERMES_DEV_API_TARGET` in the launching environment to change that upstream.
 
-**How it works:** FastAPI automatically serves OpenAPI JSON at `http://localhost:8000/openapi.json`
+## Commands
 
-**Current State:** Uses auto-generated types in `src/types/api.generated.ts` (2,937+ lines)
+Run from the repository root:
 
-**✅ Working:** Run `pnpm generate:types` to update generated types with full automation
+| Command | Purpose |
+| --- | --- |
+| `pnpm --filter hermes-app dev` | Start native Vite development server |
+| `pnpm --filter hermes-app build` | TypeScript compilation and production build into `packages/hermes-app/dist` |
+| `pnpm --filter hermes-app preview` | Preview the production build |
+| `pnpm --filter hermes-app type-check` | Check TypeScript without emitting files |
+| `pnpm --filter hermes-app lint` | Run ESLint |
+| `pnpm --filter hermes-app test` | Run Vitest once |
+| `pnpm --filter hermes-app test:watch` | Run Vitest in watch mode |
+| `pnpm --filter hermes-app test:coverage` | Run tests with coverage |
+| `pnpm generate:types` | Export backend OpenAPI and generate TypeScript schemas |
+| `pnpm generate:routes` | Generate TanStack Router route definitions |
 
-## 🏗️ Architecture
+## API integration
 
-### Tech Stack
+Reuse the [API client](src/services/api/client.ts) and generated schemas in
+[src/types/api.generated.ts](src/types/api.generated.ts). JSON fields use
+camelCase, such as `downloadId` and `downloadSubtitles`; query parameter names
+follow the API schema.
 
-- **React 19** - Modern React with concurrent features
-- **TypeScript** - Full type safety
-- **Vite** - Fast build tool and dev server
-- **TanStack Router** - Type-safe routing
-- **TanStack Query** - Server state management
-- **Tailwind CSS** - Utility-first CSS framework
-- **shadcn/ui** - High-quality component library
-- **Lucide React** - Beautiful icons
-- **date-fns** - Modern date utilities
+`pnpm generate:types` imports the Python app and exports its OpenAPI schema into
+a temporary file, then runs `openapi-typescript`. It requires uv and installed
+workspace dependencies, but no running API server. After changing backend models,
+regenerate the types, update callers, run the relevant checks, and commit the
+generated file. See the [SDK guide](SDK_GUIDE.md) for examples.
 
-### Project Structure
+Live API documentation is at [Swagger UI](http://localhost:5173/api/v1/docs) and
+[OpenAPI JSON](http://localhost:5173/api/v1/openapi.json) during development.
 
-```
-src/
-├── components/          # Reusable UI components
-│   ├── ui/             # Base shadcn/ui components
-│   ├── auth/           # Authentication components
-│   ├── queue/          # Queue management components
-│   ├── settings/       # Settings components
-│   └── forms/          # Form components
-├── hooks/              # Custom React hooks
-├── routes/             # Route components
-├── services/           # API client and services
-├── types/              # TypeScript type definitions
-├── lib/                # Utilities and helpers
-└── utils/              # Additional utilities
-```
+## Configuration and deployment
 
-## 📝 Available Scripts
+The browser API URL comes from runtime `config.js`, then Vite's build-time
+`VITE_API_BASE_URL`, then `/api/v1`. Production Docker generates `config.js` at
+container startup, so changing its environment requires recreating the container.
+Native static builds need a rebuild to change Vite's captured value.
 
-- `pnpm dev` - Start development server
-- `pnpm build` - Build for production
-- `pnpm preview` - Preview production build
-- `pnpm type-check` - Run TypeScript type checking
-- `pnpm lint` - Run linting
-- `pnpm clean` - Clean build artifacts
+Keep `/api/v1` for the default same-origin deployment. For a separate API origin,
+set a full browser-reachable URL and configure API CORS to allow the frontend
+origin. See [configuration](../../docs/CONFIGURATION.md#compose-and-frontend-settings)
+and [reverse proxies](../../docs/PROXY_DEPLOYMENT.md).
 
-## 🔧 Configuration
+The production container serves the static build with nginx and proxies `/api`
+to the internal API. Use the root Compose files to deploy matching app, API,
+worker, and scheduler versions.
 
-The app connects to the Hermes API backend. Configure the API URL in:
+## Structure and conventions
 
-- Development: `VITE_API_BASE_URL` environment variable
-- Production: Uses relative paths for nginx proxy
+| Path | Contents |
+| --- | --- |
+| `src/components/` | UI, authentication, queue, and settings components |
+| `src/hooks/` | Query hooks and shared UI behavior |
+| `src/routes/` | TanStack Router route components |
+| `src/services/` | API client, authentication, sessions, and HTTP helpers |
+| `src/types/` | Generated API schemas and shared application types |
+| `src/themes/` | Theme styles and metadata |
 
-## 🎨 Styling
+Use the shared session service for authentication. It coordinates refresh-token
+rotation across tabs; direct independent refresh calls can invalidate a session.
+Use the existing SSE hooks for live updates and TanStack Query for server state.
+See [themes](src/themes/README.md) for adding light and dark color schemes.
 
-- **Tailwind CSS** for styling
-- **CSS Variables** for theming
-- **Dark mode** support (auto, light, dark)
-- **Responsive design** with mobile-first approach
-
-## 🔒 Authentication
-
-- JWT token-based authentication
-- Automatic token refresh
-- Secure token storage (sessionStorage + localStorage)
-- Protected routes with role-based access
-
-## 📱 Features
-
-- **Drag & Drop** URL input
-- **Real-time** download progress
-- **Queue management** with filtering and sorting
-- **Video preview** with format selection
-- **Bulk operations** (delete, retry)
-- **Responsive design** for all devices
-- **Keyboard shortcuts** for power users
-- **Settings management** with API key generation
-
-## 🧪 Testing
-
-```bash
-# Run tests (when implemented)
-pnpm test
-
-# Test with coverage
-pnpm test:coverage
-```
-
-## 📦 Building
-
-```bash
-# Build for production
-pnpm build
-
-# The built files will be in the `dist/` directory
-```
-
-## 🚀 Deployment
-
-The app is designed to work with nginx and can be deployed as static files. See the Dockerfile for containerized deployment.
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run `pnpm type-check` to ensure type safety
-5. Submit a pull request
-
-## 📄 License
-
-See the main project LICENSE file.
-
+Hermes is licensed under [AGPL-3.0](../../LICENSE).

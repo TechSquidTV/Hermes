@@ -1,246 +1,131 @@
-# Hermes — Self-Hosted Video Downloader
+# Hermes
 
 [![codecov](https://codecov.io/gh/TechSquidTV/Hermes/branch/main/graph/badge.svg)](https://codecov.io/gh/TechSquidTV/Hermes)
 
-**Download videos from YouTube and 1000+ sites with a robust API and beautiful, modern interface**
+A self-hosted video downloader with a web interface and API, powered by
+[yt-dlp](https://github.com/yt-dlp/yt-dlp).
 
-Hermes is a self-hosted video downloader built on [yt-dlp](https://github.com/yt-dlp/yt-dlp).
+- Download videos and playlists from YouTube and other yt-dlp-supported sites.
+- Queue downloads in the background and follow progress in real time.
+- Browse download history and retrieve media, subtitles, and thumbnails.
+- Manage users and API keys with administrator controls and configurable signup.
+- Run the app, API, workers, scheduler, and Redis with Docker Compose.
 
-_This tool is designed for content creators who wish to **lawfully** use freely available media under [fair use](https://en.wikipedia.org/wiki/Fair_use) (best explained by [Tom Scott](https://www.youtube.com/watch?v=1Jwo5qc78QU)).
-Hermes **does not endorse** piracy, freebooting, or using downloads to bypass advertising._
+Use Hermes only for media you have permission to download and reuse. Hermes is
+intended for lawful use by content creators and does not endorse piracy,
+freebooting, or bypassing advertising.
 
 https://github.com/user-attachments/assets/7d9c6b96-d966-4989-a8b3-d5d49af463ae
 
-## Key Features
+## Quick start
 
-- 🎥 **Universal Support** - Download from YouTube, Vimeo, TikTok, and 1000+ sites
-- ⚡ **Background Processing** - Queue downloads and process them asynchronously
-- ▶️ **Playlists** - Download entire playlists asynchronously
-- 🔒 **Secure Authentication** - JWT tokens with API key management and admin user control
-- 👥 **User Management** - Admin controls for self-hosted deployments with configurable signup
-
-## Quick Start
-
-### Build the current checkout
-
-For unreleased `main`, build from source so the app, API, worker, and scheduler
-include the same fixes.
+Install Docker with Compose 2.24.4+ and Git. The commands below build the current
+checkout so all components use the same source.
 
 ```bash
-git clone https://github.com/techsquidtv/hermes.git
+git clone https://github.com/TechSquidTV/Hermes.git hermes
 cd hermes
 cp .env.example .env
 
-# Set a random HERMES_SECRET_KEY in .env before starting.
+# Generate a secret, then set HERMES_SECRET_KEY in .env to the result.
 python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 nano .env
 
-# Prepare the bind mounts for the default container user (UID/GID 1000).
-mkdir -p ./data/downloads ./data/temp ./data/data
-sudo chown -R 1000:1000 ./data
+# Prepare persistent directories for the default container user (UID/GID 1000).
+mkdir -p data/downloads data/temp data/data
+sudo chown -R 1000:1000 data
 
 docker compose up -d --build --wait
 ```
 
-The web app is at http://localhost:3000 and the interactive API documentation is
-at http://localhost:3000/api/v1/docs. Redis and the API stay on the internal
-Docker network.
+Open the [web app](http://localhost:3000) and create your first account; it becomes
+the administrator. Public signup is disabled afterward unless an administrator
+enables it. You can also [seed an administrator](docs/CONFIGURATION.md#signup-and-initial-administrator)
+before starting the stack.
 
-### Prebuilt release images
+| Service | Default URL |
+| --- | --- |
+| Web app | [localhost:3000](http://localhost:3000) |
+| Interactive API docs | [Swagger UI](http://localhost:3000/api/v1/docs) |
+| Alternative API docs | [ReDoc](http://localhost:3000/api/v1/redoc) |
+| API readiness | [Readiness check](http://localhost:3000/api/v1/health/ready) |
+
+The API and Redis stay on the internal Docker network. The app container serves
+the UI and proxies `/api/*` to the API. For HTTPS, put your reverse proxy in front
+of the app; see the [proxy guide](docs/PROXY_DEPLOYMENT.md).
+
+### Prebuilt releases and upgrades
 
 Use `docker-compose.example.yml` and `.env.example` from the release you deploy.
-Set `HERMES_IMAGE_TAG` in `.env` to that exact published version, without a `v`
-prefix. The same tag selects the frontend, API, worker, and scheduler images.
-There is no independent `latest` selection.
+Prepare the secret and data directories as above, then set `HERMES_IMAGE_TAG` in
+`.env` to that exact published version without a `v` prefix. One tag selects the
+app, API, worker, and scheduler together.
 
-**Release requirement:** the new scheduler requires a release containing the
-security and opt-in retention fixes. Published 0.6.0 images predate them. Until a
-hardened release is published, use the source-build instructions above for these
-changes.
+**Release compatibility warning:** the 0.6.0 images predate the security and
+opt-in retention fixes required by these Compose files. Use a release containing
+those fixes; build the current checkout from source for unreleased changes.
 
-After selecting a compatible release and preparing the same data directories:
+For a new installation with a compatible release:
 
 ```bash
 docker compose -f docker-compose.example.yml pull
 docker compose -f docker-compose.example.yml up -d --wait
 ```
 
-For upgrades, use the script from the target release (Python 3.11+ on Linux/macOS):
+For an existing installation, use `scripts/upgrade.py` from the target release:
 
 ```bash
-python3 scripts/upgrade.py 1.2.3  # Replace with the published version you selected.
+python3 scripts/upgrade.py 1.2.3  # Replace with the selected published version.
 ```
 
-It pulls matching images, pauses requests, drains queued and active work, backs
-up the database, migrates it, and checks the replacement services. It updates
-`HERMES_IMAGE_TAG` only after success. Open tabs offer a Reload button after the
-new frontend is deployed. See the [upgrade and recovery guide](docs/UPGRADING.md)
-for requirements, maintenance timeouts, custom Compose files, and recovery.
+The upgrade drains work, backs up the database, migrates it, and checks replacement
+services before updating `.env`. Read the [upgrade and recovery guide](docs/UPGRADING.md)
+first, including its breaking changes and recovery requirements.
 
-### Development with hot reload
+### Storage and maintenance
 
-Use the same `.env` and persistent directories:
+The bundled stacks persist the database and scheduler state in `data/data`,
+downloads in `data/downloads`, and temporary files in `data/temp`. These directories
+must be writable by the backend container user. See the
+[deployment guide](docs/DEPLOYMENT.md#persistent-storage) for ownership and backups.
+
+Run one `celery_beat` scheduler per deployment. It schedules temporary-file and
+expired-token cleanup. Download retention is off unless
+`HERMES_DOWNLOAD_RETENTION_DAYS` is set.
+
+## Development
+
+After preparing `.env` and the data directories, start the hot-reload stack:
 
 ```bash
 docker compose -f docker-compose.dev.yml up --build --wait
 ```
 
-The Vite app is at http://localhost:5173, with API requests and documentation
-proxied under `/api/v1`. Direct debugging access is http://localhost:8000; Redis
-is exposed only by the development stack. For native processes, change the Redis
-hostname and storage paths as described in the
-[configuration guide](docs/CONFIGURATION.md#docker-defaults-and-native-development).
+The development app is at [localhost:5173](http://localhost:5173), with API docs
+at [localhost:5173/api/v1/docs](http://localhost:5173/api/v1/docs). The API is also
+exposed on port 8000 and Redis on port 6379 for debugging.
 
-### Persistent directories and maintenance
+See [Contributing](docs/CONTRIBUTING.md) for native setup, tool versions, checks,
+and the pull request workflow. Start branches from `main` and open PRs to `main`.
 
-The bundled stacks mount `data/downloads` at `/app/downloads`, `data/temp` at
-`/app/temp`, and `data/data` at `/app/data`. These directories must be writable
-by the backend container user. Source builds accept `USER_UID` and `USER_GID` to
-match a different host owner; set those build arguments and rebuild all backend
-services together.
+## Documentation
 
-One `celery_beat` process schedules temporary-file and expired-token cleanup.
-Media retention is off unless `HERMES_DOWNLOAD_RETENTION_DAYS` is set. Scheduler
-state is kept beside the database in `data/data`; run only one scheduler per
-deployment.
+| Guide | Contents |
+| --- | --- |
+| [Configuration](docs/CONFIGURATION.md) | Environment variables, signup, authentication, and storage settings |
+| [Deployment](docs/DEPLOYMENT.md) | Persistent storage, backups, monitoring, and troubleshooting |
+| [Reverse proxies](docs/PROXY_DEPLOYMENT.md) | HTTPS, single-domain and separate-domain deployments, and SSE |
+| [Upgrading](docs/UPGRADING.md) | Coordinated upgrades, migrations, and recovery |
+| [PostgreSQL](docs/POSTGRESQL.md) | Optional PostgreSQL deployment and validation; SQLite is the default |
+| [Managed files](docs/MANAGED_FILES.md) | Media deliverables, sidecars, and path migration requirements |
+| [Contributing](docs/CONTRIBUTING.md) | Development setup, checks, and contribution workflow |
+| [Release process](docs/RELEASE_PROCESS.md) | Shared versioning, image publication, and release recovery |
+| [Dependency maintenance](docs/DEPENDENCY_MAINTENANCE.md) | Renovate policy, lockfiles, and dependency validation |
+| [API](packages/hermes-api/README.md) | Authenticated usage, endpoint overview, and backend development |
+| [Frontend](packages/hermes-app/README.md) | App development, configuration, and generated API types |
 
-### Using a Reverse Proxy
+For bugs or feature requests, use the
+[issue templates](https://github.com/TechSquidTV/Hermes/issues/new/choose).
+Include reproduction steps and relevant logs with secrets removed.
 
-The default setup exposes the `hermes-app` nginx container on port 3000. That container serves the UI and proxies `/api/*` to the internal API service, so no bundled reverse proxy is required.
-
-For production HTTPS, put your existing reverse proxy in front of the app container and forward traffic to port 80. Preserve the `Host` header and pass `X-Forwarded-Proto`.
-
-#### Domain Configuration Options
-
-**Single Domain** (Recommended for most users):
-- Frontend and API on same domain: `hermes.example.com`
-- API accessible at: `hermes.example.com/api/`
-
-**Separate Domains** (Advanced):
-- Frontend at: `hermes.example.com`
-- API at: `hermes-api.example.com`
-
-#### Environment Configuration
-
-Copy `.env.example` to `.env` and configure:
-
-```bash
-# For single domain
-HERMES_ALLOWED_ORIGINS=https://hermes.example.com
-VITE_API_BASE_URL=/api/v1
-
-# For separate domains
-HERMES_ALLOWED_ORIGINS=https://hermes.example.com,https://hermes-api.example.com
-VITE_API_BASE_URL=https://hermes-api.example.com/api/v1
-```
-
-See our [Proxy & Deployment Guide](docs/PROXY_DEPLOYMENT.md) for integrating with existing setups (Traefik, nginx, etc.) and deploying with separate subdomains.
-
-## 🔒 Self-Hosting Security
-
-Hermes includes security features designed specifically for self-hosted deployments:
-
-### Signup Control
-
-Public signup is disabled by default after the first account is created. Administrators can create additional accounts or explicitly enable public signup. Existing installations retain their saved signup setting.
-
-**Option 1: First User Becomes Admin** (Default)
-- The first user to sign up automatically gets admin privileges
-- Subsequent users can only sign up if public signup is enabled
-- Simple for personal deployments
-
-**Option 2: Disable Public Signup**
-```bash
-# In your .env file:
-HERMES_ALLOW_PUBLIC_SIGNUP=false
-```
-- Only administrators can create new accounts via admin panel
-- Prevents unauthorized account creation
-- Recommended for shared/exposed deployments
-
-**Option 3: Pre-seed Initial Admin** (Docker-friendly)
-```bash
-# In your .env file:
-HERMES_INITIAL_ADMIN_USERNAME=admin
-HERMES_INITIAL_ADMIN_EMAIL=admin@example.com
-HERMES_INITIAL_ADMIN_PASSWORD=changeme123
-```
-- Admin account created automatically on first startup
-- Perfect for Docker deployments and automation
-- **Important**: Change the password after first login!
-
-### Admin User Management
-
-Administrators have access to user management features:
-- **Create users** - Add accounts when public signup is disabled
-- **Promote/demote admins** - Grant admin privileges to trusted users
-- **Activate/deactivate accounts** - Disable access without deleting users
-- **Delete users** - Permanently remove accounts
-- **Safety checks** - Cannot delete yourself or the last admin
-
-Access admin features via: **API endpoints at `/api/v1/users`** (see [API docs](http://localhost:3000/api/v1/docs))
-
-### Security Best Practices
-
-1. **Set a strong secret key**: Generate with `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`
-2. **Disable public signup** for non-personal deployments: `HERMES_ALLOW_PUBLIC_SIGNUP=false`
-3. **Change default credentials** if using pre-seeded admin
-4. **Use HTTPS** in production with your reverse proxy or load balancer
-5. **Restrict CORS origins** to your actual domains in `.env`
-6. **Keep Hermes updated** to get the latest security patches
-
-### 🐛 Having Issues?
-
-If you run into problems, please use our [issue templates](https://github.com/techsquidtv/hermes/issues/new/choose) instead of generic issues:
-- **[🐛 Bug Report](https://github.com/techsquidtv/hermes/issues/new?template=bug_report.yml)** - For unexpected behavior
-- **[🔧 API Issues](https://github.com/techsquidtv/hermes/issues/new?template=bug_report.yml)** - Backend problems
-- **[🎨 Frontend Issues](https://github.com/techsquidtv/hermes/issues/new?template=bug_report.yml)** - UI/UX problems
-- **[🐳 DevOps Issues](https://github.com/techsquidtv/hermes/issues/new?template=bug_report.yml)** - Docker/deployment issues
-
-These templates help us help you faster!
-
-### Manual Installation (Development)
-
-For development and contribution purposes, use Node.js 22.22.2+ (22.x), 24.15+ (24.x), or 26+ (used in Docker and CI), pnpm 12.18.0, and Python 3.11+ (Python 3.15 in Docker and CI). Corepack uses the pnpm version pinned in `package.json`. Node 26 requires installing Corepack separately; the Docker builds use its pinned root development dependency.
-
-**Tooling update:** use the pinned pnpm 12.18.0 release and a Node version in the ranges above. Run `corepack enable` and `pnpm install` after pulling. Docker and CI now use Python 3.15; native Python support remains 3.11+. Frontend animation imports use `motion/react`. TypeScript remains on 6.0.3 because the current ESLint and OpenAPI tooling does not support the TypeScript 7 compiler API; `pnpm update:all` preserves that restriction.
-
-```bash
-# Install the repository's Corepack version, then enable pnpm
-npm install --global "corepack@$(node -p 'require("./package.json").devDependencies.corepack')"
-corepack enable pnpm
-
-# Install dependencies
-pnpm install
-
-# Set up environment (all environment variables are configured in the root .env file)
-cp .env.example .env
-# Edit .env with your settings
-
-# Start development servers
-pnpm dev
-```
-
-## 📚 Documentation
-
-- **[Configuration Guide](docs/CONFIGURATION.md)** - Complete environment variables and settings reference
-- **[Deployment Guide](docs/DEPLOYMENT.md)** - Docker volumes, production deployment, and troubleshooting
-- **[Contributing Guide](docs/CONTRIBUTING.md)** - Development workflow, branch strategy, and how to contribute
-- **[Release Process](docs/RELEASE_PROCESS.md)** - Version management and release workflow
-- **[API Documentation](packages/hermes-api/README.md)** - Complete API reference and examples
-- **[Frontend Guide](packages/hermes-app/README.md)** - React app development guide
-- **[Interactive API Docs](http://localhost:3000/api/v1/docs)** - Live Swagger documentation
-- **[docker-compose.example.yml](docker-compose.example.yml)** - Pre-built images deployment configuration
-
-### 🔀 Branch Strategy
-
-- **`main`** - Stable production releases (Docker: `latest`)
-- **`develop`** - Optional staging branch (currently inactive)
-- **Feature branches** - Your contributions (merge to `main`)
-
-Contributors: Open PRs to `main`. The `develop` workflow is optional and its branch is not currently active. See the [Contributing Guide](docs/CONTRIBUTING.md) for details.
----
-
-## Hosting Partner
-
-This could be you! Bring Hermes to the world by hosting a public instance and getting featured here!
+Hermes is licensed under [AGPL-3.0](LICENSE).

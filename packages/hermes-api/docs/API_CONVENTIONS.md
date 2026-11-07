@@ -1,213 +1,73 @@
-# API Conventions
+# API conventions
 
-This document outlines the conventions and best practices for the Hermes API.
+## JSON fields and Python names
 
-## Field Naming: camelCase for JSON, snake_case for Python
-
-### Problem
-
-JavaScript/TypeScript frontends expect `camelCase` field names, while Python code uses `snake_case` by convention. This mismatch can cause bugs and confusion.
-
-### Solution: CamelCaseModel
-
-We use Pydantic v2's built-in `alias_generator` to automatically convert between naming conventions:
+Use the shared [CamelCaseModel](../app/models/base.py) for API request and response
+models. Python attributes use snake_case; serialized JSON and OpenAPI properties
+use camelCase.
 
 ```python
 from app.models.base import CamelCaseModel
 
-class UserResponse(CamelCaseModel):
-    """User response model."""
 
-    user_id: int        # Python: snake_case
-    is_active: bool     # Python: snake_case
-    created_at: str     # Python: snake_case
+class ExampleResponse(CamelCaseModel):
+    download_id: str
+    is_complete: bool
 ```
 
-**API Response (automatic conversion):**
+Serialized JSON:
+
 ```json
 {
-  "userId": 123,
-  "isActive": true,
-  "createdAt": "2025-11-09T10:00:00Z"
+  "downloadId": "example-id",
+  "isComplete": false
 }
 ```
 
-### Base Model Implementation
+The base model configures Pydantic's `to_camel` alias generator,
+`populate_by_name=True`, and `from_attributes=True`. Use those shared settings
+instead of copying the base model or adding manual aliases for regular field
+names. Explicit aliases should be reserved for contracts the generator cannot
+express. Reuse existing shared models before introducing another request or
+response shape.
 
-Located in `app/models/base.py`:
+Inputs support Python field names through the base configuration, but client
+examples and frontend code should use the canonical camelCase schema. This
+naming rule applies to JSON models; query parameter names are declared by each
+endpoint and may use snake_case, such as `include_formats` or `start_date`.
 
-```python
-from pydantic import BaseModel, ConfigDict
-from pydantic.alias_generators import to_camel
+## Frontend contracts
 
-class CamelCaseModel(BaseModel):
-    """
-    Base model that automatically converts snake_case fields to camelCase in JSON.
+Generate TypeScript types from the Python app with `pnpm generate:types` at the
+repository root. No running API server is needed. Import generated schemas
+instead of manually mirroring backend interfaces:
 
-    Configuration:
-        - alias_generator: Auto converts field names to camelCase
-        - populate_by_name: Accepts both snake_case and camelCase on input
-        - from_attributes: Allows creation from ORM models (SQLAlchemy)
-    """
-    model_config = ConfigDict(
-        alias_generator=to_camel,
-        populate_by_name=True,
-        from_attributes=True,
-    )
+```typescript
+import type { components } from '@/types/api.generated'
+
+const request = {
+  url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+  format: 'bestvideo*+bestaudio/best',
+  downloadSubtitles: true,
+  downloadThumbnail: false,
+} satisfies components['schemas']['DownloadRequest']
 ```
 
-### Usage Guidelines
+See the [SDK guide](../../hermes-app/SDK_GUIDE.md) for client examples and the
+regeneration workflow. Live schema and documentation paths are
+`/api/v1/openapi.json`, `/api/v1/docs`, and `/api/v1/redoc`.
 
-#### ✅ DO: Use CamelCaseModel for All API Response Models
+## Validation and tests
 
-```python
-# Response models (sent to frontend)
-class UserResponse(CamelCaseModel):
-    user_id: int
-    is_admin: bool
+Use Pydantic field types and validators for input contracts, keep optional values
+explicit, and follow the application's strict mypy settings. Tests of JSON
+responses should assert serialized names such as `downloadId`, even when model
+constructors use `download_id`.
 
-# Input models (received from frontend)
-class UserCreate(CamelCaseModel):
-    username: str
-    email: str
-```
+When changing a contract, update endpoint tests, regenerate frontend types, and
+check callers. Document breaking changes and migration requirements; do not add
+compatibility aliases or fallbacks for removed fields or behavior.
 
-#### ✅ DO: Use snake_case in Python Code
-
-```python
-# Python code uses snake_case
-user = User(
-    user_id=123,
-    is_active=True,
-    created_at="2025-11-09"
-)
-```
-
-#### ❌ DON'T: Manually Add Field Aliases
-
-```python
-# ❌ WRONG - Don't do this!
-class UserResponse(BaseModel):
-    user_id: int = Field(..., alias="userId", serialization_alias="userId")
-    is_active: bool = Field(..., alias="isActive", serialization_alias="isActive")
-
-# ✅ CORRECT - Use CamelCaseModel instead
-class UserResponse(CamelCaseModel):
-    user_id: int
-    is_active: bool
-```
-
-#### ✅ DO: Inherit from CamelCaseModel for Consistency
-
-All models in these locations should use `CamelCaseModel`:
-- `app/api/v1/endpoints/*.py` - Endpoint-specific models
-- `app/models/pydantic/*.py` - Shared models
-
-### Benefits
-
-1. **Automatic Conversion**: No manual aliases needed
-2. **Type Safety**: Python types stay clean and simple
-3. **Flexibility**: Accepts both formats on input (`populate_by_name=True`)
-4. **Consistency**: One pattern across the entire API
-5. **Maintainability**: Change once in base model, applies everywhere
-
-### OpenAPI Schema
-
-FastAPI automatically generates correct OpenAPI schemas with camelCase:
-
-```yaml
-UserResponse:
-  properties:
-    userId:
-      type: integer
-    isActive:
-      type: boolean
-    createdAt:
-      type: string
-```
-
-### Testing
-
-Tests should expect camelCase in API responses:
-
-```python
-def test_user_response():
-    response = client.get("/api/v1/users/1")
-    data = response.json()
-
-    # ✅ CORRECT - Check for camelCase
-    assert "userId" in data
-    assert "isActive" in data
-
-    # ❌ WRONG - Don't check for snake_case
-    assert "user_id" in data  # This will fail!
-```
-
-### Common Patterns
-
-**Response Model:**
-```python
-class DownloadResponse(CamelCaseModel):
-    download_id: str
-    file_name: str
-    is_complete: bool
-    created_at: str
-```
-
-**Input Model:**
-```python
-class DownloadCreate(CamelCaseModel):
-    url: str
-    download_subtitles: bool = False
-    output_directory: str | None = None
-```
-
-**List Response:**
-```python
-class DownloadListItem(CamelCaseModel):
-    download_id: str
-    status: str
-    progress_percent: int
-```
-
-### Exceptions
-
-**Simple fields without underscores don't need special handling:**
-```python
-class SimpleModel(CamelCaseModel):
-    id: str          # No conversion needed
-    name: str        # No conversion needed
-    status: str      # No conversion needed
-```
-
-### Migration from Manual Aliases
-
-If you find models with manual `Field(alias=...)`, refactor them:
-
-**Before:**
-```python
-class OldModel(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    is_active: bool = Field(..., alias="isActive", serialization_alias="isActive")
-    created_at: str = Field(..., alias="createdAt", serialization_alias="createdAt")
-```
-
-**After:**
-```python
-class NewModel(CamelCaseModel):
-    is_active: bool
-    created_at: str
-```
-
-### References
-
-- [Pydantic v2 Alias Documentation](https://docs.pydantic.dev/latest/concepts/alias/)
-- [Pydantic Alias Generators](https://docs.pydantic.dev/latest/api/alias_generators/)
-- Base Model Implementation: `app/models/base.py`
-
-### History
-
-- **2025-11-09**: Implemented CamelCaseModel with Pydantic v2 `alias_generator`
-- **Reason**: Standardize API responses to use camelCase for JavaScript/TypeScript frontends
-- **Impact**: Reduced boilerplate by ~60%, improved maintainability
+- [API development](../README.md)
+- [API tests](../tests/README.md)
+- [Pydantic aliases](https://docs.pydantic.dev/latest/concepts/alias/)
