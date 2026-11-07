@@ -2,6 +2,7 @@
 API statistics endpoint.
 """
 
+from collections import Counter
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query
@@ -13,6 +14,8 @@ from app.core.security import ApiKeyPermission, AuthPrincipal, require_api_permi
 from app.db.models import DownloadHistory
 from app.db.session import get_database_session
 from app.models.pydantic.stats import ApiStatistics, ErrorBreakdown, ExtractorStats
+from app.services.storage_service import StorageService
+from app.utils.dates import as_utc
 from app.utils.time_periods import get_period_delta
 
 router = APIRouter(prefix="/stats", tags=["statistics"])
@@ -117,8 +120,9 @@ async def get_api_statistics(
         )
     ]
 
-    # Peak hour (simplified - just return 0 for now)
-    peak_hour = 0
+    hours = Counter(as_utc(record.completed_at).hour for record in records)
+    # Lowest UTC hour wins ties, including the empty-history default of midnight.
+    peak_hour = max(range(24), key=lambda hour: hours[hour])
 
     return ApiStatistics(
         period=period,
@@ -131,5 +135,5 @@ async def get_api_statistics(
         popular_extractors=popular_extractors,
         error_breakdown=error_breakdown,
         peak_hour=peak_hour,
-        total_storage_used=total_bandwidth,
+        total_storage_used=await StorageService.get_downloads_size(),
     )

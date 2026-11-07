@@ -1430,13 +1430,13 @@ export interface components {
             errorBreakdown?: components["schemas"]["ErrorBreakdown"][];
             /**
              * Peakhour
-             * @description Peak usage hour (0-23)
+             * @description Peak UTC completion hour (0-23); earliest hour wins ties, 0 when history is empty
              * @default 0
              */
             peakHour: number;
             /**
              * Totalstorageused
-             * @description Total storage used in bytes
+             * @description Current regular-file bytes under download storage, independent of the selected period; excludes symlinks and temp storage
              * @default 0
              */
             totalStorageUsed: number;

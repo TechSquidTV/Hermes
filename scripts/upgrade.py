@@ -81,6 +81,15 @@ class WorkerState(TypedDict):
     queues: list[str]
 
 
+def report(message: str, *, error: bool = False) -> None:
+    """Operator output must never change the outcome of a deployment operation."""
+    try:
+        print(message, file=sys.stderr if error else sys.stdout, flush=True)
+    except OSError:
+        # A closed pipe or terminal must not trigger deployment cleanup.
+        pass
+
+
 def validate_storage(
     environment: dict[str, str],
     old_environment: list[str],
@@ -178,6 +187,7 @@ class Upgrade:
         self.timeout = timeout
         self.environment = {**os.environ, "HERMES_IMAGE_TAG": version}
         self.state: dict[str, object] = {}
+        self.configuration: dict[str, object] = {}
         self.state_file: Path | None = None
         self.queues: list[str] = []
         self.project = project
@@ -266,6 +276,7 @@ class Upgrade:
 
     def preflight(self, pull: bool) -> dict[str, str]:
         config = json.loads(self.compose("config", "--format", "json"))
+        self.configuration = config
         self.project = config["name"]
         images: dict[str, str] = {}
         for name in SERVICES:
@@ -305,9 +316,8 @@ class Upgrade:
                 },
             )
         if pull:
-            print(
+            report(
                 "Pulling the selected release while the current version keeps running...",
-                flush=True,
             )
             self.compose("pull", *SERVICES)
         metadata = json.loads(self.helper("preflight"))
@@ -378,21 +388,26 @@ class Upgrade:
             json.dumps({"services": existing}).replace("$", "$$")
         )
         previous_images.chmod(0o600)
+        # Capture resolved environment and absolute mounts before maintenance.
+        # Recovery must not re-interpolate mutable files or shell variables.
+        recovery_compose = directory / "compose.json"
+        # `compose config` has already escaped literal dollars for round trips.
+        recovery_compose.write_text(json.dumps(self.configuration))
+        recovery_compose.chmod(0o600)
         backup = f"/app/data/backups/{identifier}"
         self.save(
             version=self.version,
             project_name=self.project,
-            files=[str(file) for file in self.files],
+            compose_file=str(recovery_compose),
             env_file=str(self.env_file),
             backup_directory=backup,
             phase="prepared",
         )
-        print(f"Recovery record: {self.state_file}", flush=True)
+        report(f"Recovery record: {self.state_file}")
         try:
             self.check_stop()
-            print(
+            report(
                 "Pausing requests and scheduling; waiting for queued and active work...",
-                flush=True,
             )
             self.compose("stop", "--timeout", "60", "app", "api", "celery_beat")
             self.save(phase="draining")
@@ -406,7 +421,7 @@ class Upgrade:
             self.save(snapshot=snapshot, phase="backed-up")
             self.check_stop()
             self.save(phase="migrating")
-            print("Backup complete. Applying database migrations once...", flush=True)
+            report("Backup complete. Applying database migrations once...")
             self.helper("migrate")
             self.check_stop()
             self.save(phase="starting")
@@ -446,9 +461,8 @@ class Upgrade:
             self.persist_version()
             self.helper("maintenance", "off")
             self.save(phase="complete")
-            print(
+            report(
                 f"Hermes {self.version} is ready. Backup retained at {backup}.",
-                flush=True,
             )
         except BaseException:
             if self.state.get("phase") in PRE_MIGRATION_PHASES:
@@ -462,11 +476,10 @@ class Upgrade:
                             "stop", "--timeout", "60", "app", "api", "celery_beat"
                         )
                     finally:
-                        print(
+                        report(
                             "Upgrade stopped. Keep services offline until recovery or a forward fix.\n"
                             f"Recovery: python3 scripts/upgrade.py --recover {shlex.quote(str(self.state_file))} --restore-database",
-                            file=sys.stderr,
-                            flush=True,
+                            error=True,
                         )
             raise
 
@@ -505,8 +518,13 @@ def recover(state_file: Path, *, restore: bool) -> None:
         raise UpgradeError(
             "This upgrade completed; restoring its snapshot could discard new writes. Use the manual recovery procedure"
         )
+    compose_file = state.get("compose_file")
+    if not isinstance(compose_file, str) or not Path(compose_file).is_file():
+        raise UpgradeError(
+            "Recovery requires the saved resolved Compose configuration; use manual recovery for older or incomplete records"
+        )
     upgrade = Upgrade(
-        [Path(file) for file in state["files"]],
+        [Path(compose_file)],
         Path(state["env_file"]),
         state["version"],
         900,
@@ -521,7 +539,7 @@ def recover(state_file: Path, *, restore: bool) -> None:
     with defer_signals(upgrade), upgrade_lock(upgrade.env_file.parent):
         if before_migration:
             upgrade.abort_before_migration()
-            print("Original services resumed. No database restore was needed.")
+            report("Original services resumed. No database restore was needed.")
             return
         previous = json.loads(
             (state_file.parent / "previous-services.json").read_text()
@@ -547,7 +565,7 @@ def recover(state_file: Path, *, restore: bool) -> None:
             "up", "--detach", "--no-deps", "--wait", "--wait-timeout", "180", *SERVICES
         )
         upgrade.save(phase="recovered")
-        print(
+        report(
             "Previous images and database snapshot restored. Any writes after the snapshot were discarded."
         )
 
@@ -594,7 +612,7 @@ def main() -> None:
         with defer_signals(upgrade), upgrade_lock(upgrade.env_file.parent):
             upgrade.apply(pull=not args.skip_pull)
     except (UpgradeError, OSError, KeyboardInterrupt) as error:
-        print(f"Upgrade failed: {error}", file=sys.stderr)
+        report(f"Upgrade failed: {error}", error=True)
         raise SystemExit(1) from None
 
 

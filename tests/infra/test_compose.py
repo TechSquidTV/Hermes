@@ -21,6 +21,40 @@ STACKS = ("docker-compose.yml", "docker-compose.example.yml", "docker-compose.de
 
 @unittest.skipUnless(shutil.which("docker"), "Docker Compose CLI is required")
 class ComposeConfigurationTests(unittest.TestCase):
+    def test_resolved_recovery_config_preserves_database_mounts_and_literals(
+        self,
+    ) -> None:
+        source = self.project / "docker-compose.example.yml"
+        env_file = self.project / ".env"
+        initial = Upgrade([source], env_file, "1.2.3", 1)
+        initial.environment = {
+            **self.environment,
+            "HERMES_IMAGE_TAG": "1.2.3",
+            "HERMES_DATABASE_URL": "sqlite+aiosqlite:////app/data/original.sqlite",
+            "HERMES_SECRET_KEY": "literal$dollar-recovery-test-secret",
+        }
+        config = json.loads(initial.compose("config", "--format", "json"))
+        saved = self.project / "saved.json"
+        saved.write_text(json.dumps(config))
+        source.write_text("invalid mutable Compose file")
+        env_file.write_text("HERMES_DATABASE_URL=wrong-database\n")
+        restored = Upgrade([saved], env_file, "1.2.3", 1, project=config["name"])
+        restored.environment = {
+            **self.environment,
+            "HERMES_DATABASE_URL": "another-wrong-database",
+            "HERMES_SECRET_KEY": "wrong-secret",
+        }
+        resolved = json.loads(restored.compose("config", "--format", "json"))
+        for service in ("api", "celery_worker", "celery_beat"):
+            self.assertEqual(
+                resolved["services"][service]["environment"],
+                config["services"][service]["environment"],
+            )
+            self.assertEqual(
+                resolved["services"][service]["volumes"],
+                config["services"][service]["volumes"],
+            )
+
     def test_explicit_project_survives_a_different_shell_environment(self) -> None:
         files, environment = [
             self.project / "docker-compose.example.yml"

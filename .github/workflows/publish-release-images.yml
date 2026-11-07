@@ -193,7 +193,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release create "$RELEASE_TAG" --verify-tag --title "$RELEASE_TAG" --generate-notes
+            NOTES=()
+            # Only attach guidance that actually belongs to the selected tag.
+            if [[ -f .github/release-notes.md ]]; then
+              python3 .release-policy/.github/scripts/release_notes.py "${RELEASE_TAG#v}" .github/release-notes.md > "$RUNNER_TEMP/release-notes.md"
+              NOTES=(--notes-file "$RUNNER_TEMP/release-notes.md")
+            fi
+            gh release create "$RELEASE_TAG" --verify-tag --title "$RELEASE_TAG" "${NOTES[@]}" --generate-notes
           fi
 
       - name: Generate publish summary

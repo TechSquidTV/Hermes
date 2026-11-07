@@ -2,6 +2,7 @@
 Timeline analytics endpoint for charts and data visualization.
 """
 
+from dataclasses import dataclass
 from datetime import date as date_type
 from datetime import datetime, timezone
 from typing import Literal, Optional
@@ -20,6 +21,16 @@ from app.utils.time_periods import get_period_delta
 
 router = APIRouter(prefix="/timeline", tags=["timeline"])
 logger = get_logger(__name__)
+
+
+@dataclass(frozen=True)
+class DailyTotals:
+    """Exact daily aggregates shared by chart and summary calculations."""
+
+    date: date_type
+    downloads: int
+    successful: int
+    total_size: int
 
 
 @router.get("/", response_model=list[DailyStats])
@@ -48,6 +59,28 @@ async def get_timeline_stats(
 
     Date filters override period selection.
     """
+    totals = await _daily_totals(
+        db_session, period, start_date, end_date, extractor, status
+    )
+    return [
+        DailyStats(
+            date=day.date,
+            downloads=day.downloads,
+            success_rate=round(day.successful / day.downloads, 3),
+            total_size=day.total_size,
+        )
+        for day in totals
+    ]
+
+
+async def _daily_totals(
+    session: AsyncSession,
+    period: str,
+    start_date: date_type | None,
+    end_date: date_type | None,
+    extractor: str | None = None,
+    status: HistoryStatus | None = None,
+) -> list[DailyTotals]:
     # Calculate date range based on period or use provided dates
     if start_date or end_date:
         date_filters = []
@@ -80,7 +113,6 @@ async def get_timeline_stats(
             func.cast(DownloadHistoryModel.status == "completed", type_=Integer)
         ).label("successful"),
         func.sum(DownloadHistoryModel.file_size).label("total_size"),
-        func.avg(DownloadHistoryModel.duration).label("avg_duration"),
     ).select_from(DownloadHistoryModel)
 
     if len(filters) > 1:
@@ -91,26 +123,20 @@ async def get_timeline_stats(
     query = query.group_by(func.date(DownloadHistoryModel.completed_at))
     query = query.order_by(func.date(DownloadHistoryModel.completed_at))
 
-    result = await db_session.execute(query)
-    daily_records = result.all()
-
-    # Convert to DailyStats objects
-    daily_stats = []
-    for record in daily_records:
-        successful = record.successful or 0
-        total = record.downloads or 0
-        success_rate = successful / total if total > 0 else 0.0
-
-        daily_stats.append(
-            DailyStats(
-                date=record.date,
-                downloads=total,
-                success_rate=round(success_rate, 3),
-                total_size=record.total_size or 0,
-            )
+    result = await session.execute(query)
+    return [
+        DailyTotals(
+            date=(
+                record.date
+                if isinstance(record.date, date_type)
+                else date_type.fromisoformat(record.date)
+            ),
+            downloads=record.downloads,
+            successful=record.successful or 0,
+            total_size=record.total_size or 0,
         )
-
-    return daily_stats
+        for record in result.all()
+    ]
 
 
 @router.get("/summary", response_model=TimelineSummary)
@@ -130,15 +156,7 @@ async def get_timeline_summary(
     for the specified time period.
     """
     # Get daily stats first
-    daily_stats = await get_timeline_stats(
-        period=period,
-        start_date=start_date,
-        end_date=end_date,
-        extractor=None,
-        status=None,
-        db_session=db_session,
-        principal=principal,
-    )
+    daily_stats = await _daily_totals(db_session, period, start_date, end_date)
 
     if not daily_stats:
         return TimelineSummary(
@@ -155,9 +173,7 @@ async def get_timeline_summary(
 
     # Calculate summary statistics
     total_downloads = sum(stat.downloads for stat in daily_stats)
-    total_successful = sum(
-        int(stat.downloads * stat.success_rate) for stat in daily_stats
-    )
+    total_successful = sum(stat.successful for stat in daily_stats)
     total_size = sum(stat.total_size for stat in daily_stats)
 
     success_rate = total_successful / total_downloads if total_downloads > 0 else 0.0

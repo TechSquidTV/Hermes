@@ -291,9 +291,12 @@ jobs:
           NEW_VERSION="${{ steps.new_version.outputs.version }}"
           TAG="v$NEW_VERSION"
 
+          python3 .github/scripts/release_notes.py "$NEW_VERSION" .github/release-notes.md > "$RUNNER_TEMP/release-notes.md"
+
           gh release create "$TAG" \
             --title "$TAG" \
             --verify-tag \
+            --notes-file "$RUNNER_TEMP/release-notes.md" \
             --generate-notes
 
           echo "Created GitHub Release $TAG"
