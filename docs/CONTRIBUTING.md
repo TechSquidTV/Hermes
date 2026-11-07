@@ -171,16 +171,6 @@ cd packages/hermes-api && uv run pytest --cov=app --cov-report=html
 - Bug fixes (regression tests)
 - API changes (request/response validation)
 
-## 🤖 AI Assistance
-
-We use Cursor with AI assistance. The `.cursor/` directory contains project-specific rules and patterns.
-
-**For AI contributors:**
-- Reference `.cursor/rules/rule.mdc` for project guidelines
-- Follow established code patterns
-- Always run tests to validate generated code
-- Ask for clarification when unsure
-
 ## 📝 Contribution Process
 
 ### 1. Choose an Issue
