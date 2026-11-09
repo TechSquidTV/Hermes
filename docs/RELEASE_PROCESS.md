@@ -9,6 +9,8 @@ the Release workflow updates both package manifests and lockfiles.
 1. Merge reviewed changes to `main` with passing required checks.
 2. Validate the combined source with `pnpm pre-check`, which runs both packages'
    checks and tests and builds all three Dockerfiles.
+   Run `python3 tests/infra/compose_smoke.py` as well: it checks both deployment
+   topologies and rehearses SQLite upgrades and restores on a Linux Docker volume.
 3. Test the app, API, worker, and scheduler together, including persistent storage,
    authentication, downloads, and progress events.
 4. Review [.github/release-notes.md](../.github/release-notes.md), including breaking
@@ -39,7 +41,8 @@ gh workflow run release.yml --ref main -f version=1.2.3
 The workflow:
 
 1. Checks out `main` and verifies the requested version and tags are available.
-2. Updates all three manifests and both lockfiles, then runs `pnpm pre-check`.
+2. Updates all three manifests and both lockfiles, then runs `pnpm pre-check`
+   and the Compose/SQLite upgrade and restoration gate.
 3. Commits `chore(release): bump version to X.Y.Z` and pushes it to `main`.
 4. Creates `vX.Y.Z`, `hermes-app-vX.Y.Z`, and `hermes-api-vX.Y.Z` at that commit.
 5. Builds and publishes the app and API images for `linux/amd64` and `linux/arm64`.
@@ -297,3 +300,59 @@ For rackserver installations, publish matching image digests and use the existin
 immutable Ansible release owner rather than also running the standalone Compose
 upgrade coordinator. Keep admission closed, drain work without purging queues,
 and require a fresh verified encrypted backup/restore receipt before migration.
+
+### Preparing 1.0.1
+
+1.0.0 remains held for deployment. 1.0.1 replaces its unverified SQLite runtime
+with upstream 3.54.1, built from a pinned checksum for both image architectures.
+The build checks Python's loaded library and prints its upstream source ID.
+Do not retag, rebuild over, or delete 1.0.0 to repair this release.
+
+`tests/infra/sqlite_release.py` runs all live database access inside a Linux-native
+Docker volume. It validates original table rows and media/temp checksums through
+old-version startup, upgrade under concurrent login/refresh and repeated
+success/error/cancelled transactions, online backup, a fresh upgraded restore,
+and a separate original-checkpoint restore onto the old images. Failed runs keep
+stopped containers, their volume, and private logs. Successful runs remove only
+their own disposable containers, network and volume and retain `result.json`.
+The Compose smoke gate uses the seeded 0.6.0 fixture; production acceptance also
+requires the actual verified backup checkpoint and exact candidate image IDs.
+
+For an actual retrieved checkpoint archive containing
+`hermes/{config,downloads,temp,redis}`, load the retained old images and candidates
+into one Docker engine, then run:
+
+```bash
+python3 tests/infra/sqlite_release.py \
+  --api-image hermes-api:1.0.1-amd64 --app-image hermes-app:1.0.1-amd64 \
+  --old-api-image ghcr.io/techsquidtv/hermes-api:0.6.0 \
+  --old-app-image ghcr.io/techsquidtv/hermes-app:0.6.0 \
+  --redis-image redis:8-alpine \
+  --checkpoint /private/recovery/data.tar --evidence /private/recovery/acceptance-1.0.1
+```
+
+The evidence directory must be new. Omit `--checkpoint` for synthetic data only.
+Image arguments are resolved to immutable local IDs and recorded with their
+architecture. All images must match `--platform` (default `linux/amd64`). Never
+point the rehearsal at live installation mounts or give it production endpoints.
+
+After these fixes merge with passing checks, dispatch the existing Release
+workflow from `main` with **version `1.0.1`**. Leave the manifests at 1.0.0 during
+preparation: the workflow owns the coordinated version/lockfile bump and release
+commit. It now runs the Compose/SQLite gate before pushing that commit or tags.
+Verify the published image digests and repeat exact-image acceptance before
+production deployment. Existing 0.6.0 installations still need the breaking
+migration, coordinated service upgrade and sign-in described above; 1.0.1 adds
+no new schema revision.
+
+Preparation validation on 2026-11-09 passed on local candidates: 518 backend
+tests (two PostgreSQL-only tests skipped), 488 frontend tests, 40 infrastructure
+tests, and 32 focused regressions inside the AMD64 backend runtime. Both AMD64
+and ARM64 load SQLite 3.54.1 with upstream source ID
+`2026-10-16 14:45:20 555e07ef33f69a0957d24d8e555b702464a131d6f1607f4c3c1e4551e8e6ca76`.
+All three Dockerfiles and both Compose topologies passed, including interrupted
+upgrade recovery. The Linux-volume four-phase rehearsal passed with the actual
+retrieved checkpoint on AMD64 and the synthetic fixture on ARM64; each preserved
+original rows and file hashes and passed 64 authentication requests and 60
+transaction outcomes. These local candidate results do not replace acceptance
+of the subsequently published images or a fresh production backup receipt.

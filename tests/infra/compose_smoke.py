@@ -401,6 +401,47 @@ assert result.get("dry_run") is True, result
         "Both Compose stacks, maintenance queues, persistent mounts and runtime config passed."
     )
 
+    # Keep all WAL access in Linux even when this gate is run from macOS.
+    # Resolve immutable image IDs inside the rehearsal and record them as evidence.
+    historical = {
+        "api": "ghcr.io/techsquidtv/hermes-api:0.6.0",
+        "app": "ghcr.io/techsquidtv/hermes-app:0.6.0",
+    }
+    redis = "redis:8-alpine@sha256:71885d8cc6e42f2bc0aa2eb853bfc4be200b5108a46ac50e117ae1df0531fb80"
+    platform = run(
+        "docker",
+        "image",
+        "inspect",
+        images["api"],
+        "--format",
+        "{{.Os}}/{{.Architecture}}",
+        capture=True,
+    ).strip()
+    for image in (*historical.values(), redis):
+        run("docker", "pull", "--platform", platform, image)
+    evidence = (
+        Path(os.environ.get("RUNNER_TEMP", tempfile.gettempdir()))
+        / f"{project}-sqlite-evidence"
+    )
+    run(
+        sys.executable,
+        str(ROOT / "tests/infra/sqlite_release.py"),
+        "--api-image",
+        images["api"],
+        "--app-image",
+        images["app"],
+        "--old-api-image",
+        historical["api"],
+        "--old-app-image",
+        historical["app"],
+        "--redis-image",
+        redis,
+        "--platform",
+        platform,
+        "--evidence",
+        str(evidence),
+    )
+
 
 if __name__ == "__main__":
     main()

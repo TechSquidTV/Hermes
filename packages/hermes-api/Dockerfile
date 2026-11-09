@@ -1,6 +1,20 @@
 # Multi-stage Dockerfile for Hermes API
 FROM ghcr.io/astral-sh/uv:0.13.7@sha256:96f40d3904aad8d0bd010539001d36c8e2188b981e1334471a90c4a1d93bb490 AS uv-runtime
 
+# Build the same verified WAL-fixed library for both supported architectures.
+# Upstream archive SHA3-256: b6ced585c750916b1052667239a12c25a7ff34e7f06e1e6e01ecb0427657d9c4
+# https://sqlite.org/download.html (3.54.1); https://sqlite.org/wal.html#walreset
+FROM python:3.15-slim@sha256:e97b88e416c3c01eb427b21fd8cd3ebf006e6ee38afcfcc3cae1c54ee2ab0a75 AS sqlite-runtime
+RUN apt-get update && apt-get install -y --no-install-recommends gcc make libc6-dev \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /build
+ADD --checksum=sha256:926ef8d3eab93fbf6e06011901273eec076b25594a4e1cdadd50c987f4f6d64e \
+    https://sqlite.org/2026/sqlite-autoconf-3540100.tar.gz sqlite.tar.gz
+RUN tar -xzf sqlite.tar.gz --strip-components=1 \
+    && ./configure --prefix=/opt/sqlite --disable-static --disable-readline CFLAGS='-O2' \
+    && make -j2 libsqlite3.so \
+    && make install-dll
+
 FROM python:3.15-slim@sha256:e97b88e416c3c01eb427b21fd8cd3ebf006e6ee38afcfcc3cae1c54ee2ab0a75 AS builder
 
 # Install system dependencies for building
@@ -38,6 +52,12 @@ RUN apt-get update && apt-get install -y \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
+
+# Verify Python's loaded library, rather than trusting a package version or CLI.
+COPY --from=sqlite-runtime /opt/sqlite/lib/ /usr/local/lib/
+RUN echo '/usr/local/lib' > /etc/ld.so.conf.d/00-hermes-sqlite.conf \
+    && ldconfig \
+    && python -c "import sqlite3; assert sqlite3.sqlite_version == '3.54.1', sqlite3.sqlite_version; print(sqlite3.connect(':memory:').execute('SELECT sqlite_source_id()').fetchone()[0])"
 
 # Copy uv and virtual environment from builder
 COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv

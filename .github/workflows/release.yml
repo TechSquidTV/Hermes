@@ -178,6 +178,9 @@ jobs:
           echo "Running comprehensive pre-release checks..."
           pnpm pre-check
 
+      - name: Rehearse SQLite upgrade and restoration before tagging
+        run: python3 tests/infra/compose_smoke.py
+
       - name: Configure git
         run: |
           git config user.name "github-actions[bot]"
