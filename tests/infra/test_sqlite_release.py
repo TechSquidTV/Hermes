@@ -1,14 +1,16 @@
 """The rehearsal must reject data loss and incomplete restoration evidence."""
 
+import io
 import json
 import sqlite3
+import tarfile
 import tempfile
 import unittest
 from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
-from sqlite_release import probe, snapshot, verify
+from sqlite_release import extract_checkpoint, probe, snapshot, verify
 
 
 class SQLiteReleaseEvidenceTests(unittest.TestCase):
@@ -28,6 +30,39 @@ class SQLiteReleaseEvidenceTests(unittest.TestCase):
         self.media.write_bytes(b"original media")
         self.baseline = self.root / "baseline.json"
         self.baseline.write_text(json.dumps(snapshot(self.root)))
+
+    def sparse_archive(self, canonical: str) -> Path:
+        archive_path = self.root / "checkpoint.tar"
+        content = b"original sparse media"
+        sparse_map = f"1\n0\n{len(content)}\n".encode().ljust(512, b"\0")
+        member = tarfile.TarInfo("hermes/downloads/GNUSparseFile.1/temporary.mp4")
+        member.pax_headers = {
+            "GNU.sparse.major": "1",
+            "GNU.sparse.minor": "0",
+            "GNU.sparse.name": canonical,
+            "GNU.sparse.realsize": str(len(content)),
+            "path": member.name,
+        }
+        member.size = len(sparse_map) + len(content)
+        with tarfile.open(archive_path, "w", format=tarfile.PAX_FORMAT) as archive:
+            archive.addfile(member, io.BytesIO(sparse_map + content))
+        return archive_path
+
+    def test_sparse_archive_restores_canonical_path_and_bytes(self) -> None:
+        canonical = "hermes/downloads/" + "long unicode title \u2019" * 8 + ".mp4"
+        destination = self.root / "restored"
+        extract_checkpoint(self.sparse_archive(canonical), destination)
+        self.assertEqual(
+            (destination / canonical).read_bytes(), b"original sparse media"
+        )
+        self.assertFalse(list(destination.rglob("GNUSparseFile*")))
+
+    def test_sparse_canonical_path_cannot_escape_the_destination(self) -> None:
+        with self.assertRaises(tarfile.FilterError):
+            extract_checkpoint(
+                self.sparse_archive("../escape.mp4"), self.root / "restored"
+            )
+        self.assertFalse((self.root / "escape.mp4").exists())
 
     def test_changed_original_credentials_are_rejected(self) -> None:
         with closing(sqlite3.connect(self.database)) as connection:

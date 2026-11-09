@@ -15,6 +15,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import tarfile
 import time
 import urllib.request
 import uuid
@@ -29,6 +30,17 @@ class Snapshot(TypedDict):
     columns: dict[str, list[str]]
     tables: dict[str, list[str]]
     files: dict[str, str]
+
+
+def extract_checkpoint(archive_path: Path, destination: Path) -> None:
+    """Restore GNU sparse names before applying the safe extraction filter."""
+    destination.mkdir(parents=True)
+    with tarfile.open(archive_path) as archive:
+        for member in archive:
+            # GNU sparse 1.0 stores the canonical path separately; a PAX path
+            # may otherwise override it with the temporary GNUSparseFile name.
+            member.name = member.pax_headers.get("GNU.sparse.name", member.name)
+            archive.extract(member, destination, filter="data")
 
 
 def encode_blob(value: object) -> str:
@@ -180,7 +192,9 @@ def stress_transactions() -> None:
 def probe(action: str, phase: str) -> None:
     """Executed exclusively inside a Linux container on the named volume."""
     directory = ROOT / phase / "hermes"
-    if action == "seed":
+    if action == "unpack":
+        extract_checkpoint(ROOT / "checkpoint.tar", ROOT / "original")
+    elif action == "seed":
         for name in ("config", "downloads", "temp", "redis"):
             (directory / name).mkdir(parents=True)
         with closing(sqlite3.connect(directory / "config/hermes.db")) as connection:
@@ -331,19 +345,12 @@ def rehearse(args: argparse.Namespace) -> None:
         docker("cp", str(script), helper + ":/rehearsal/probe.py")
         runtime = json.loads(check("runtime", "original"))
         if args.checkpoint:
-            docker("exec", helper, "mkdir", "/rehearsal/original")
             docker(
                 "cp",
                 str(Path(args.checkpoint).resolve()),
                 helper + ":/rehearsal/checkpoint.tar",
             )
-            docker(
-                "exec",
-                helper,
-                "python",
-                "-c",
-                "import tarfile; t=tarfile.open('/rehearsal/checkpoint.tar'); t.extractall('/rehearsal/original', filter='data')",
-            )
+            check("unpack", "original")
         else:
             fixture = (
                 script.parents[2]
