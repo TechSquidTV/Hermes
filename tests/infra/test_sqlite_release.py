@@ -35,22 +35,37 @@ class SQLiteReleaseEvidenceTests(unittest.TestCase):
         self.baseline = self.root / "baseline.json"
         self.baseline.write_text(json.dumps(release.snapshot(self.root)))
 
-    def test_failed_rehearsal_retains_container_stdout_and_stderr(self) -> None:
+    def failed_rehearsal(
+        self, *, log_exit: int = 0, stop_exit: int = 0, setup_exit: int = 0
+    ) -> Path:
         binary = self.root / "bin"
         binary.mkdir()
         docker = binary / "docker"
-        docker.write_text(f"#!{sys.executable}\n" + textwrap.dedent("""\
+        docker.write_text(
+            f"#!{sys.executable}\n"
+            + textwrap.dedent("""\
             import sys
+            from pathlib import Path
             arguments = sys.argv[1:]
             if arguments[:2] == ["image", "inspect"]:
                 print("sha256:" + "a" * 64 + " linux/amd64")
             elif arguments[0] == "logs":
                 print("container standard output")
                 print("container error diagnostics", file=sys.stderr)
+                sys.exit(__LOG_EXIT__)
+            elif arguments[0] == "stop":
+                (Path(sys.argv[0]).parent.parent / "stop-attempted").touch()
+                sys.exit(__STOP_EXIT__)
+            elif arguments[:2] == ["network", "create"]:
+                sys.exit(__SETUP_EXIT__)
             elif arguments[0] == "exec":
                 print("synthetic runtime check failure", file=sys.stderr)
                 sys.exit(1)
-        """))
+        """)
+            .replace("__LOG_EXIT__", str(log_exit))
+            .replace("__STOP_EXIT__", str(stop_exit))
+            .replace("__SETUP_EXIT__", str(setup_exit))
+        )
         docker.chmod(0o700)
         evidence = self.root / "evidence"
         arguments = argparse.Namespace(
@@ -68,10 +83,45 @@ class SQLiteReleaseEvidenceTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(RuntimeError, "Rehearsal failed"):
                 release.rehearse(arguments)
+        return evidence
+
+    def test_failed_rehearsal_retains_container_stdout_and_stderr(self) -> None:
+        evidence = self.failed_rehearsal()
         logs = list(evidence.glob("*-helper.private.log"))
         self.assertEqual(len(logs), 1)
         self.assertIn("container standard output", logs[0].read_text())
         self.assertIn("container error diagnostics", logs[0].read_text())
+
+    def test_failed_log_collection_still_stops_and_records_the_volume(self) -> None:
+        evidence = self.failed_rehearsal(log_exit=1)
+        self.assertTrue((self.root / "stop-attempted").exists())
+        self.assertTrue((evidence / "retained-volume.txt").exists())
+        self.assertIn(
+            "collecting logs", (evidence / "cleanup-errors.private.log").read_text()
+        )
+        self.assertIn(
+            "synthetic runtime check failure",
+            (evidence / "failure-command.private.log").read_text(),
+        )
+
+    def test_failed_stop_preserves_the_primary_error_and_recovery_identity(
+        self,
+    ) -> None:
+        evidence = self.failed_rehearsal(stop_exit=1)
+        self.assertTrue((evidence / "retained-volume.txt").exists())
+        self.assertIn(
+            "stopping containers", (evidence / "cleanup-errors.private.log").read_text()
+        )
+        self.assertIn(
+            "synthetic runtime check failure",
+            (evidence / "failure-command.private.log").read_text(),
+        )
+        self.assertFalse((evidence / "result.json").exists())
+
+    def test_setup_failure_records_a_volume_created_before_the_helper(self) -> None:
+        evidence = self.failed_rehearsal(setup_exit=1)
+        self.assertTrue((evidence / "retained-volume.txt").exists())
+        self.assertFalse((evidence / "result.json").exists())
 
     def sparse_archive(self, canonical: str) -> Path:
         archive_path = self.root / "checkpoint.tar"

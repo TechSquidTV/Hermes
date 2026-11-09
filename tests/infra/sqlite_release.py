@@ -19,7 +19,9 @@ import tarfile
 import time
 import urllib.request
 import uuid
+from collections.abc import Callable
 from contextlib import closing
+from functools import partial
 from pathlib import Path
 from typing import TypedDict, cast
 
@@ -292,28 +294,13 @@ def rehearse(args: argparse.Namespace) -> None:
     )
     with checkpoint.open("rb") as stream:
         checkpoint_hash = hashlib.file_digest(stream, "sha256").hexdigest()
-    docker("volume", "create", identity)
-    docker("network", "create", "--internal", identity)
     volume = ("--mount", f"type=volume,source={identity},target=/rehearsal")
     helper = identity + "-helper"
-    docker(
-        "run",
-        "-d",
-        "--name",
-        helper,
-        "--network",
-        "none",
-        "--platform",
-        args.platform,
-        "--user",
-        "0:0",
-        *volume,
-        "--entrypoint",
-        "sleep",
-        images["api"][0],
-        "infinity",
-    )
-    created.append(helper)
+
+    def start(name: str, *arguments: str) -> None:
+        # A failed client response can still leave a created/running container.
+        created.append(name)
+        docker("run", "-d", "--name", name, *arguments)
 
     def check(action: str, phase: str, container: str = helper) -> str:
         return docker(
@@ -345,7 +332,30 @@ def rehearse(args: argparse.Namespace) -> None:
         raise RuntimeError(f"Readiness timed out: {container}")
 
     phases = []
+    result: dict[str, object] = {}
+    volume_created = False
+    network_created = False
     try:
+        docker("volume", "create", identity)
+        volume_created = True
+        docker("network", "create", "--internal", identity)
+        network_created = True
+        start(
+            helper,
+            "--init",
+            "--no-healthcheck",
+            "--network",
+            "none",
+            "--platform",
+            args.platform,
+            "--user",
+            "0:0",
+            *volume,
+            "--entrypoint",
+            "sleep",
+            images["api"][0],
+            "infinity",
+        )
         docker("cp", str(script), helper + ":/rehearsal/probe.py")
         runtime = json.loads(check("runtime", "original"))
         if args.checkpoint:
@@ -409,10 +419,7 @@ def rehearse(args: argparse.Namespace) -> None:
                     "/rehearsal/upgrade/hermes/config/backups/rehearsal/database.sqlite",
                     "--confirm-stopped",
                 )
-            docker(
-                "run",
-                "-d",
-                "--name",
+            start(
                 names["redis"],
                 *common,
                 "--mount",
@@ -424,18 +431,13 @@ def rehearse(args: argparse.Namespace) -> None:
                 "--maxmemory-policy",
                 "noeviction",
             )
-            created.append(names["redis"])
-            docker(
-                "run",
-                "-d",
-                "--name",
+            start(
                 names["api"],
                 *common,
                 *env,
                 *mounts(phase),
                 images[version + "api"][0],
             )
-            created.append(names["api"])
             endpoint = "ready" if not version else "detailed"
             wait(
                 names["api"],
@@ -443,10 +445,7 @@ def rehearse(args: argparse.Namespace) -> None:
                 "-c",
                 f"import json,urllib.request; r=json.load(urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/{endpoint}',timeout=5)); assert r['status']=='healthy'",
             )
-            docker(
-                "run",
-                "-d",
-                "--name",
+            start(
                 names["worker"],
                 *common,
                 *env,
@@ -460,7 +459,6 @@ def rehearse(args: argparse.Namespace) -> None:
                 "--concurrency=1",
                 "--queues=hermes.rehearsal.only",
             )
-            created.append(names["worker"])
             wait(
                 names["worker"],
                 "celery",
@@ -470,17 +468,13 @@ def rehearse(args: argparse.Namespace) -> None:
                 "ping",
                 "--timeout=2",
             )
-            docker(
-                "run",
-                "-d",
-                "--name",
+            start(
                 names["app"],
                 *common,
                 "-e",
                 "VITE_API_BASE_URL=http://" + names["api"] + ":8000/api/v1",
                 images[version + "app"][0],
             )
-            created.append(names["app"])
             wait(names["app"], "wget", "-qO-", "http://127.0.0.1/")
             check("verify", phase)
             if phase == "upgrade":
@@ -547,22 +541,54 @@ def rehearse(args: argparse.Namespace) -> None:
                 "retrieved archive" if args.checkpoint else "synthetic fixture"
             ),
         }
-        (evidence / "result.json").write_text(json.dumps(result, indent=2) + "\n")
         passed = True
     finally:
-        for container in created:
-            if not passed:
-                log = evidence / (container + ".private.log")
-                log.write_text(docker("logs", container, include_stderr=True))
-                log.chmod(0o600)
+        cleanup_errors: list[str] = []
+
+        def attempt(description: str, action: Callable[[], object]) -> None:
+            try:
+                action()
+            except Exception as error:
+                cleanup_errors.append(f"{description}: {type(error).__name__}: {error}")
+
+        def save_logs(container: str) -> None:
+            log = evidence / (container + ".private.log")
+            log.write_text(docker("logs", container, include_stderr=True, timeout=15))
+            log.chmod(0o600)
+
+        if not passed:
+            failure = evidence / "last-command.private.log"
+            if failure.exists():
+                attempt(
+                    "preserving primary failure",
+                    partial(
+                        shutil.copy2, failure, evidence / "failure-command.private.log"
+                    ),
+                )
+            for container in created:
+                attempt(
+                    f"collecting logs for {container}", partial(save_logs, container)
+                )
         if created:
-            docker("stop", "--time", "30", *created)
-        if passed:
-            docker("rm", *created)
-            docker("network", "rm", identity)
-            docker("volume", "rm", identity)
-        else:
+            attempt(
+                "stopping containers", partial(docker, "stop", "--time", "30", *created)
+            )
+        if passed and not cleanup_errors:
+            attempt("removing containers", partial(docker, "rm", *created))
+            if network_created and not cleanup_errors:
+                attempt("removing network", partial(docker, "network", "rm", identity))
+            if volume_created and not cleanup_errors:
+                attempt("removing volume", partial(docker, "volume", "rm", identity))
+        if volume_created and (not passed or cleanup_errors):
             (evidence / "retained-volume.txt").write_text(identity + "\n")
+        if cleanup_errors:
+            log = evidence / "cleanup-errors.private.log"
+            log.write_text("\n".join(cleanup_errors) + "\n")
+            log.chmod(0o600)
+            print(f"Cleanup incomplete; inspect {log}", file=sys.stderr)
+            if passed:
+                raise RuntimeError(f"Rehearsal cleanup failed; inspect {log}")
+    (evidence / "result.json").write_text(json.dumps(result, indent=2) + "\n")
 
 
 def main() -> None:
