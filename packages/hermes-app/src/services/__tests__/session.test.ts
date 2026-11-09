@@ -91,12 +91,15 @@ describe('Session refresh coordination', () => {
     expect(TokenStorage.getRefreshToken()).toBe('other-refresh')
   })
 
-  it('allows a later refresh attempt after a failed exchange', async () => {
+  it('preserves credentials on database contention and allows an explicit later refresh', async () => {
     const fetchMock = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(new Response('{}', { status: 503 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(replacement)))
     vi.stubGlobal('fetch', fetchMock)
     await expect(refreshSession()).rejects.toThrow('503')
+    expect(TokenStorage.getAccessToken()).toBe('old-access')
+    expect(TokenStorage.getRefreshToken()).toBe('old-refresh')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(await refreshSession()).toEqual(replacement)
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })

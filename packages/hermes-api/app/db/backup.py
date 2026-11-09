@@ -62,9 +62,12 @@ def backup_database(destination: Path) -> Path:
             source = Path(url.database or "").resolve()
             if not source.is_file():
                 raise ValueError("SQLite source database does not exist")
-            with closing(
-                sqlite3.connect(source.as_uri() + "?mode=ro", uri=True)
-            ) as original, closing(sqlite3.connect(snapshot)) as target:
+            with (
+                closing(
+                    sqlite3.connect(source.as_uri() + "?mode=ro", uri=True)
+                ) as original,
+                closing(sqlite3.connect(snapshot)) as target,
+            ):
                 original.backup(target)
                 if target.execute("PRAGMA integrity_check").fetchone() != ("ok",):
                     raise RuntimeError("Database backup integrity check failed")

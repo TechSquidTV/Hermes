@@ -10,6 +10,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import OperationalError
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
 
@@ -17,6 +18,8 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.maintenance import in_maintenance
+from app.db.base import SQLITE_BUSY_TIMEOUT_SECONDS
+from app.db.errors import is_sqlite_lock_error
 from app.models.pydantic.response import ErrorResponse
 
 # Setup logging
@@ -31,6 +34,7 @@ STANDARD_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     409: {"model": ErrorResponse, "description": "Conflict"},
     429: {"model": ErrorResponse, "description": "Too Many Requests"},
     500: {"model": ErrorResponse, "description": "Internal Server Error"},
+    503: {"model": ErrorResponse, "description": "Service Unavailable"},
 }
 
 
@@ -232,6 +236,25 @@ def create_application() -> FastAPI:
                 "error": {
                     "code": "internal_server_error",
                     "message": "An internal server error occurred",
+                    "details": None,
+                }
+            },
+        )
+
+    @app.exception_handler(OperationalError)
+    async def database_exception_handler(
+        request: Request, exc: OperationalError
+    ) -> JSONResponse:
+        if not is_sqlite_lock_error(exc):
+            return await general_exception_handler(request, exc)
+        logger.warning("Database contention prevented a request from completing")
+        return JSONResponse(
+            status_code=503,
+            headers={"Retry-After": str(SQLITE_BUSY_TIMEOUT_SECONDS)},
+            content={
+                "error": {
+                    "code": "database_busy",
+                    "message": "Database is busy; try again shortly",
                     "details": None,
                 }
             },

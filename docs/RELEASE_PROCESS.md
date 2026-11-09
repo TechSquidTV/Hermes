@@ -275,3 +275,25 @@ IndexedDB storage and works on plain HTTP too; a closed tab's lease expires afte
 60 seconds. Refresh operations are bounded to 30 seconds, and a suspended tab
 cannot persist credentials after that deadline. A storage failure leaves the
 current credentials intact and reports an error so the user can retry.
+
+
+### SQLite lock regression gate
+
+Before releasing, run `uv run --locked pytest tests/test_db/test_sqlite_locking.py
+--no-cov` from `packages/hermes-api`, followed by `pnpm pre-check` at the root.
+The tests cover real separate-process reader/writer contention, request-session
+completion/error/cancellation, repeated worker event loops, and authentication
+and health behavior under an exclusive database lock. The rollback-journal
+control must block the writer while the WAL case succeeds without stopping its
+reader. Lock errors must release resources and return bounded 503 responses,
+not authentication rejection or a false healthy database status.
+
+Rehearse the exact release images on an isolated restored 0.6.0 installation,
+including success/failure/cancellation workloads and auth refresh under concurrent
+worker writes. Verify original-account/data/file preservation, then restore a
+separate original checkpoint onto the retained old images. Treat these tests as
+release gates; the PR tests alone do not establish production restore acceptance.
+For rackserver installations, publish matching image digests and use the existing
+immutable Ansible release owner rather than also running the standalone Compose
+upgrade coordinator. Keep admission closed, drain work without purging queues,
+and require a fresh verified encrypted backup/restore receipt before migration.

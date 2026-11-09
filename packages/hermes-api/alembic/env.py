@@ -2,15 +2,13 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import command, context
-from sqlalchemy import pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.core.config import settings
 
 # Import your app's base and models
 from app.db import models  # noqa: F401
-from app.db.base import Base
+from app.db.base import Base, create_database_engine
 from app.db.migrations import adopt_native_schema, migration_connection
 
 # this is the Alembic Config object, which provides
@@ -78,10 +76,8 @@ async def run_async_migrations() -> None:
     and associate a connection with the context.
 
     """
-    connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
+    connectable = create_database_engine(
+        settings.database_url, echo=settings.database_echo
     )
 
     try:

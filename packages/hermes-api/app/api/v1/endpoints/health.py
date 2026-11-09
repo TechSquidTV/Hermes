@@ -73,7 +73,7 @@ async def get_detailed_health() -> DetailedHealthResponse:
     try:
         start_time = time.time()
         async with engine.connect() as conn:
-            result = await conn.execute(text("SELECT 1"))
+            result = await conn.execute(text("SELECT id FROM users LIMIT 1"))
             result.fetchone()
 
         response_time_ms = round((time.time() - start_time) * 1000, 2)

@@ -14,7 +14,8 @@ def run_async_task(operation: Awaitable[T]) -> T:
 
     Celery executes successive task calls in the same process, each with a new
     event loop. asyncpg connections cannot survive into the next task's loop.
-    The API retains its normal pool on its long-lived application loop.
+    The API engine lives on its application loop. File-backed SQLite
+    connections are not pooled in either process.
     """
 
     async def run_and_dispose() -> T:

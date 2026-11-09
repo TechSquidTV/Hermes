@@ -45,7 +45,7 @@ Use the [managed upgrade flow](UPGRADING.md) for the bundled prebuilt stack.
 API startup and online Alembic commands share a database migration lock. Native
 startup applies migrations too; recognized unversioned native schemas are
 validated before baselining. Workers/scheduler must use the
-same migrated database. Each process uses at most 10 pooled connections plus 20
+same migrated database. For PostgreSQL, each process uses at most 10 pooled connections plus 20
 overflow connections; budget the server connection limit for all processes.
 Celery task wrappers dispose database connections before their temporary event
 loop closes, so successive tasks cannot reuse connections from a closed loop.
@@ -102,3 +102,31 @@ Do not set both test variables simultaneously: the migration target must start
 empty. Without `HERMES_TEST_POSTGRES_URL`, the PostgreSQL migration test reports
 an explicit skip. The normal test suite always isolates SQLite data in a temporary
 directory unless `HERMES_TEST_DATABASE_URL` is explicitly supplied.
+
+
+## SQLite contention and connection lifetime
+
+File-backed SQLite connections are not pooled: closing a request or task session
+releases its connection before the owning event loop ends. In-memory databases
+retain their single shared connection. PostgreSQL pooling remains unchanged.
+Migration/startup initializes persistent WAL journaling under the existing
+migration lock, before workers start, and refuses startup if WAL cannot be set.
+Connection lock waits are bounded to five seconds. Use a supported SQLite build
+with the applicable WAL fixes; keep SQLite data on a local filesystem supporting
+shared memory and file locks, not a network share.
+
+WAL permits a reader and writer to progress concurrently; it still permits only
+one writer. Keep transactions short and do not hold them over downloads, network
+calls or progress waits. Task sessions must close even on errors or cancellation;
+engine disposal alone does not close checked-out sessions.
+
+Detailed health reads the users table rather than only evaluating `SELECT 1`.
+SQLite busy/locked errors reaching the API return HTTP 503 with `Retry-After: 5`
+and a generic `database_busy` error. Credentials are not rejected as invalid and
+the server does not automatically retry login, refresh or other mutations.
+
+**Operational change:** SQLite now uses persistent WAL journaling. Use the online
+backup command or a consistent stopped-process snapshot; copying a live `.db`
+file alone can omit committed WAL data. Never delete journal, WAL or shared-memory
+files to clear a lock. Restore only with all backend processes stopped, using the
+matched backup/configuration/images described in [upgrade recovery](UPGRADING.md).

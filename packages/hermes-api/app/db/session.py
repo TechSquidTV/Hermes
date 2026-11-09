@@ -13,7 +13,7 @@ from app.db.base import get_db
 # FastAPI dependency for database sessions
 async def get_database_session() -> AsyncGenerator[AsyncSession, None]:
     """FastAPI dependency for getting database sessions."""
-    async for session in get_db():
+    async with get_db() as session:
         yield session
 
 
