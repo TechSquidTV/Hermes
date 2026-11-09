@@ -1,3 +1,21 @@
+## SQLite runtime and recovery
+
+The backend image includes checksum-verified SQLite 3.54.1, including the
+[upstream WAL-reset fix](https://sqlite.org/wal.html#walreset). This replaces the
+unverified runtime in 1.0.0. Keep 1.0.0's tags and images intact for diagnosis;
+use this corrected release for a new upgrade rehearsal.
+
+**SQLite storage requirement:** every process accessing a live database must
+share the same host and local filesystem, including backup and diagnostic
+readers. Keep Docker databases on a Linux-native volume. Do not open a live
+container database with a macOS host tool over a shared mount. PostgreSQL remains
+the supported option for database access across hosts.
+
+Use the native online backup command or a consistent stopped-process checkpoint.
+Copying a live database file alone can omit committed writes. Preserve journal,
+WAL and shared-memory files; do not delete them to clear locks. Rehearse both
+upgrade and restoration on an isolated copy before production deployment.
+
 ## Before upgrading
 
 **Database migration and coordinated service upgrade required.** Use the target

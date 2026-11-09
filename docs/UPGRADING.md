@@ -8,6 +8,22 @@ database, storage mounts, Redis URL, and secrets. Do database moves separately.
 External API clients, workers and schedulers must be stopped separately; this
 command only coordinates the selected Compose project and rejects extra workers.
 
+**SQLite storage:** all live readers and writers, including diagnostics and
+online backups, must run on the same host with local storage. For Docker on
+macOS, keep the database in a Linux-native named volume shared by the API,
+worker, scheduler and migration/backup helper. Do not open its live files from
+macOS through a shared directory. Linux local bind mounts are also supported;
+network filesystems and cross-host SQLite access are not. Use PostgreSQL for
+cross-host access. Move an existing database only while all writers are stopped,
+using a verified backup and a separate restoration rehearsal.
+
+Release 1.0.1 images load checksum-verified SQLite 3.54.1. Native deployments must
+use a runtime with the [upstream WAL-reset fix](https://sqlite.org/wal.html#walreset)
+(3.51.3 or later, excluding the withdrawn 3.52.0 release). Check the library
+Python actually loads with `python3 -c 'import sqlite3; print(sqlite3.sqlite_version)'`;
+installing a newer `sqlite3` command alone does not update Python's library.
+Do not deploy 1.0.0: its runtime and recovery acceptance remain on hold.
+
 **Authentication change:** existing browser sessions must sign in again after
 this release. Access, refresh and live-event credentials are now bound to the
 password that issued them. Changing a password signs the user out on every
