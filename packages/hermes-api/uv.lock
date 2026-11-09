@@ -1102,7 +1102,7 @@ wheels = [
 
 [[package]]
 name = "hermes-api"
-version = "0.6.0"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },
