@@ -250,13 +250,17 @@ def rehearse(args: argparse.Namespace) -> None:
     created: list[str] = []
     passed = False
 
-    def docker(*command: str, timeout: int = 180) -> str:
+    def docker(*command: str, timeout: int = 180, include_stderr: bool = False) -> str:
         result = subprocess.run(
-            ["docker", *command], capture_output=True, text=True, timeout=timeout
+            ["docker", *command],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT if include_stderr else subprocess.PIPE,
+            text=True,
+            timeout=timeout,
         )
         if result.returncode:
             log = evidence / "last-command.private.log"
-            log.write_text(result.stdout + result.stderr)
+            log.write_text(result.stdout + (result.stderr or ""))
             log.chmod(0o600)
             raise RuntimeError(f"Rehearsal failed; inspect {log}")
         return result.stdout
@@ -549,7 +553,7 @@ def rehearse(args: argparse.Namespace) -> None:
         for container in created:
             if not passed:
                 log = evidence / (container + ".private.log")
-                log.write_text(docker("logs", container))
+                log.write_text(docker("logs", container, include_stderr=True))
                 log.chmod(0o600)
         if created:
             docker("stop", "--time", "30", *created)

@@ -348,7 +348,7 @@ migration, coordinated service upgrade and sign-in described above; 1.0.1 adds
 no new schema revision.
 
 Preparation validation on 2026-11-09 passed on local candidates: 518 backend
-tests (two PostgreSQL-only tests skipped), 488 frontend tests, 42 infrastructure
+tests (two PostgreSQL-only tests skipped), 488 frontend tests, 43 infrastructure
 tests, and 32 focused regressions inside the AMD64 backend runtime. Both AMD64
 and ARM64 load SQLite 3.54.1 with upstream source ID
 `2026-10-16 14:45:20 555e07ef33f69a0957d24d8e555b702464a131d6f1607f4c3c1e4551e8e6ca76`.
