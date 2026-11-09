@@ -75,6 +75,12 @@ async def migration_connection(engine: AsyncEngine) -> AsyncIterator[AsyncConnec
                         )
                     await asyncio.sleep(0.1)
             async with engine.connect() as connection:
+                # Change journaling only under the migration lock, before
+                # migrations open a transaction or workers start.
+                mode = await connection.scalar(text("PRAGMA journal_mode=WAL"))
+                if mode != "wal":
+                    raise RuntimeError("SQLite WAL initialization failed")
+                await connection.commit()
                 yield connection
         return
 

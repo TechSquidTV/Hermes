@@ -190,12 +190,16 @@ def test_concurrent_migrations_all_succeed(tmp_path: Path) -> None:
         ).fetchone() == (1,)
 
 
+@pytest.mark.parametrize("journal_mode", ["delete", "wal"])
 def test_online_backup_stays_consistent_and_restores(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, journal_mode: str
 ) -> None:
     database = tmp_path / "source.db"
     monkeypatch.setattr(settings, "database_url", f"sqlite+aiosqlite:///{database}")
     with closing(sqlite3.connect(database)) as connection:
+        assert connection.execute(f"PRAGMA journal_mode={journal_mode}").fetchone() == (
+            journal_mode,
+        )
         connection.executescript(
             "CREATE TABLE pair (id INTEGER PRIMARY KEY, version INTEGER); INSERT INTO pair VALUES (1, 0), (2, 0);"
         )
@@ -204,23 +208,23 @@ def test_online_backup_stays_consistent_and_restores(
 
     def writer() -> None:
         with closing(sqlite3.connect(database)) as connection:
-            ready.set()
             while not stopped.is_set():
                 connection.execute("UPDATE pair SET version = version + 1")
                 connection.commit()
+                ready.set()
                 stopped.wait(0.001)
 
     thread = Thread(target=writer)
     thread.start()
-    ready.wait(5)
     try:
+        assert ready.wait(5), "Writer must commit before backup"
         snapshot = backup_database(tmp_path / "backup")
     finally:
         stopped.set()
         thread.join(5)
     with closing(sqlite3.connect(snapshot)) as connection:
         original = connection.execute("SELECT version FROM pair ORDER BY id").fetchall()
-        assert original[0] == original[1]
+        assert original[0] == original[1] and original[0][0] > 0
     with closing(sqlite3.connect(database)) as connection:
         connection.execute("DROP TABLE pair")
         connection.commit()

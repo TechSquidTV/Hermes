@@ -2,8 +2,9 @@
 Database base configuration and session management.
 """
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncGenerator
 
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import (
@@ -13,9 +14,11 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.pool import NullPool, StaticPool
 
 from app.core.config import settings
+
+SQLITE_BUSY_TIMEOUT_SECONDS = 5
 
 
 def create_database_engine(database_url: str, *, echo: bool = False) -> AsyncEngine:
@@ -27,6 +30,13 @@ def create_database_engine(database_url: str, *, echo: bool = False) -> AsyncEng
         ":memory:",
     ):
         Path(url.database).parent.mkdir(parents=True, exist_ok=True)
+        # File connections must not survive a request/task or cross worker loops.
+        return create_async_engine(
+            url,
+            echo=echo,
+            poolclass=NullPool,
+            connect_args={"timeout": float(SQLITE_BUSY_TIMEOUT_SECONDS)},
+        )
     if url.get_backend_name() == "sqlite" and url.database in (None, "", ":memory:"):
         return create_async_engine(
             url, echo=echo, pool_pre_ping=True, poolclass=StaticPool
@@ -57,19 +67,11 @@ class Base(DeclarativeBase):
     pass
 
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """
-    Dependency for getting database sessions.
-    Yields an async database session and ensures proper cleanup.
-    """
+@asynccontextmanager
+async def get_db() -> AsyncIterator[AsyncSession]:
+    """Close the session, including unfinished transactions, before returning."""
     async with async_session_maker() as session:
-        try:
-            yield session
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
+        yield session
 
 
 async def create_tables() -> None:
