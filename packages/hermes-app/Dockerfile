@@ -1,5 +1,5 @@
 # Hermes App Dockerfile - Static Build Only
-FROM node:26-alpine@sha256:8996bb5821d62a8fd9bb27c1cb07462f3fdce6e47d640c6a881ead0b064ce216 AS base
+FROM node:26-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5 AS base
 
 # Corepack selects the package manager pinned in the root manifest.
 ENV PNPM_HOME="/pnpm"
@@ -24,7 +24,7 @@ COPY packages/hermes-app/ ./packages/hermes-app/
 RUN pnpm --filter hermes-app build
 
 # Production image - nginx serving static files with runtime config
-FROM nginx:1.31-alpine@sha256:713fc2ebfd92e8217db451477182ee91944b123d2b1ee9fd5a8c6e91ca6c3a11 AS runner
+FROM nginx:1.31-alpine@sha256:fb4658584bd9a916ffb6f6e365f97c25cfdb2923801f551ea08356e695f14ff7 AS runner
 
 # Serialize deployer-provided runtime values as JSON, including quotes/newlines.
 RUN apk add --no-cache jq

@@ -1,10 +1,10 @@
 # Multi-stage Dockerfile for Hermes API
-FROM ghcr.io/astral-sh/uv:0.13.7@sha256:96f40d3904aad8d0bd010539001d36c8e2188b981e1334471a90c4a1d93bb490 AS uv-runtime
+FROM ghcr.io/astral-sh/uv:0.13.9@sha256:d3b601f0c7b118bc1753febf7c41cc80981df678445e0254284eecf84db79a7d AS uv-runtime
 
 # Build the same verified WAL-fixed library for both supported architectures.
 # Upstream archive SHA3-256: b6ced585c750916b1052667239a12c25a7ff34e7f06e1e6e01ecb0427657d9c4
 # https://sqlite.org/download.html (3.54.1); https://sqlite.org/wal.html#walreset
-FROM python:3.15-slim@sha256:e97b88e416c3c01eb427b21fd8cd3ebf006e6ee38afcfcc3cae1c54ee2ab0a75 AS sqlite-runtime
+FROM python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928 AS sqlite-runtime
 RUN apt-get update && apt-get install -y --no-install-recommends gcc make libc6-dev \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /build
@@ -15,7 +15,7 @@ RUN tar -xzf sqlite.tar.gz --strip-components=1 \
     && make -j2 libsqlite3.so \
     && make install-dll
 
-FROM python:3.15-slim@sha256:e97b88e416c3c01eb427b21fd8cd3ebf006e6ee38afcfcc3cae1c54ee2ab0a75 AS builder
+FROM python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928 AS builder
 
 # Install system dependencies for building
 RUN apt-get update && apt-get install -y \
@@ -34,10 +34,10 @@ COPY pyproject.toml uv.lock ./
 # Validate the lockfile and install only production dependencies
 RUN uv sync --locked --no-install-project --no-dev
 
-FROM node:26-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072 AS node-runtime
+FROM node:26-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS node-runtime
 
 # Production stage - use Python slim base image
-FROM python:3.15-slim@sha256:e97b88e416c3c01eb427b21fd8cd3ebf006e6ee38afcfcc3cae1c54ee2ab0a75
+FROM python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928
 
 # Build args for configurable UID/GID (defaults to 1000)
 # Override at build time: docker build --build-arg USER_UID=$(id -u) --build-arg USER_GID=$(id -g)

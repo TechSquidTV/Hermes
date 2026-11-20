@@ -66,7 +66,7 @@ jobs:
     if: needs.detect-changes.outputs.dependency-config == 'true'
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/renovatebot/renovate:44.221.5@sha256:ff73c6043e78a4fa0d32378bc2093e65fceb082a040d10db20add14ebe1c650a
+      image: ghcr.io/renovatebot/renovate:44.257.0@sha256:a8a60308419c2ed2b88c68ba4cc22fc22b06f89e4c0a62b664d9514509fa0462
       # Checkout must write to GitHub's runner-owned state and workspace mounts.
       options: --user 0:0
     steps:
